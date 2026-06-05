@@ -16,12 +16,22 @@ If the entry router has not already printed the announcement, print:
 
 ## Hard Rules
 
-- Do not write business source code until the human explicitly replies `批准 bugfix 规范，启动执行`.
+- Do not write business source code until the human explicitly replies the preferred approval phrase `批准规范，启动执行`.
+- For compatibility, also accept the legacy Bugfix approval phrase `批准 bugfix 规范，启动执行`.
 - Generate or update spec artifacts in `docs/specs/`; they are the source of truth.
 - Do not hide root cause behind symptom-only patches.
 - Do not delete failing tests, weaken assertions, or disable warnings just to pass validation.
 - Keep the fix minimal and avoid unrelated refactors.
 - If the bug requires new user-visible capability or product scope change, stop and reroute to Feature.
+
+## High-Risk Warning
+
+If the task involves authentication, authorization, payments, billing, database schema changes, data repair, distributed consistency, cache consistency, secrets, encryption, sensitive data, incident mitigation, rollback, or hotfix work, include this warning even when the router was skipped:
+
+```markdown
+> [!WARNING]
+> 高风险变更警告：当前任务涉及核心系统或高影响范围区域，必须进行人类深度审查，切勿草率合并。
+```
 
 ## Intake Precondition
 
@@ -60,7 +70,13 @@ Before review, replace all template placeholders with concrete content. If a tem
 
 If automated reproduction cannot be created, record why in `bugfix.md`, describe substitute evidence strength and limits, and use the strongest available verification substitute.
 
-The approval phrase for implementation is:
+The preferred approval phrase for implementation is:
+
+```text
+批准规范，启动执行
+```
+
+The legacy Bugfix phrase remains valid for compatibility:
 
 ```text
 批准 bugfix 规范，启动执行
@@ -72,7 +88,7 @@ Suggested validation:
 python <plugin-root>/scripts/validate_spec.py docs/specs/ --workflow bugfix
 ```
 
-This is a structural integrity check only. It does not prove root-cause quality, minimal-fix scope, unchanged-behavior coverage, substitute reproduction strength, rollback safety, or monitoring sufficiency; review those semantics before implementation.
+This is a structural integrity check only. It does not prove root-cause quality, minimal-fix scope, unchanged-behavior coverage, substitute reproduction strength, rollback safety, or monitoring sufficiency; review those semantics before implementation. Passing validation does not approve implementation; implementation still requires an accepted approval phrase.
 
 ## State C: Controlled Implementation
 
@@ -86,6 +102,7 @@ Implementation rules:
 - Select only the first unchecked task in `tasks.md`.
 - Implement only that task and keep the change tied to the recorded root cause.
 - Prefer proof order: reproduce the bug, prove the fix, prove unchanged behavior.
+- If implementation reveals that the recorded root cause is wrong, the fix scope must change, or `bugfix.md`, `design.md`, or `tasks.md` must change, stop code work, return to State B, update the specs, rerun validation, and wait for an accepted approval phrase again before continuing.
 - Run verification and perform at most three self-healing loops.
 - After passing the selected task's verification criteria, mark that task as `- [x]`. For a reproduction task, passing means the failure proof behaves as expected on unfixed code or the substitute evidence is recorded and strong enough to constrain the fix.
 - Provide a commit message suggestion in this form:

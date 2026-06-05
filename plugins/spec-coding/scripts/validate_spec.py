@@ -20,13 +20,17 @@ import argparse
 import os
 import re
 import sys
+from dataclasses import dataclass
+from pathlib import Path
 
 
 Result = tuple[bool, str]
+COLOR_MODE = "auto"
 
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 
@@ -39,13 +43,62 @@ class Colors:
     RESET = "\033[0m"
 
 
+class ValidationReadError(Exception):
+    """Raised when a spec file cannot be read as UTF-8 text."""
+
+
+@dataclass(frozen=True)
+class TaskStats:
+    unchecked: int
+    checked: int
+    skipped: int
+
+    @property
+    def total(self) -> int:
+        return self.unchecked + self.checked + self.skipped
+
+
+def set_color_mode(mode: str) -> None:
+    global COLOR_MODE
+    COLOR_MODE = mode
+
+
+def should_colorize() -> bool:
+    if COLOR_MODE == "always":
+        return True
+    if COLOR_MODE == "never" or os.environ.get("NO_COLOR"):
+        return False
+    return bool(getattr(sys.stdout, "isatty", lambda: False)())
+
+
 def colorize(text: str, color: str) -> str:
+    if not should_colorize():
+        return text
     return f"{color}{text}{Colors.RESET}"
 
 
-def read_text(path: str) -> str:
-    with open(path, "r", encoding="utf-8") as handle:
-        return handle.read()
+def read_text(path: str | Path) -> str:
+    try:
+        return Path(path).read_text(encoding="utf-8-sig")
+    except UnicodeDecodeError as exc:
+        filename = Path(path).name
+        raise ValidationReadError(
+            f"{filename} 不是有效 UTF-8 文本，请转换为 UTF-8 后重试 "
+            f"(byte {exc.start}, reason: {exc.reason})"
+        ) from exc
+    except OSError as exc:
+        filename = Path(path).name
+        raise ValidationReadError(f"{filename} 读取失败: {exc}") from exc
+
+
+def load_spec_file(specs_dir: str, filename: str) -> tuple[str | None, list[Result]]:
+    filepath = Path(specs_dir) / filename
+    if not filepath.is_file():
+        return None, [(False, f"{filename} 不存在，跳过内容检查")]
+    try:
+        return read_text(filepath), []
+    except ValidationReadError as exc:
+        return None, [(False, str(exc))]
 
 
 def check_file_exists(specs_dir: str, filename: str) -> Result:
@@ -56,7 +109,7 @@ def check_file_exists(specs_dir: str, filename: str) -> Result:
 
 
 def has_pattern(content: str, pattern: str) -> bool:
-    return bool(re.search(pattern, content, re.IGNORECASE))
+    return bool(re.search(pattern, content, re.IGNORECASE | re.MULTILINE))
 
 
 def normalize_workflow(workflow: str | None) -> str | None:
@@ -110,41 +163,117 @@ def display_workflow(workflow: str) -> str:
     return labels[workflow]
 
 
-def is_low_level_design(content: str) -> bool:
-    for line in content.splitlines():
-        if not re.search(r"设计粒度|Design Level", line, re.IGNORECASE):
-            continue
-        if "Low Level Design" not in line:
-            continue
-        if "High Level Design" in line and "|" in line:
-            continue
+def required_files_for(workflow: str) -> list[str]:
+    return {
+        "requirements-first": ["product.md", "architecture.md", "tasks.md"],
+        "design-first": ["design.md", "requirements.md", "tasks.md"],
+        "bugfix": ["bugfix.md", "design.md", "tasks.md"],
+    }[workflow]
+
+
+BRACKET_PLACEHOLDER_RE = re.compile(r"\[([^\]\n]{1,120})\]")
+TODO_RE = re.compile(r"\b(?:TODO|FIXME|TBD)\b|待补充|待定", re.IGNORECASE)
+DEFAULT_TEMPLATE_PATTERNS = [
+    (re.compile(r"High Level Design\s*\|\s*Low Level Design", re.IGNORECASE), "未选择设计粒度"),
+    (re.compile(r"草稿\s*\|\s*审查中\s*\|\s*已批准"), "未选择文档状态"),
+    (re.compile(r"是\s*/\s*否"), "未替换是否选项"),
+    (re.compile(r"采用\s*/\s*放弃"), "未替换方案结论"),
+    (re.compile(r"批准/驳回/待修改"), "未替换审批决定"),
+    (re.compile(r"AI Architect\s*\+\s*Human Engineer", re.IGNORECASE), "未替换默认作者"),
+    (re.compile(r"请根据实际方案替换上图"), "未替换示例图提示"),
+]
+
+
+def is_ignored_bracket_token(line: str, match: re.Match[str]) -> bool:
+    token = match.group(1).strip()
+    if token in {"", "x", "X", "~"}:
+        return True
+    if match.end() < len(line) and line[match.end()] == "(":
         return True
     return False
 
 
-def check_product_spec(specs_dir: str) -> list[Result]:
+def find_draft_residue(filename: str, content: str) -> list[str]:
+    hits: list[str] = []
+    for line_number, line in enumerate(content.splitlines(), start=1):
+        for match in BRACKET_PLACEHOLDER_RE.finditer(line):
+            if is_ignored_bracket_token(line, match):
+                continue
+            hits.append(f"{filename}:{line_number} 方括号占位符 {match.group(0)}")
+        if TODO_RE.search(line):
+            hits.append(f"{filename}:{line_number} TODO/FIXME/TBD/待定残留")
+        for pattern, description in DEFAULT_TEMPLATE_PATTERNS:
+            if pattern.search(line):
+                hits.append(f"{filename}:{line_number} {description}")
+    return hits
+
+
+def check_draft_residue(specs_dir: str, required_files: list[str]) -> list[Result]:
     results: list[Result] = []
-    filepath = os.path.join(specs_dir, "product.md")
+    for filename in required_files:
+        filepath = Path(specs_dir) / filename
+        if not filepath.is_file():
+            results.append((False, f"{filename} 不存在，跳过占位符检查"))
+            continue
+        try:
+            content = read_text(filepath)
+        except ValidationReadError as exc:
+            results.append((False, str(exc)))
+            continue
 
-    if not os.path.isfile(filepath):
-        return [(False, "product.md 不存在，跳过内容检查")]
+        hits = find_draft_residue(filename, content)
+        if not hits:
+            results.append((True, f"{filename} 未发现模板占位符或草稿残留"))
+            continue
 
-    content = read_text(filepath)
-    has_given = has_pattern(content, r"\*\*GIVEN\*\*|GIVEN\s")
-    has_when = has_pattern(content, r"\*\*WHEN\*\*|WHEN\s")
-    has_then = has_pattern(content, r"\*\*THEN\*\*|THEN\s")
+        preview = "; ".join(hits[:6])
+        if len(hits) > 6:
+            preview += f"; 另有 {len(hits) - 6} 处"
+        results.append((False, f"{filename} 存在未替换占位符/草稿残留: {preview}"))
+    return results
 
-    if has_given and has_when and has_then:
-        results.append((True, "product.md 包含 GIVEN / WHEN / THEN 验收标准"))
-    else:
-        missing = []
-        if not has_given:
-            missing.append("GIVEN")
-        if not has_when:
-            missing.append("WHEN")
-        if not has_then:
-            missing.append("THEN")
-        results.append((False, f"product.md 缺少验收标准关键词: {', '.join(missing)}"))
+
+GWT_LINE_RE = re.compile(
+    r"^\s*[-*]\s+(?:\*\*)?(GIVEN|WHEN|THEN)(?:\*\*)?\s*(?:[:：-])?\s+\S",
+    re.IGNORECASE | re.MULTILINE,
+)
+
+
+def gwt_terms(content: str) -> set[str]:
+    return {match.group(1).upper() for match in GWT_LINE_RE.finditer(content)}
+
+
+def check_gwt_lines(content: str, filename: str, required_terms: tuple[str, ...]) -> Result:
+    present = gwt_terms(content)
+    missing = [term for term in required_terms if term not in present]
+    if not missing:
+        return True, f"{filename} 包含正式 {' / '.join(required_terms)} 验收/行为行"
+    return (
+        False,
+        f"{filename} 缺少正式 GWT 行: {', '.join(missing)} "
+        "(需使用类似 '- **GIVEN** ...' 的独立列表行)",
+    )
+
+
+def is_low_level_design(content: str) -> bool:
+    for line in content.splitlines():
+        if not re.search(r"设计粒度|Design Level|Design Granularity", line, re.IGNORECASE):
+            continue
+        if re.search(
+            r"\bLow[- ]?Level Design\b|\bLLD\b|低层设计|详细设计",
+            line,
+            re.IGNORECASE,
+        ):
+            return True
+    return False
+
+
+def check_product_spec(specs_dir: str) -> list[Result]:
+    content, load_errors = load_spec_file(specs_dir, "product.md")
+    if content is None:
+        return load_errors
+
+    results: list[Result] = [check_gwt_lines(content, "product.md", ("GIVEN", "WHEN", "THEN"))]
 
     if has_pattern(content, r"US-\d+|用户故事|User Story"):
         results.append((True, "product.md 包含用户故事标识"))
@@ -160,13 +289,11 @@ def check_product_spec(specs_dir: str) -> list[Result]:
 
 
 def check_architecture_spec(specs_dir: str) -> list[Result]:
+    content, load_errors = load_spec_file(specs_dir, "architecture.md")
+    if content is None:
+        return load_errors
+
     results: list[Result] = []
-    filepath = os.path.join(specs_dir, "architecture.md")
-
-    if not os.path.isfile(filepath):
-        return [(False, "architecture.md 不存在，跳过内容检查")]
-
-    content = read_text(filepath)
     required_sections = [
         (r"数据模型|Data Model|实体", "数据模型定义"),
         (r"API|接口|Interface|端点|Endpoint", "API / 接口签名"),
@@ -190,21 +317,11 @@ def check_architecture_spec(specs_dir: str) -> list[Result]:
 
 
 def check_requirements_spec(specs_dir: str) -> list[Result]:
-    results: list[Result] = []
-    filepath = os.path.join(specs_dir, "requirements.md")
+    content, load_errors = load_spec_file(specs_dir, "requirements.md")
+    if content is None:
+        return load_errors
 
-    if not os.path.isfile(filepath):
-        return [(False, "requirements.md 不存在，跳过内容检查")]
-
-    content = read_text(filepath)
-    has_given = has_pattern(content, r"\*\*GIVEN\*\*|GIVEN\s")
-    has_when = has_pattern(content, r"\*\*WHEN\*\*|WHEN\s")
-    has_then = has_pattern(content, r"\*\*THEN\*\*|THEN\s")
-
-    if has_given and has_when and has_then:
-        results.append((True, "requirements.md 包含 GIVEN / WHEN / THEN 验收标准"))
-    else:
-        results.append((False, "requirements.md 缺少 GIVEN / WHEN / THEN 验收标准"))
+    results: list[Result] = [check_gwt_lines(content, "requirements.md", ("GIVEN", "WHEN", "THEN"))]
 
     if has_pattern(content, r"REQ-\d+|需求|Requirement"):
         results.append((True, "requirements.md 包含需求标识"))
@@ -225,15 +342,13 @@ def check_requirements_spec(specs_dir: str) -> list[Result]:
 
 
 def check_design_first_spec(specs_dir: str) -> list[Result]:
+    content, load_errors = load_spec_file(specs_dir, "design.md")
+    if content is None:
+        return load_errors
+
     results: list[Result] = []
-    filepath = os.path.join(specs_dir, "design.md")
-
-    if not os.path.isfile(filepath):
-        return [(False, "design.md 不存在，跳过内容检查")]
-
-    content = read_text(filepath)
     required_sections = [
-        (r"设计粒度|Design Level|High Level Design|Low Level Design", "设计粒度"),
+        (r"设计粒度|Design Level|High[- ]?Level Design|Low[- ]?Level Design|\bHLD\b|\bLLD\b|详细设计|低层设计", "设计粒度"),
         (r"设计起点|设计输入|约束|Constraint", "设计起点与约束"),
         (r"组件|边界|系统边界|Scope", "目标系统边界"),
         (r"方案设计|接口|数据流|Topology|调用链", "方案设计"),
@@ -270,13 +385,11 @@ def check_design_first_spec(specs_dir: str) -> list[Result]:
 
 
 def check_bugfix_spec(specs_dir: str) -> list[Result]:
+    content, load_errors = load_spec_file(specs_dir, "bugfix.md")
+    if content is None:
+        return load_errors
+
     results: list[Result] = []
-    filepath = os.path.join(specs_dir, "bugfix.md")
-
-    if not os.path.isfile(filepath):
-        return [(False, "bugfix.md 不存在，跳过内容检查")]
-
-    content = read_text(filepath)
     required_sections = [
         (r"证据|Evidence|复现|Reproduction", "证据与复现"),
         (r"当前错误行为|Current Behavior|BUG-\d+", "当前错误行为"),
@@ -291,24 +404,16 @@ def check_bugfix_spec(specs_dir: str) -> list[Result]:
         else:
             results.append((False, f"bugfix.md 缺少: {desc}"))
 
-    has_when = has_pattern(content, r"\*\*WHEN\*\*|WHEN\s")
-    has_then = has_pattern(content, r"\*\*THEN\*\*|THEN\s")
-    if has_when and has_then:
-        results.append((True, "bugfix.md 使用 WHEN / THEN 描述行为"))
-    else:
-        results.append((False, "bugfix.md 缺少 WHEN / THEN 行为描述"))
-
+    results.append(check_gwt_lines(content, "bugfix.md", ("WHEN", "THEN")))
     return results
 
 
 def check_bugfix_design_spec(specs_dir: str) -> list[Result]:
+    content, load_errors = load_spec_file(specs_dir, "design.md")
+    if content is None:
+        return load_errors
+
     results: list[Result] = []
-    filepath = os.path.join(specs_dir, "design.md")
-
-    if not os.path.isfile(filepath):
-        return [(False, "design.md 不存在，跳过内容检查")]
-
-    content = read_text(filepath)
     required_sections = [
         (r"根因|Root Cause|初始假设", "根因分析"),
         (r"路径|影响面|组件|Surface", "代码路径与影响面"),
@@ -331,34 +436,66 @@ def check_bugfix_design_spec(specs_dir: str) -> list[Result]:
     return results
 
 
+def expected_task_prefix(workflow: str) -> str:
+    return "B" if workflow == "bugfix" else "T"
+
+
+def task_line_pattern(workflow: str) -> re.Pattern[str]:
+    prefix = expected_task_prefix(workflow)
+    return re.compile(
+        rf"^\s*-\s+\[(?P<status>[ xX~])\]\s+(?:\*\*)?"
+        rf"(?P<task_id>{prefix}-\d+)\s*[:：](?:\*\*)?",
+        re.MULTILINE,
+    )
+
+
+def checkbox_line_pattern() -> re.Pattern[str]:
+    return re.compile(r"^\s*-\s+\[[ xX~]\]\s+.+", re.MULTILINE)
+
+
+def collect_task_stats(content: str, workflow: str) -> tuple[TaskStats, list[str]]:
+    expected_re = task_line_pattern(workflow)
+    valid_matches = list(expected_re.finditer(content))
+    stats = TaskStats(
+        unchecked=sum(1 for match in valid_matches if match.group("status") == " "),
+        checked=sum(1 for match in valid_matches if match.group("status").lower() == "x"),
+        skipped=sum(1 for match in valid_matches if match.group("status") == "~"),
+    )
+
+    invalid_lines: list[str] = []
+    for line_number, line in enumerate(content.splitlines(), start=1):
+        if not checkbox_line_pattern().match(line):
+            continue
+        if not expected_re.match(line):
+            invalid_lines.append(f"tasks.md:{line_number} {line.strip()}")
+    return stats, invalid_lines
+
+
 def check_tasks_spec(specs_dir: str, workflow: str) -> list[Result]:
+    content, load_errors = load_spec_file(specs_dir, "tasks.md")
+    if content is None:
+        return load_errors
+
     results: list[Result] = []
-    filepath = os.path.join(specs_dir, "tasks.md")
+    stats, invalid_lines = collect_task_stats(content, workflow)
+    task_label = f"{expected_task_prefix(workflow)}-xxx"
 
-    if not os.path.isfile(filepath):
-        return [(False, "tasks.md 不存在，跳过内容检查")]
-
-    content = read_text(filepath)
-    unchecked = re.findall(r"- \[ \]", content)
-    checked = re.findall(r"- \[x\]", content, re.IGNORECASE)
-    skipped = re.findall(r"- \[~\]", content)
-    total_tasks = len(unchecked) + len(checked) + len(skipped)
-
-    if total_tasks > 0:
+    if stats.total > 0:
         results.append((
             True,
-            f"tasks.md 包含 {total_tasks} 个任务 "
-            f"(待完成: {len(unchecked)}, 已完成: {len(checked)}, 已跳过: {len(skipped)})",
+            f"tasks.md 包含 {stats.total} 个任务 "
+            f"(待完成: {stats.unchecked}, 已完成: {stats.checked}, 已跳过: {stats.skipped})",
         ))
     else:
-        results.append((False, "tasks.md 缺少复选框格式任务 (应使用 - [ ] 格式)"))
+        results.append((False, f"tasks.md 缺少带 {task_label} 编号的复选框任务"))
 
-    task_id_pattern = r"- \[[ xX~]\]\s+(?:\*\*)?B-\d+" if workflow == "bugfix" else r"- \[[ xX~]\]\s+(?:\*\*)?T-\d+"
-    task_label = "B-xxx" if workflow == "bugfix" else "T-xxx"
-    if has_pattern(content, task_id_pattern):
-        results.append((True, f"tasks.md 包含任务编号标识 ({task_label})"))
+    if invalid_lines:
+        preview = "; ".join(invalid_lines[:4])
+        if len(invalid_lines) > 4:
+            preview += f"; 另有 {len(invalid_lines) - 4} 行"
+        results.append((False, f"tasks.md 存在未编号或错误编号的复选框任务行: {preview}"))
     else:
-        results.append((False, f"tasks.md 缺少任务编号标识 (建议使用 {task_label} 格式)"))
+        results.append((True, f"tasks.md 所有复选框任务均使用 {task_label} 编号"))
 
     if has_pattern(content, r"验证标准|Validation|Test|测试|✅"):
         results.append((True, "tasks.md 包含验证标准"))
@@ -406,7 +543,14 @@ def main() -> None:
         metavar="{auto,requirements-first,design-first,bugfix}",
         help="指定要验证的规范分支，默认自动检测；兼容旧别名 feature",
     )
+    parser.add_argument(
+        "--color",
+        default="auto",
+        choices=("auto", "always", "never"),
+        help="控制 ANSI 颜色输出，默认 auto；重定向或设置 NO_COLOR 时不输出颜色",
+    )
     args = parser.parse_args()
+    set_color_mode(args.color)
 
     print(colorize("\n╔══════════════════════════════════════════════╗", Colors.CYAN))
     print(colorize("║   Spec Coding 规范完整性验证                ║", Colors.CYAN))
@@ -431,11 +575,7 @@ def main() -> None:
             print("请确认规范目录只包含一套工件，或使用 --workflow requirements-first / design-first / bugfix 显式指定。")
             sys.exit(1)
 
-    required_files = {
-        "requirements-first": ["product.md", "architecture.md", "tasks.md"],
-        "design-first": ["design.md", "requirements.md", "tasks.md"],
-        "bugfix": ["bugfix.md", "design.md", "tasks.md"],
-    }[workflow]
+    required_files = required_files_for(workflow)
 
     print(f"📂 检查目录: {os.path.abspath(specs_dir)}")
     print(f"🧭 规范分支: {display_workflow(workflow)}\n")
@@ -445,6 +585,11 @@ def main() -> None:
     print_section("文件存在性检查")
     for filename in required_files:
         result = check_file_exists(specs_dir, filename)
+        all_results.append(result)
+        print_result(result)
+
+    print_section("占位符与草稿残留检查")
+    for result in check_draft_residue(specs_dir, required_files):
         all_results.append(result)
         print_result(result)
 

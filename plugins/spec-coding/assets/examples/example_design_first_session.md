@@ -1,120 +1,107 @@
 # Design-First 完整使用示例
 
-本文档展示了一个端到端的 Design-First 工作流示例，
-演示如何使用 spec-coding 技能从技术设计出发，依次生成设计、需求与任务清单。
+本文档展示如何从已确定的技术方案出发，生成 `design.md`、派生 `requirements.md`，再拆成任务。
 
 ---
 
-## 场景：按既定事件驱动方案为订单系统增加出站事件能力
+## 场景：按 outbox + worker 方案发布订单出站事件
 
-### 路由判断
+### Intake 与路由
 
 **用户输入：**
-> 我们已经决定用 outbox + worker 的方案给订单系统发出站事件。先按这个技术方案做 spec，再决定具体需求和任务。
+
+> 我们已经决定用 outbox + worker 给订单系统发出站事件。先按这个技术方案做 spec，再决定具体需求和任务。
 
 **智能体响应：**
 
 我读到了Spec-coding技能。
+我会先按照“spec-intake”完成需求澄清。
+
+已检查现有订单模块说明和 ADR 草案。用户明确给出 outbox + worker 作为固定技术起点，因此进入 Design-First。
 
 ## Spec 路由决定
 
 - 路径：Feature / Design-First
 - Design-First 粒度：High Level Design
+- Intake 状态：需要反问
 - 原因：用户已给出既定技术方案，并要求先从技术设计出发
 - 下一步：Design-First 澄清
 
 我会按照“Feature / Design-First”分支来完成。
 
 > [!WARNING]
-> 高风险变更警告：当前任务涉及 outbox、worker 与 Kafka 出站事件链路，存在分布式一致性和投递语义风险，必须进行人类深度审查，切勿草率合并。
+> 高风险变更警告：当前任务涉及 outbox、worker 与消息投递语义，必须进行人类深度审查，切勿草率合并。
 
----
+## Design-First 澄清
 
-### 状态 A：Design-First 设计起点审视与澄清
-
-**智能体响应：**
-
-## 🧱 Design-First 澄清清单
-
-- 设计粒度：High Level Design
-
-在进入 Design-First 规范阶段之前，我需要确认以下问题：
-
-1. 现有订单服务、消息 broker、消费方分别是什么技术栈？
-2. 哪些接口契约和数据库表结构已经锁定，不能修改？
-3. 出站事件需要满足哪些可靠性、幂等性和延迟约束？
-4. 这次设计明确不处理哪些能力，例如事件重放、跨区域复制？
-5. 是否已有 ADR、拓扑图或监控指标作为设计输入？
+1. 订单创建接口、订单表、消息 broker 中哪些契约已经锁定不能改？
+2. 出站事件需要满足哪些投递、延迟和幂等性约束？
+3. 本期明确不处理哪些能力，例如事件重放或跨区域复制？
 
 **用户回复：**
-> 1. 订单服务是 Node.js，broker 是 Kafka  
-> 2. 订单创建接口不能改，现有 orders 表可以加字段但不能改主键  
-> 3. 至少一次投递，可接受 5 秒内延迟，消费方自己做幂等  
-> 4. 这次不做事件重放  
-> 5. 有 ADR，核心决策就是 outbox + worker
+
+> 订单创建接口不能改，orders 表可以加字段但不能改主键；broker 是 Kafka；至少一次投递，5 秒内可接受，消费方自己幂等；本期不做事件重放。
 
 ---
 
-### 状态 B：Design-First 规范工件生成
+### 规范工件生成
 
-智能体生成以下三个文件：
+智能体生成：
 
-#### docs/specs/design.md（节选）
+- `docs/specs/design.md`
+- `docs/specs/requirements.md`
+- `docs/specs/tasks.md`
 
-```markdown
+#### `docs/specs/design.md` 节选
+
+````markdown
 > **设计粒度：** High Level Design
 
-## 4. 方案设计
+## 方案设计
 
-### 4.2 拓扑 / 调用链
+订单 API 在同一事务内写入订单与 outbox 记录；worker 轮询待发送记录并发布到 Kafka。
 
-订单 API -> 订单服务 -> orders / outbox 表 -> worker -> Kafka
+```mermaid
+flowchart TD
+    API --> Orders
+    API --> Outbox
+    Outbox --> Worker
+    Worker --> Kafka
 ```
+````
 
-#### docs/specs/requirements.md（节选）
+#### `docs/specs/requirements.md` 节选
 
 ```markdown
 ### REQ-001: 订单创建后发布出站事件
 
-**作为** 下游订阅服务，**我希望** 在订单创建成功后收到标准化事件，
-**以便** 异步处理履约与通知流程。
-
-- **AC-001.1:**
-  - **GIVEN** 订单创建成功
-  - **WHEN** outbox worker 处理待发送记录
-  - **THEN** Kafka 中应出现符合约定 schema 的订单创建事件
+- **GIVEN** 订单创建事务已提交
+- **WHEN** outbox worker 处理待发送记录
+- **THEN** Kafka 中出现符合 schema 的订单创建事件
 ```
 
-#### docs/specs/tasks.md（节选）
+#### `docs/specs/tasks.md` 节选
 
 ```markdown
 - [ ] **T-001:** 固化 outbox 持久化与 worker 基础约束
-  - ✅ 验证标准：设计中的事务边界与投递路径被落地
+  - 验证标准：事务边界和发布路径符合 design.md
 
 - [ ] **T-002:** 实现订单创建后的 outbox 写入与事件发布路径
-  - ✅ 验证标准：同时满足 design.md 和 requirements.md 的约束
+  - 验证标准：满足 requirements.md 的 GWT 验收标准
 ```
 
 **智能体输出：**
-> ✅ Design-First 规范工件生成完毕。请审查 `docs/specs/design.md`、`docs/specs/requirements.md` 和 `docs/specs/tasks.md`。  
-> 确认无误后，请回复 **"批准 design-first 规范，启动执行"**。
 
-**用户回复：**
-> 批准 design-first 规范，启动执行
-
----
-
-### 状态 C：受控代码实施
-
-**智能体：** 📌 锁定任务 **T-001**：固化 outbox 持久化与 worker 基础约束
-
-*(智能体会先实现第一个任务，并验证它同时满足 `design.md` 与 `requirements.md`。)*
+> 规范工件已生成。请审查 `docs/specs/design.md`、`docs/specs/requirements.md` 和 `docs/specs/tasks.md`。
+> 通过校验仍不代表批准实施。确认无误后，请回复 `批准规范，启动执行`。
+>
+> 兼容旧短语：`批准 design-first 规范，启动执行`。
 
 ---
 
-## 关键要点总结
+## 关键要点
 
-1. **这是先设计后需求，不是把 Requirements-First 换个名字**
-2. **必须先判定 High Level Design 还是 Low Level Design**
-3. **`requirements.md` 必须从 `design.md` 派生，不能越界**
-4. **任务清单既要忠实设计，也要忠实派生需求**
+1. Design-First 的真实来源是固定技术方案，不是普通需求换个名字。
+2. 先选择 High Level Design 或 Low Level Design。
+3. `requirements.md` 必须从 `design.md` 派生，不能扩大产品范围。
+4. 实现中若发现设计冲突，必须回到规范阶段并重新获得批准。

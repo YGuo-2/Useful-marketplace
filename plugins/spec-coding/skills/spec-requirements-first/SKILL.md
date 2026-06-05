@@ -16,11 +16,20 @@ If the entry router has not already printed the announcement, print:
 
 ## Hard Rules
 
-- Do not write business source code until the human explicitly replies `批准规范，启动执行`.
+- Do not write business source code until the human explicitly replies the preferred approval phrase `批准规范，启动执行`.
 - Generate or update spec artifacts in `docs/specs/`; they are the source of truth.
 - Keep this branch for new capabilities, user workflows, scaffolding, complex refactors, and product-driven work.
 - If the user switches to architecture-first or ADR-first work, reroute to `../spec-design-first/SKILL.md`.
 - If the work is actually restoring existing expected behavior, reroute to `../spec-bugfix/SKILL.md`.
+
+## High-Risk Warning
+
+If the task involves authentication, authorization, payments, billing, database schema changes, data repair, distributed consistency, cache consistency, secrets, encryption, sensitive data, incident mitigation, rollback, or hotfix work, include this warning even when the router was skipped:
+
+```markdown
+> [!WARNING]
+> 高风险变更警告：当前任务涉及核心系统或高影响范围区域，必须进行人类深度审查，切勿草率合并。
+```
 
 ## Intake Precondition
 
@@ -57,7 +66,7 @@ Generate:
 
 Before review, replace all template placeholders with concrete content. If a template section does not apply, state that explicitly with the reason instead of leaving placeholder text.
 
-After generation, ask the human to review the artifacts. The approval phrase for implementation is:
+After generation, ask the human to review the artifacts. The preferred approval phrase for implementation is:
 
 ```text
 批准规范，启动执行

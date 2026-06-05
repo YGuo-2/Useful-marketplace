@@ -60,6 +60,7 @@ If the route is still unclear:
 - Planning artifacts must be written to `docs/specs/`; chat-only plans are not the source of truth.
 - Do not mix Feature and Bugfix. If a fix adds new user-visible capability or changes product scope, reroute to Feature.
 - Do not mix Requirements-First and Design-First. Use Design-First only when fixed technical design, architecture, ADRs, or technical constraints are the primary starting point; ordinary stack, compatibility, or schema constraints can be recorded in Requirements-First specs.
+- The preferred approval phrase for all branches is `批准规范，启动执行`; branch-specific legacy phrases remain valid where documented for compatibility.
 
 ## Intake First
 

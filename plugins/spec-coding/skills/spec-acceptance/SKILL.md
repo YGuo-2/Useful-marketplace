@@ -22,6 +22,7 @@ If the branch skill has not already printed the announcement, print:
 - Do not report the whole Spec Coding workflow complete before this acceptance flow passes.
 - Do not spawn sub-agents unless the current conversation explicitly authorizes sub-agent orchestration. If authorization is missing, ask for it and stop.
 - Do not downgrade this flow to a single local review or pretend local review is equivalent to multi-agent acceptance.
+- If the current environment cannot orchestrate sub-agents, state that final acceptance is blocked by missing orchestration capability and do not report the workflow complete.
 - Do not edit business source code inside this skill. Confirmed issues must route into `../spec-bugfix/SKILL.md`.
 - Final success output must summarize the completed plugin workflow, not dump raw agent review transcripts.
 
@@ -41,6 +42,12 @@ If sub-agent authorization is missing, ask:
 
 ```markdown
 结尾验收需要按 `tasks.md` 编排子 agent 进行审查和对抗审查。请明确授权我启动子 agent 后，我再继续验收流程。
+```
+
+If sub-agent orchestration is unavailable in the current environment, stop with:
+
+```markdown
+结尾验收被阻塞：当前环境不支持按 `tasks.md` 编排子 agent 审查和对抗审查。根据 Spec Coding 规则，不能降级为单 agent 自审，也不能宣告整个工作流完成。
 ```
 
 ## State B: Build Review Units

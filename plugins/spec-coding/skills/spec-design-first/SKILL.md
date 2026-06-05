@@ -16,11 +16,21 @@ If the entry router has not already printed the announcement, print:
 
 ## Hard Rules
 
-- Do not write business source code until the human explicitly replies `批准 design-first 规范，启动执行`.
+- Do not write business source code until the human explicitly replies the preferred approval phrase `批准规范，启动执行`.
+- For compatibility, also accept the legacy Design-First approval phrase `批准 design-first 规范，启动执行`.
 - Generate or update spec artifacts in `docs/specs/`; they are the source of truth.
 - `design.md` is the primary truth source for this branch.
 - `requirements.md` must be derived from `design.md`; do not add unsupported product scope.
 - If the request is a pure product goal with no technical design intent, reroute to `../spec-requirements-first/SKILL.md`. If the user explicitly asks for Design-First but provides incomplete design input, stay in State A and clarify the design starting point.
+
+## High-Risk Warning
+
+If the task involves authentication, authorization, payments, billing, database schema changes, data repair, distributed consistency, cache consistency, secrets, encryption, sensitive data, incident mitigation, rollback, or hotfix work, include this warning even when the router was skipped:
+
+```markdown
+> [!WARNING]
+> 高风险变更警告：当前任务涉及核心系统或高影响范围区域，必须进行人类深度审查，切勿草率合并。
+```
 
 ## Intake Precondition
 
@@ -70,7 +80,13 @@ Before review, replace all template placeholders with concrete content. If a tem
 
 If `requirements.md` exposes a gap in `design.md`, update `design.md` first, then derive requirements and tasks again.
 
-The approval phrase for implementation is:
+The preferred approval phrase for implementation is:
+
+```text
+批准规范，启动执行
+```
+
+The legacy Design-First phrase remains valid for compatibility:
 
 ```text
 批准 design-first 规范，启动执行
@@ -82,7 +98,7 @@ Suggested validation:
 python <plugin-root>/scripts/validate_spec.py docs/specs/ --workflow design-first
 ```
 
-This is a structural integrity check only. Passing validation does not approve implementation; implementation still requires the exact approval phrase.
+This is a structural integrity check only. Passing validation does not approve implementation; implementation still requires an accepted approval phrase.
 
 ## State C: Controlled Implementation
 
@@ -96,7 +112,7 @@ Implementation rules:
 - Select only the first unchecked task in `tasks.md`.
 - Implement only behavior inside the approved design boundary.
 - Add or update tests that prove both design constraints and derived requirements.
-- If implementation conflicts with `design.md` or any approved spec artifact must change, stop code work, return to State B, update the specs, rerun validation, and wait for `批准 design-first 规范，启动执行` again before continuing.
+- If implementation conflicts with `design.md` or any approved spec artifact must change, stop code work, return to State B, update the specs, rerun validation, and wait for an accepted approval phrase again before continuing.
 - Run verification and perform at most three self-healing loops.
 - After passing verification, mark that task as `- [x]`.
 - Provide a commit message suggestion in this form:

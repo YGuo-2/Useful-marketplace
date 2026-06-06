@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "spce_workflow_progress": {
+      "command": "python",
+      "args": [
+        "./mcp/spec_progress_server.py"
+      ],
+      "cwd": "."
+    }
+  }
+}

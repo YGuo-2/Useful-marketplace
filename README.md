@@ -1,26 +1,26 @@
-# Spec Coding Marketplace
+# Useful-marketplace
 
-This repository provides the Codex plugin marketplace entry for `spec-coding`.
+This repository provides the Codex plugin marketplace entry for `spce-workflow`.
 
 ## Import in Codex
 
 Use the Codex "Add plugin marketplace" dialog:
 
-- Source: `YGuo-2/spec-coding-marketplace`
+- Source: `YGuo-2/Useful-marketplace`
 - Git ref: `main`
 - Sparse path: leave empty
 
 Codex expects the marketplace manifest at `.agents/plugins/marketplace.json`.
-The plugin source is at `plugins/spec-coding`.
+The plugin source is at `plugins/spce-workflow`.
 
 ## What It Does
 
-`spec-coding` is a spec-first workflow for changes where correctness, scope control, resumability, and reviewability matter more than speed.
+`spce-workflow` is a spec-first workflow for changes where correctness, scope control, resumability, and reviewability matter more than speed.
 
 It includes seven skills:
 
 - `spec-intake`: inspect context first, then ask only material clarification questions.
-- `spec-coding`: route the request to the right workflow branch.
+- `spce-workflow`: route the request to the right workflow branch.
 - `spec-requirements-analysis`: run Kiro-style Analyze Requirements before artifact generation.
 - `spec-requirements-first`: create product-led feature specs.
 - `spec-design-first`: create design-led specs from fixed architecture or technical constraints.
@@ -80,16 +80,16 @@ Task state is enforced through `tasks.md`, `progress.md`, and `spec.yml`.
 Use the CLI directly:
 
 ```bash
-python plugins/spec-coding/scripts/spec_progress.py init docs/specs/
-python plugins/spec-coding/scripts/spec_progress.py status docs/specs/
-python plugins/spec-coding/scripts/spec_progress.py resume docs/specs/
-python plugins/spec-coding/scripts/spec_progress.py start docs/specs/ T-001
-python plugins/spec-coding/scripts/spec_progress.py complete docs/specs/ T-001 --evidence "pytest tests/test_feature.py passed"
-python plugins/spec-coding/scripts/spec_progress.py block docs/specs/ T-001 --reason "needs API decision"
-python plugins/spec-coding/scripts/spec_progress.py skip docs/specs/ T-001 --approval "human approved skip"
-python plugins/spec-coding/scripts/spec_progress.py waves docs/specs/
-python plugins/spec-coding/scripts/spec_progress.py sync-check docs/specs/
-python plugins/spec-coding/scripts/spec_progress.py pre-acceptance docs/specs/
+python plugins/spce-workflow/scripts/spec_progress.py init docs/specs/
+python plugins/spce-workflow/scripts/spec_progress.py status docs/specs/
+python plugins/spce-workflow/scripts/spec_progress.py resume docs/specs/
+python plugins/spce-workflow/scripts/spec_progress.py start docs/specs/ T-001
+python plugins/spce-workflow/scripts/spec_progress.py complete docs/specs/ T-001 --evidence "pytest tests/test_feature.py passed"
+python plugins/spce-workflow/scripts/spec_progress.py block docs/specs/ T-001 --reason "needs API decision"
+python plugins/spce-workflow/scripts/spec_progress.py skip docs/specs/ T-001 --approval "human approved skip"
+python plugins/spce-workflow/scripts/spec_progress.py waves docs/specs/
+python plugins/spce-workflow/scripts/spec_progress.py sync-check docs/specs/
+python plugins/spce-workflow/scripts/spec_progress.py pre-acceptance docs/specs/
 ```
 
 `complete` requires verification evidence. `skip` requires explicit human approval evidence. If a task is active and the worktree has business-code changes after an interruption, `resume` reports `interrupted`; the next agent must inspect the diff and evidence before continuing.
@@ -112,7 +112,7 @@ Agents should use MCP task tools when available. The CLI is the fallback and rem
 A pre-commit hook template lives at:
 
 ```text
-plugins/spec-coding/assets/hooks/pre-commit-spec-progress
+plugins/spce-workflow/assets/hooks/pre-commit-spec-progress
 ```
 
 Install it into a target repository by copying it to `.git/hooks/pre-commit` and making it executable. It blocks commits that stage business-code changes while an active spec workflow exists but no legal `docs/specs/tasks.md`, `docs/specs/progress.md`, or `docs/specs/spec.yml` update is staged.
@@ -122,9 +122,9 @@ Install it into a target repository by copying it to `.git/hooks/pre-commit` and
 Run the structural validator against the generated specs:
 
 ```bash
-python plugins/spec-coding/scripts/validate_spec.py docs/specs/ --workflow requirements-first
-python plugins/spec-coding/scripts/validate_spec.py docs/specs/ --workflow design-first
-python plugins/spec-coding/scripts/validate_spec.py docs/specs/ --workflow bugfix
+python plugins/spce-workflow/scripts/validate_spec.py docs/specs/ --workflow requirements-first
+python plugins/spce-workflow/scripts/validate_spec.py docs/specs/ --workflow design-first
+python plugins/spce-workflow/scripts/validate_spec.py docs/specs/ --workflow bugfix
 ```
 
 `--workflow auto` is the default when the directory contains exactly one recognizable artifact set.
@@ -134,16 +134,16 @@ The validator checks required files, unresolved template placeholders, formal GW
 Color output defaults to `auto` and can be controlled with:
 
 ```bash
-python plugins/spec-coding/scripts/validate_spec.py docs/specs/ --color never
+python plugins/spce-workflow/scripts/validate_spec.py docs/specs/ --color never
 ```
 
 Progress and acceptance checks:
 
 ```bash
-python plugins/spec-coding/scripts/validate_spec.py docs/specs/ --progress
-python plugins/spec-coding/scripts/validate_spec.py docs/specs/ --resume
-python plugins/spec-coding/scripts/validate_spec.py docs/specs/ --sync-check
-python plugins/spec-coding/scripts/validate_spec.py docs/specs/ --pre-acceptance
+python plugins/spce-workflow/scripts/validate_spec.py docs/specs/ --progress
+python plugins/spce-workflow/scripts/validate_spec.py docs/specs/ --resume
+python plugins/spce-workflow/scripts/validate_spec.py docs/specs/ --sync-check
+python plugins/spce-workflow/scripts/validate_spec.py docs/specs/ --pre-acceptance
 ```
 
 ## Final Acceptance
@@ -161,12 +161,12 @@ Authentication, authorization, payments, billing, database schema changes, data 
 Useful local checks for this repository:
 
 ```bash
-python -m py_compile plugins/spec-coding/scripts/validate_spec.py
-python -m py_compile plugins/spec-coding/scripts/spec_progress.py
-python -m py_compile plugins/spec-coding/mcp/spec_progress_server.py
-python plugins/spec-coding/scripts/validate_spec.py --help
-python plugins/spec-coding/scripts/test_validate_spec.py
-python -m json.tool plugins/spec-coding/.codex-plugin/plugin.json
-python -m json.tool plugins/spec-coding/.mcp.json
+python -m py_compile plugins/spce-workflow/scripts/validate_spec.py
+python -m py_compile plugins/spce-workflow/scripts/spec_progress.py
+python -m py_compile plugins/spce-workflow/mcp/spec_progress_server.py
+python plugins/spce-workflow/scripts/validate_spec.py --help
+python plugins/spce-workflow/scripts/test_validate_spec.py
+python -m json.tool plugins/spce-workflow/.codex-plugin/plugin.json
+python -m json.tool plugins/spce-workflow/.mcp.json
 git diff --check
 ```

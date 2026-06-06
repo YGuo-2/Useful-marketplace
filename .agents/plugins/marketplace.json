@@ -1,14 +1,14 @@
 {
-  "name": "spec-coding-marketplace",
+  "name": "Useful-marketplace",
   "interface": {
-    "displayName": "Spec Coding Marketplace"
+    "displayName": "Useful-marketplace"
   },
   "plugins": [
     {
-      "name": "spec-coding",
+      "name": "spce-workflow",
       "source": {
         "source": "local",
-        "path": "./plugins/spec-coding"
+        "path": "./plugins/spce-workflow"
       },
       "policy": {
         "installation": "AVAILABLE",

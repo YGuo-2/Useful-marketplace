@@ -1,0 +1,25 @@
+#!/usr/bin/env sh
+# Spce workflow progress guard.
+#
+# Install by copying this file to .git/hooks/pre-commit and making it executable.
+# It blocks commits that stage business-code changes while an active spec
+# workflow exists but docs/specs/tasks.md, progress.md, or spec.yml was not
+# updated in the same commit.
+
+set -eu
+
+if [ ! -d "docs/specs" ]; then
+  exit 0
+fi
+
+if [ ! -f "docs/specs/tasks.md" ]; then
+  exit 0
+fi
+
+SCRIPT="plugins/spce-workflow/scripts/spec_progress.py"
+if [ ! -f "$SCRIPT" ]; then
+  echo "Spce workflow hook skipped: $SCRIPT not found." >&2
+  exit 0
+fi
+
+python "$SCRIPT" guard-commit docs/specs/

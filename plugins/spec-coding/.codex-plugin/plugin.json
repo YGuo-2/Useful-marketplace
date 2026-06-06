@@ -1,7 +1,7 @@
 {
   "name": "spec-coding",
-  "version": "0.1.1",
-  "description": "Spec-first workflows with intake clarification, branch implementation, and final acceptance for requirements-first features, design-first features, and bugfixes.",
+  "version": "0.2.0",
+  "description": "Spec-first workflows with Kiro-compatible indexes, requirements analysis, task graphs, resumable progress, MCP task updates, hook guards, and layered acceptance.",
   "author": {
     "name": "TriciaDoctor"
   },
@@ -14,6 +14,12 @@
     "acceptance",
     "final-review",
     "adversarial-review",
+    "kiro",
+    "requirements-analysis",
+    "task-graph",
+    "resume",
+    "mcp",
+    "hooks",
     "design-first",
     "requirements",
     "scope",
@@ -24,7 +30,7 @@
   "interface": {
     "displayName": "Spec Coding",
     "shortDescription": "Clarify, route, implement, and accept complex coding work through approved specs.",
-    "longDescription": "Spec Coding adds an intake-first clarification step, lightweight spec workflows, controlled branch implementation, and final task-based acceptance with review and adversarial review agents before reporting completion.",
+    "longDescription": "Spec Coding adds intake-first clarification, Kiro-style requirements analysis, spec.yml/progress.md state files, structured task graphs, MCP-backed task updates, hook guard templates, controlled implementation, local pre-acceptance, and strict final acceptance with review and adversarial review agents before reporting completion.",
     "developerName": "TriciaDoctor",
     "category": "Developer Tools",
     "capabilities": [
@@ -39,7 +45,8 @@
       "Create a spec before implementing this feature.",
       "Plan this design-first change before coding.",
       "Write a bugfix spec for this regression.",
-      "Run final acceptance for this completed spec workflow."
+      "Run final acceptance for this completed spec workflow.",
+      "Resume this interrupted spec workflow from docs/specs/progress.md."
     ]
   }
 }

@@ -19,6 +19,7 @@ If the entry router has not already printed the announcement, print:
 - Do not write business source code until the human explicitly replies the preferred approval phrase `批准规范，启动执行`.
 - For compatibility, also accept the legacy Bugfix approval phrase `批准 bugfix 规范，启动执行`.
 - Generate or update spec artifacts in `docs/specs/`; they are the source of truth.
+- New specs must also generate `docs/specs/spec.yml` and `docs/specs/progress.md` from the templates in `../../assets/templates/`.
 - Do not hide root cause behind symptom-only patches.
 - Do not delete failing tests, weaken assertions, or disable warnings just to pass validation.
 - Keep the fix minimal and avoid unrelated refactors.
@@ -59,12 +60,18 @@ Use the plugin templates from `../../assets/templates/`:
 - `bugfix_template.md`
 - `bugfix_design_template.md`
 - `bugfix_tasks_template.md`
+- `progress_template.md`
+- `spec_index_template.yml`
 
 Generate:
 
 - `docs/specs/bugfix.md`: defect summary, impact, environment, reproduction evidence, automated-reproduction status, substitute evidence when needed, current behavior, expected behavior, unchanged behavior, scope boundaries, and non-goals
 - `docs/specs/design.md`: root-cause analysis, code-path trace, minimal fix strategy, alternatives, affected surface, explicitly untouched areas, test strategy, and non-automated verification risks when applicable
-- `docs/specs/tasks.md`: ordered atomic tasks using `- [ ]`, starting with reproduction or strongest available evidence, then minimal fix, regression protection, and verification
+- `docs/specs/tasks.md`: ordered atomic tasks using `- [ ]`, starting with reproduction or strongest available evidence, then minimal fix, regression protection, and verification. Each task must include status, files, verify, evidence, depends_on, risk, covers, and parallelizable.
+- `docs/specs/progress.md`: resume entrypoint with workflow status, current task, approval state, branch, commit, blockers, and recovery notes
+- `docs/specs/spec.yml`: Kiro-compatible machine index with workflow, mode, approval, risk level, artifact paths, requirement IDs, task graph, current task, and checkpoint
+
+Bugfix defaults to `strict`. Do not use Quick Plan for P0/P1, production incidents, data repair, auth, payment, schema, consistency, secrets, encryption, or sensitive-data work.
 
 Before review, replace all template placeholders with concrete content. If a template section does not apply, state that explicitly with the reason instead of leaving placeholder text.
 
@@ -86,6 +93,8 @@ Suggested validation:
 
 ```bash
 python <plugin-root>/scripts/validate_spec.py docs/specs/ --workflow bugfix
+python <plugin-root>/scripts/spec_progress.py init docs/specs/
+python <plugin-root>/scripts/validate_spec.py docs/specs/ --resume
 ```
 
 This is a structural integrity check only. It does not prove root-cause quality, minimal-fix scope, unchanged-behavior coverage, substitute reproduction strength, rollback safety, or monitoring sufficiency; review those semantics before implementation. Passing validation does not approve implementation; implementation still requires an accepted approval phrase.
@@ -100,11 +109,14 @@ Implementation rules:
 
 - Read `docs/specs/bugfix.md`, `docs/specs/design.md`, and `docs/specs/tasks.md`.
 - Select only the first unchecked task in `tasks.md`.
+- Before editing business code for that task, call `spec_start_task` through MCP or run `python <plugin-root>/scripts/spec_progress.py start docs/specs/ B-xxx`.
 - Implement only that task and keep the change tied to the recorded root cause.
 - Prefer proof order: reproduce the bug, prove the fix, prove unchanged behavior.
-- If implementation reveals that the recorded root cause is wrong, the fix scope must change, or `bugfix.md`, `design.md`, or `tasks.md` must change, stop code work, return to State B, update the specs, rerun validation, and wait for an accepted approval phrase again before continuing.
+- If implementation reveals that the recorded root cause is wrong, the fix scope must change, or `bugfix.md`, `design.md`, or `tasks.md` must change, stop code work, return to State B, update the specs, run sync-check, set approval to `reapproval-required`, and wait for an accepted approval phrase again before continuing.
 - Run verification and perform at most three self-healing loops.
-- After passing the selected task's verification criteria, mark that task as `- [x]`. For a reproduction task, passing means the failure proof behaves as expected on unfixed code or the substitute evidence is recorded and strong enough to constrain the fix.
+- After passing the selected task's verification criteria, call `spec_complete_task` through MCP or run `python <plugin-root>/scripts/spec_progress.py complete docs/specs/ B-xxx --evidence "<verification evidence>"`. For a reproduction task, passing means the failure proof behaves as expected on unfixed code or the substitute evidence is recorded and strong enough to constrain the fix.
+- If blocked, call `spec_block_task` or `python <plugin-root>/scripts/spec_progress.py block docs/specs/ B-xxx --reason "<reason>"`.
+- If skipped, call `spec_skip_task` or `python <plugin-root>/scripts/spec_progress.py skip docs/specs/ B-xxx --approval "<human approval evidence>"`.
 - Provide a commit message suggestion in this form:
 
 ```text

@@ -5,7 +5,7 @@ description: 当用户要求先写 spec、先澄清需求、先做设计、desig
 
 # Spec Coding Router
 
-This is the lightweight entrypoint for the Spec Coding plugin. Keep this file small: run intake, classify the request, announce the route, hand off to the branch skill, then run final acceptance when branch tasks are complete.
+This is the lightweight entrypoint for the Spec Coding plugin. Keep this file small: resume existing progress first, run intake, classify the request, announce the route, hand off to the branch skill, then run pre-acceptance and final acceptance when branch tasks are complete.
 
 ## Required Announcement
 
@@ -55,12 +55,27 @@ If the route is still unclear:
 ## Hard Rules
 
 - No business source code before a human explicitly approves the spec artifacts.
+- If `docs/specs/progress.md` exists, run the resume flow before intake or rerouting. Do not restart discovery until the current state is known.
 - Clarify first, classify second, then generate spec artifacts.
 - Do not invent missing boundaries, compatibility rules, security constraints, or failure modes. Ask or record them as assumptions.
 - Planning artifacts must be written to `docs/specs/`; chat-only plans are not the source of truth.
+- New specs must include Markdown artifacts plus `docs/specs/spec.yml` and `docs/specs/progress.md`. `tasks.md` is the human-readable task source, `progress.md` is the resume entrypoint, and `spec.yml` is the Kiro-compatible machine index.
 - Do not mix Feature and Bugfix. If a fix adds new user-visible capability or changes product scope, reroute to Feature.
 - Do not mix Requirements-First and Design-First. Use Design-First only when fixed technical design, architecture, ADRs, or technical constraints are the primary starting point; ordinary stack, compatibility, or schema constraints can be recorded in Requirements-First specs.
 - The preferred approval phrase for all branches is `批准规范，启动执行`; branch-specific legacy phrases remain valid where documented for compatibility.
+- During implementation, task state must be changed through the Spec Progress MCP tools or `scripts/spec_progress.py`. Do not hand-edit task completion in chat only.
+
+## Resume First
+
+Before intake, if `docs/specs/progress.md` exists:
+
+1. Run or request the equivalent of `python <plugin-root>/scripts/spec_progress.py resume docs/specs/`.
+2. Read `docs/specs/progress.md`, `docs/specs/spec.yml`, `docs/specs/tasks.md`, and the branch spec artifacts.
+3. If resume reports `interrupted`, inspect the diff and verification evidence before continuing. Do not mark any task complete until evidence is recorded.
+4. If approval is `reapproval-required`, stop implementation and ask for human reapproval after syncing specs.
+5. If resume is clean, continue from the current task instead of restarting intake.
+
+Print a short resume summary before continuing.
 
 ## Intake First
 
@@ -69,6 +84,12 @@ Before routing, read and follow `../spec-intake/SKILL.md` unless the current con
 If intake asks questions, stop after the questions and wait for the human answer. Do not generate spec artifacts or enter a branch workflow yet.
 
 When intake produces a summary or no questions are needed, use those conclusions as routing input and carry them into the selected branch's spec artifacts.
+
+## Analyze Requirements
+
+For Requirements-First and Design-First, the selected branch must perform Kiro-style Analyze Requirements before finalizing specs. Record the result inside `product.md` or `requirements.md`; do not create a standalone analysis file unless the user explicitly asks.
+
+The analysis must check ambiguity, undefined concepts, conflicting constraints, missing boundary cases, failure paths, permissions, concurrency, data consistency, and safety/security risks. Quick Plan may skip the full analysis only for low-risk work with explicit human authorization, and the skip reason must be recorded.
 
 ## Routing Rules
 
@@ -91,7 +112,7 @@ After handoff, keep only the selected branch in scope until the user changes dir
 
 ## Final Acceptance
 
-After the selected branch has no unchecked tasks in `docs/specs/tasks.md`, read and follow `../spec-acceptance/SKILL.md`.
+After the selected branch has no unchecked tasks in `docs/specs/tasks.md`, first run local pre-acceptance with `python <plugin-root>/scripts/validate_spec.py docs/specs/ --pre-acceptance`, then read and follow `../spec-acceptance/SKILL.md`.
 
 Do not report the whole Spec Coding workflow complete until final acceptance passes. If acceptance finds actionable issues, route them into the Bugfix branch and repeat final acceptance after the fix.
 

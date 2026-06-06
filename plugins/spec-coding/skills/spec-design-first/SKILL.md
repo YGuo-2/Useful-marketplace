@@ -19,8 +19,9 @@ If the entry router has not already printed the announcement, print:
 - Do not write business source code until the human explicitly replies the preferred approval phrase `批准规范，启动执行`.
 - For compatibility, also accept the legacy Design-First approval phrase `批准 design-first 规范，启动执行`.
 - Generate or update spec artifacts in `docs/specs/`; they are the source of truth.
+- New specs must also generate `docs/specs/spec.yml` and `docs/specs/progress.md` from the templates in `../../assets/templates/`.
 - `design.md` is the primary truth source for this branch.
-- `requirements.md` must be derived from `design.md`; do not add unsupported product scope.
+- `requirements.md` must be derived from `design.md`; do not add unsupported product scope. It must include Kiro-style Analyze Requirements conclusions before finalizing tasks.
 - If the request is a pure product goal with no technical design intent, reroute to `../spec-requirements-first/SKILL.md`. If the user explicitly asks for Design-First but provides incomplete design input, stay in State A and clarify the design starting point.
 
 ## High-Risk Warning
@@ -67,12 +68,18 @@ Use the plugin templates from `../../assets/templates/`:
 - `design_first_design_template.md`
 - `requirements_template.md`
 - `design_first_tasks_template.md`
+- `progress_template.md`
+- `spec_index_template.yml`
 
 Generate:
 
 - `docs/specs/design.md`: design granularity, system or module boundaries, relationships, key interfaces, data flow, constraints, rejected alternatives, and risks
 - `docs/specs/requirements.md`: requirements and acceptance criteria derived from `design.md`, with clear markers for assumptions
-- `docs/specs/tasks.md`: ordered atomic tasks that follow design dependencies, using `- [ ]`, with verification criteria, estimate, and dependencies
+- `docs/specs/tasks.md`: ordered atomic tasks that follow design dependencies, using `- [ ]`, with structured fields: status, files, verify, evidence, depends_on, risk, covers, and parallelizable
+- `docs/specs/progress.md`: resume entrypoint with workflow status, current task, approval state, branch, commit, blockers, and recovery notes
+- `docs/specs/spec.yml`: Kiro-compatible machine index with workflow, mode, approval, risk level, artifact paths, requirement IDs, task graph, current task, and checkpoint
+
+Default mode is `strict`. Use `quick` only when the user explicitly authorizes Quick Plan and the risk level is low; record the Quick Plan reason in `requirements.md` and `spec.yml`.
 
 If the selected granularity is `Low Level Design`, `design.md` must also include module/class responsibilities, function signatures and contracts, algorithm flow, state transitions, and detailed data structures.
 
@@ -96,6 +103,8 @@ Suggested validation:
 
 ```bash
 python <plugin-root>/scripts/validate_spec.py docs/specs/ --workflow design-first
+python <plugin-root>/scripts/spec_progress.py init docs/specs/
+python <plugin-root>/scripts/validate_spec.py docs/specs/ --resume
 ```
 
 This is a structural integrity check only. Passing validation does not approve implementation; implementation still requires an accepted approval phrase.
@@ -110,11 +119,14 @@ Implementation rules:
 
 - Read `docs/specs/design.md`, `docs/specs/requirements.md`, and `docs/specs/tasks.md`.
 - Select only the first unchecked task in `tasks.md`.
+- Before editing business code for that task, call `spec_start_task` through MCP or run `python <plugin-root>/scripts/spec_progress.py start docs/specs/ T-xxx`.
 - Implement only behavior inside the approved design boundary.
 - Add or update tests that prove both design constraints and derived requirements.
-- If implementation conflicts with `design.md` or any approved spec artifact must change, stop code work, return to State B, update the specs, rerun validation, and wait for an accepted approval phrase again before continuing.
+- If implementation conflicts with `design.md` or any approved spec artifact must change, stop code work, return to State B, update the specs, run sync-check, set approval to `reapproval-required`, and wait for an accepted approval phrase again before continuing.
 - Run verification and perform at most three self-healing loops.
-- After passing verification, mark that task as `- [x]`.
+- After passing verification, call `spec_complete_task` through MCP or run `python <plugin-root>/scripts/spec_progress.py complete docs/specs/ T-xxx --evidence "<verification evidence>"`. Do not manually mark `- [x]` without recorded evidence.
+- If blocked, call `spec_block_task` or `python <plugin-root>/scripts/spec_progress.py block docs/specs/ T-xxx --reason "<reason>"`.
+- If skipped, call `spec_skip_task` or `python <plugin-root>/scripts/spec_progress.py skip docs/specs/ T-xxx --approval "<human approval evidence>"`.
 - Provide a commit message suggestion in this form:
 
 ```text

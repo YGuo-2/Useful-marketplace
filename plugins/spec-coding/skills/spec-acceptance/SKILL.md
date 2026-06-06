@@ -22,6 +22,7 @@ If the branch skill has not already printed the announcement, print:
 - Do not report the whole Spec Coding workflow complete before this acceptance flow passes.
 - Do not spawn sub-agents unless the current conversation explicitly authorizes sub-agent orchestration. If authorization is missing, ask for it and stop.
 - Do not downgrade this flow to a single local review or pretend local review is equivalent to multi-agent acceptance.
+- Local `pre-acceptance` is allowed before sub-agent review, but it is only a readiness check. It must never be reported as final acceptance.
 - If the current environment cannot orchestrate sub-agents, state that final acceptance is blocked by missing orchestration capability and do not report the workflow complete.
 - Do not edit business source code inside this skill. Confirmed issues must route into `../spec-bugfix/SKILL.md`.
 - Final success output must summarize the completed plugin workflow, not dump raw agent review transcripts.
@@ -37,6 +38,18 @@ Detect the workflow from the spec files:
 - Bugfix: `bugfix.md`, `design.md`, and `tasks.md`
 
 If any task is still unchecked, return to the selected branch's Controlled Implementation state. If required verification evidence is missing, treat that as an acceptance issue.
+
+Before asking for sub-agent authorization, run or request the equivalent of:
+
+```bash
+python <plugin-root>/scripts/validate_spec.py docs/specs/ --pre-acceptance
+```
+
+If pre-acceptance fails, summarize the local issues and route them back to the selected branch or Bugfix path. If pre-acceptance passes but sub-agent orchestration is unavailable, the required wording is:
+
+```markdown
+预检通过，但严格验收未完成：当前环境不支持按 `tasks.md` 编排子 agent 审查和对抗审查。根据 Spec Coding 规则，不能把 pre-acceptance 伪装为 final acceptance，也不能宣告整个工作流完成。
+```
 
 If sub-agent authorization is missing, ask:
 

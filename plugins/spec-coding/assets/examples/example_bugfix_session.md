@@ -51,6 +51,8 @@
 - `docs/specs/bugfix.md`
 - `docs/specs/design.md`
 - `docs/specs/tasks.md`
+- `docs/specs/progress.md`
+- `docs/specs/spec.yml`
 
 #### `docs/specs/bugfix.md` 节选
 
@@ -86,21 +88,48 @@
 
 ```markdown
 - [ ] **B-001:** 建立重复消费导致双扣库存的失败证明
+  - 状态: pending
+  - 验证命令: pytest tests/test_inventory_retry.py
+  - 验证证据: pending
+  - 依赖: 无
+  - 风险: high
+  - 覆盖: BUG-001
+  - 可并行: 否
   - 验证标准：未修复前集成测试稳定失败，并证明库存扣减执行两次
 
 - [ ] **B-002:** 为库存扣减路径添加订单粒度幂等保护
+  - 状态: pending
+  - 验证命令: pytest tests/test_inventory_retry.py
+  - 验证证据: pending
+  - 依赖: B-001
+  - 风险: high
+  - 覆盖: FIX-001
+  - 可并行: 否
   - 验证标准：B-001 转为通过，且不改变现有下单接口契约
 
 - [ ] **B-003:** 补充正常单次下单与相邻路径回归测试
+  - 状态: pending
+  - 验证命令: pytest tests/test_order_regression.py
+  - 验证证据: pending
+  - 依赖: B-002
+  - 风险: medium
+  - 覆盖: SAFE-001
+  - 可并行: 否
   - 验证标准：证明修复未影响正常下单流程
 ```
 
 **智能体输出：**
 
-> Bugfix 规范工件已生成。请审查 `docs/specs/bugfix.md`、`docs/specs/design.md` 和 `docs/specs/tasks.md`。
+> Bugfix 规范工件已生成。请审查 `docs/specs/bugfix.md`、`docs/specs/design.md`、`docs/specs/tasks.md`、`docs/specs/progress.md` 和 `docs/specs/spec.yml`。
 > 通过校验仍不代表批准实施。确认无误后，请回复 `批准规范，启动执行`。
 >
 > 兼容旧短语：`批准 bugfix 规范，启动执行`。
+>
+> ```bash
+> python plugins/spec-coding/scripts/validate_spec.py docs/specs/ --workflow bugfix
+> python plugins/spec-coding/scripts/spec_progress.py init docs/specs/
+> python plugins/spec-coding/scripts/validate_spec.py docs/specs/ --resume
+> ```
 
 **用户回复：**
 
@@ -114,7 +143,19 @@
 
 > 锁定任务 B-001：建立重复消费导致双扣库存的失败证明。
 
-智能体先写失败证明，不直接跳到修复。若实现 B-001 时发现原根因判断不成立，必须停止代码工作，回到 State B 更新 `bugfix.md`、`design.md`、`tasks.md`，重新运行 validator，并等待新的批准短语。
+智能体先记录断点，再写失败证明，不直接跳到修复：
+
+```bash
+python plugins/spec-coding/scripts/spec_progress.py start docs/specs/ B-001
+```
+
+验证证据稳定后，通过受控工具更新状态：
+
+```bash
+python plugins/spec-coding/scripts/spec_progress.py complete docs/specs/ B-001 --evidence "pytest tests/test_inventory_retry.py fails on unfixed code"
+```
+
+若实现 B-001 时发现原根因判断不成立，必须停止代码工作，回到 State B 更新 `bugfix.md`、`design.md`、`tasks.md`，运行 sync-check，并等待新的批准短语。
 
 ---
 
@@ -124,3 +165,4 @@
 2. `tasks.md` 使用 `B-xxx` 任务编号。
 3. 不能用症状补丁掩盖根因，也不能削弱测试凑过验证。
 4. 根因或范围变化必须回炉并重新批准。
+5. 任务开始/完成必须用 `spec_progress.py` 或 MCP 工具更新 `tasks.md`、`progress.md` 和 `spec.yml`。

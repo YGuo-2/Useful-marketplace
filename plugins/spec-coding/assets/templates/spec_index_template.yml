@@ -1,0 +1,12 @@
+schema_version: 1
+workflow: requirements-first | design-first | bugfix
+mode: strict | quick
+approval: pending | approved | reapproval-required
+risk_level: low | medium | high
+current_task: T-001 | B-001 | n/a
+last_checkpoint: YYYY-MM-DD HH:mm
+artifacts: product.md, architecture.md, tasks.md, progress.md, spec.yml
+requirements: US-001, AC-001.1, NFR-001
+task_ids: T-001, T-002
+task_graph: T-001, T-001->T-002
+artifact_hashes: product.md=<hash>, architecture.md=<hash>

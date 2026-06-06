@@ -16,6 +16,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 PLUGIN_ROOT = SCRIPT_DIR.parent
 TEMPLATES = PLUGIN_ROOT / "assets" / "templates"
 VALIDATOR = SCRIPT_DIR / "validate_spec.py"
+PROGRESS = SCRIPT_DIR / "spec_progress.py"
 
 
 def run_validator(specs_dir: Path, workflow: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
@@ -33,6 +34,18 @@ def run_validator(specs_dir: Path, workflow: str, env: dict[str, str] | None = N
     )
 
 
+def run_progress(*args: str, cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, str(PROGRESS), *args],
+        cwd=cwd,
+        check=False,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+
+
 def write(path: Path, content: str) -> None:
     path.write_text(content.strip() + "\n", encoding="utf-8")
 
@@ -42,6 +55,13 @@ def valid_product() -> str:
     # 产品规范
 
     ## 用户故事与验收标准
+
+    ## Analyze Requirements / 需求分析结论
+
+    - 歧义检查：术语和验收对象已定义。
+    - 冲突检查：未发现互斥约束。
+    - 失败路径：Security and validation failures are covered.
+    - 并发 / 权限 / 数据风险：Authorization is required and no data migration is needed.
 
     ### US-001: Publish comments
 
@@ -98,6 +118,13 @@ def valid_requirements() -> str:
     > **来源设计：** docs/specs/design.md
 
     ## 功能需求与验收标准
+
+    ## Analyze Requirements / 需求分析结论
+
+    - 歧义检查：设计来源和行为边界已定义。
+    - 冲突检查：requirements.md 与 design.md 未冲突。
+    - 失败路径：Retry failures and idempotency risks are covered.
+    - 并发 / 权限 / 数据风险：No new authorization surface is introduced.
 
     ### REQ-001: Publish outbox event
 
@@ -179,6 +206,14 @@ def valid_design_tasks() -> str:
     ## 阶段 1
 
     - [ ] **T-001:** Implement the design.md persistence boundary
+      - 状态: pending
+      - 涉及文件: `src/outbox.py`
+      - 验证命令: pytest tests/test_outbox.py
+      - 验证证据: pending
+      - 依赖: 无
+      - 风险: low
+      - 覆盖: REQ-001
+      - 可并行: 否
       - 验证标准: Design constraints are covered by tests
     """
 
@@ -194,12 +229,36 @@ def valid_feature_tasks() -> str:
     ## 阶段 1
 
     - [ ] **T-001:** Implement comment storage
+      - 状态: pending
+      - 涉及文件: `src/comments.py`
+      - 验证命令: pytest tests/test_comments.py
+      - 验证证据: pending
+      - 依赖: 无
+      - 风险: low
+      - 覆盖: US-001, AC-001.1
+      - 可并行: 否
       - 验证标准: Unit tests pass
 
     - [x] **T-002:** Record completed setup
+      - 状态: done
+      - 涉及文件: `docs/specs/tasks.md`
+      - 验证命令: python scripts/check.py
+      - 验证证据: pytest passed
+      - 依赖: T-001
+      - 风险: low
+      - 覆盖: NFR-001
+      - 可并行: 是
       - 验证标准: Completion evidence is recorded
 
     - [~] **T-003:** Human-approved skip for optional export
+      - 状态: skipped
+      - 涉及文件: `src/export.py`
+      - 验证命令: n/a
+      - 验证证据: user approved skip
+      - 依赖: T-002
+      - 风险: low
+      - 覆盖: n/a
+      - 可并行: 否
       - 验证标准: Skip approval is recorded
     """
 
@@ -278,12 +337,36 @@ def valid_bugfix_tasks(prefix: str = "B") -> str:
     ## 阶段 1
 
     - [ ] **{prefix}-001:** 建立复现失败证明
+      - 状态: pending
+      - 涉及文件: `tests/test_inventory.py`
+      - 验证命令: pytest tests/test_inventory.py
+      - 验证证据: pending
+      - 依赖: 无
+      - 风险: high
+      - 覆盖: BUG-001
+      - 可并行: 否
       - 验证标准: 复现测试稳定失败
 
     - [ ] **{prefix}-002:** 实现最小修复
+      - 状态: pending
+      - 涉及文件: `src/inventory.py`
+      - 验证命令: pytest tests/test_inventory.py
+      - 验证证据: pending
+      - 依赖: {prefix}-001
+      - 风险: high
+      - 覆盖: FIX-001
+      - 可并行: 否
       - 验证标准: 复现测试转为通过
 
     - [ ] **{prefix}-003:** 补充回归防护
+      - 状态: pending
+      - 涉及文件: `tests/test_inventory.py`
+      - 验证命令: pytest tests/test_inventory.py
+      - 验证证据: pending
+      - 依赖: {prefix}-002
+      - 风险: medium
+      - 覆盖: SAFE-001
+      - 可并行: 否
       - 验证标准: 回归测试证明不变行为未破坏
     """
 
@@ -292,6 +375,12 @@ def make_requirements_first(specs_dir: Path, product: str | None = None, tasks: 
     write(specs_dir / "product.md", product or valid_product())
     write(specs_dir / "architecture.md", valid_architecture())
     write(specs_dir / "tasks.md", tasks or valid_feature_tasks())
+
+
+def init_progress(specs_dir: Path) -> None:
+    result = run_progress("init", str(specs_dir))
+    if result.returncode != 0:
+        raise AssertionError(result.stdout + result.stderr)
 
 
 def make_design_first(specs_dir: Path, design: str | None = None) -> None:
@@ -445,6 +534,204 @@ class ValidatorRegressionTests(unittest.TestCase):
 
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertNotIn("\x1b[", result.stdout)
+
+    def test_new_progress_files_enable_resume_validation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            specs_dir = Path(tmp)
+            make_requirements_first(specs_dir)
+            init_progress(specs_dir)
+
+            result = run_validator(specs_dir, "requirements-first")
+            resume = subprocess.run(
+                [sys.executable, str(VALIDATOR), str(specs_dir), "--resume"],
+                check=False,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+            )
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertEqual(resume.returncode, 0, resume.stdout + resume.stderr)
+            self.assertIn("spec.yml", (specs_dir / "spec.yml").read_text(encoding="utf-8"))
+
+    def test_complete_requires_evidence_and_updates_all_state_files(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            specs_dir = Path(tmp)
+            make_requirements_first(specs_dir)
+            init_progress(specs_dir)
+
+            no_evidence = run_progress("complete", str(specs_dir), "T-001", "--evidence", "")
+            self.assertNotEqual(no_evidence.returncode, 0)
+            self.assertIn("evidence", no_evidence.stderr)
+
+            started = run_progress("start", str(specs_dir), "T-001")
+            completed = run_progress(
+                "complete",
+                str(specs_dir),
+                "T-001",
+                "--evidence",
+                "pytest tests/test_comments.py passed",
+            )
+
+            self.assertEqual(started.returncode, 0, started.stdout + started.stderr)
+            self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+            self.assertIn("- [x] **T-001:**", (specs_dir / "tasks.md").read_text(encoding="utf-8"))
+            self.assertIn("pytest tests/test_comments.py passed", (specs_dir / "progress.md").read_text(encoding="utf-8"))
+            self.assertIn("current_task:", (specs_dir / "spec.yml").read_text(encoding="utf-8"))
+
+    def test_task_graph_blocks_unmet_dependencies(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            specs_dir = Path(tmp)
+            tasks = valid_feature_tasks().replace("- [x] **T-002:**", "- [ ] **T-002:**")
+            tasks = tasks.replace("- 状态: done", "- 状态: pending", 1)
+            make_requirements_first(specs_dir, tasks=tasks)
+            init_progress(specs_dir)
+
+            result = run_progress("start", str(specs_dir), "T-002")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("unmet dependencies", result.stderr)
+
+    def test_resume_marks_active_dirty_work_as_interrupted(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True)
+            specs_dir = repo / "docs" / "specs"
+            specs_dir.mkdir(parents=True)
+            make_requirements_first(specs_dir)
+            init_progress(specs_dir)
+            subprocess.run(["git", "add", "."], cwd=repo, check=True, capture_output=True)
+            subprocess.run(
+                ["git", "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-m", "init"],
+                cwd=repo,
+                check=True,
+                capture_output=True,
+            )
+
+            self.assertEqual(run_progress("start", str(specs_dir), "T-001", cwd=repo).returncode, 0)
+            (repo / "src.py").write_text("print('changed')\n", encoding="utf-8")
+            result = run_progress("resume", str(specs_dir), cwd=repo)
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("interrupted", result.stdout)
+
+    def test_guard_commit_blocks_business_code_without_progress_update(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True)
+            specs_dir = repo / "docs" / "specs"
+            specs_dir.mkdir(parents=True)
+            make_requirements_first(specs_dir)
+            init_progress(specs_dir)
+            (repo / "src.py").write_text("print('changed')\n", encoding="utf-8")
+            subprocess.run(["git", "add", "src.py"], cwd=repo, check=True, capture_output=True)
+
+            blocked = run_progress("guard-commit", str(specs_dir), cwd=repo)
+            subprocess.run(["git", "add", "docs/specs/tasks.md"], cwd=repo, check=True, capture_output=True)
+            allowed = run_progress("guard-commit", str(specs_dir), cwd=repo)
+
+            self.assertNotEqual(blocked.returncode, 0)
+            self.assertIn("Business-code changes", blocked.stdout)
+            self.assertEqual(allowed.returncode, 0, allowed.stdout + allowed.stderr)
+
+    def test_pre_acceptance_is_not_final_acceptance(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            specs_dir = Path(tmp)
+            tasks = valid_feature_tasks().replace("- [ ] **T-001:**", "- [x] **T-001:**")
+            tasks = tasks.replace("- 状态: pending", "- 状态: done", 1)
+            tasks = tasks.replace("- 验证证据: pending", "- 验证证据: pytest passed", 1)
+            make_requirements_first(specs_dir, tasks=tasks)
+            init_progress(specs_dir)
+            result = run_progress("pre-acceptance", str(specs_dir))
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("strict multi-agent final acceptance is still required", result.stdout)
+
+    def test_guard_commit_honors_non_default_specs_dir(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True)
+            # Specs live outside docs/specs/ — guard must still detect them.
+            specs_dir = repo / "spec"
+            specs_dir.mkdir(parents=True)
+            make_requirements_first(specs_dir)
+            init_progress(specs_dir)
+            (repo / "src.py").write_text("print('changed')\n", encoding="utf-8")
+            subprocess.run(["git", "add", "src.py"], cwd=repo, check=True, capture_output=True)
+
+            blocked = run_progress("guard-commit", str(specs_dir), cwd=repo)
+            subprocess.run(["git", "add", "spec/tasks.md"], cwd=repo, check=True, capture_output=True)
+            allowed = run_progress("guard-commit", str(specs_dir), cwd=repo)
+
+            self.assertNotEqual(blocked.returncode, 0, blocked.stdout)
+            self.assertIn("spec/tasks.md", blocked.stdout)
+            self.assertEqual(allowed.returncode, 0, allowed.stdout + allowed.stderr)
+
+    def test_block_records_blocker_without_completing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            specs_dir = Path(tmp)
+            make_requirements_first(specs_dir)
+            init_progress(specs_dir)
+
+            no_reason = run_progress("block", str(specs_dir), "T-001", "--reason", "")
+            blocked = run_progress("block", str(specs_dir), "T-001", "--reason", "waiting on upstream API")
+
+            self.assertNotEqual(no_reason.returncode, 0)
+            self.assertEqual(blocked.returncode, 0, blocked.stdout + blocked.stderr)
+            tasks_text = (specs_dir / "tasks.md").read_text(encoding="utf-8")
+            self.assertIn("- [ ] **T-001:**", tasks_text)
+            self.assertIn("waiting on upstream API", tasks_text)
+            self.assertIn("Blocked", (specs_dir / "progress.md").read_text(encoding="utf-8"))
+
+    def test_waves_detects_circular_dependency(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            specs_dir = Path(tmp)
+            tasks = valid_feature_tasks()
+            tasks = tasks.replace("- [x] **T-002:**", "- [ ] **T-002:**")
+            tasks = tasks.replace("- [~] **T-003:**", "- [ ] **T-003:**")
+            tasks = tasks.replace("- 状态: done", "- 状态: pending")
+            tasks = tasks.replace("- 状态: skipped", "- 状态: pending")
+            # Introduce a cycle: T-001 depends on T-003, T-003 depends on T-002, T-002 on T-001.
+            tasks = tasks.replace("- 依赖: 无", "- 依赖: T-003", 1)
+            make_requirements_first(specs_dir, tasks=tasks)
+
+            result = run_progress("waves", str(specs_dir))
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("Circular", result.stderr)
+
+    def test_sync_check_flags_changed_artifact(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            specs_dir = Path(tmp)
+            make_requirements_first(specs_dir)
+            init_progress(specs_dir)
+            # init writes spec.yml with current artifact hashes; mutate product.md.
+            run_progress("sync-check", str(specs_dir), "--write")
+            (specs_dir / "product.md").write_text(
+                valid_product() + "\n## Extra section\nNew content.\n", encoding="utf-8"
+            )
+
+            result = run_progress("sync-check", str(specs_dir))
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("product.md changed", result.stdout)
+
+    def test_specs_path_rejects_traversal_outside_base(self) -> None:
+        if str(SCRIPT_DIR) not in sys.path:
+            sys.path.insert(0, str(SCRIPT_DIR))
+        import spec_progress
+
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp) / "repo"
+            (base / "docs" / "specs").mkdir(parents=True)
+            # Inside the base is allowed.
+            self.assertTrue(
+                spec_progress.specs_path(base / "docs" / "specs", base_dir=base)
+            )
+            # ../ traversal outside the base is rejected.
+            with self.assertRaises(spec_progress.SpecProgressError):
+                spec_progress.specs_path(base / ".." / "outside", base_dir=base)
 
 
 if __name__ == "__main__":

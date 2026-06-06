@@ -23,6 +23,35 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+try:
+    from spec_progress import (
+        SpecProgressError,
+        VALID_APPROVAL_STATES,
+        VALID_PROGRESS_STATES,
+        command_pre_acceptance,
+        command_resume,
+        command_status,
+        command_sync_check,
+        execution_waves,
+        parse_flat_yml,
+        parse_progress,
+        parse_tasks,
+        workflow_matches,
+    )
+except ImportError:  # pragma: no cover - direct import is available in normal CLI use.
+    SpecProgressError = Exception
+    VALID_APPROVAL_STATES = {"pending", "approved", "reapproval-required"}
+    VALID_PROGRESS_STATES = {"Draft", "Approved", "In Progress", "Blocked", "Completed", "Accepted"}
+    command_pre_acceptance = None
+    command_resume = None
+    command_status = None
+    command_sync_check = None
+    execution_waves = None
+    parse_flat_yml = None
+    parse_progress = None
+    parse_tasks = None
+    workflow_matches = None
+
 
 Result = tuple[bool, str]
 COLOR_MODE = "auto"
@@ -126,28 +155,42 @@ def normalize_workflow(workflow: str | None) -> str | None:
 
 
 def detect_workflow(specs_dir: str) -> str | None:
-    has_requirements_first = all(
-        os.path.isfile(os.path.join(specs_dir, filename))
-        for filename in ("product.md", "architecture.md")
-    )
-    has_design_first = all(
-        os.path.isfile(os.path.join(specs_dir, filename))
-        for filename in ("design.md", "requirements.md")
-    )
-    has_bugfix = all(
-        os.path.isfile(os.path.join(specs_dir, filename))
-        for filename in ("bugfix.md", "design.md")
-    )
+    """Reuse spec_progress as the single source of truth for matching.
 
-    matches = [
-        workflow
-        for workflow, present in (
-            ("requirements-first", has_requirements_first),
-            ("design-first", has_design_first),
-            ("bugfix", has_bugfix),
-        )
-        if present
-    ]
+    spec_progress.workflow_matches lists every workflow whose artifacts are
+    present; here we keep the validator's stricter contract of returning None
+    when the directory is ambiguous (more than one match) or empty.
+    """
+    if workflow_matches is not None:
+        matches = workflow_matches(specs_dir)
+    else:  # pragma: no cover - fallback when spec_progress import failed.
+        matches = [
+            workflow
+            for workflow, present in (
+                (
+                    "requirements-first",
+                    all(
+                        os.path.isfile(os.path.join(specs_dir, filename))
+                        for filename in ("product.md", "architecture.md")
+                    ),
+                ),
+                (
+                    "design-first",
+                    all(
+                        os.path.isfile(os.path.join(specs_dir, filename))
+                        for filename in ("design.md", "requirements.md")
+                    ),
+                ),
+                (
+                    "bugfix",
+                    all(
+                        os.path.isfile(os.path.join(specs_dir, filename))
+                        for filename in ("bugfix.md", "design.md")
+                    ),
+                ),
+            )
+            if present
+        ]
 
     if len(matches) == 1:
         return matches[0]
@@ -522,6 +565,161 @@ def check_tasks_spec(specs_dir: str, workflow: str) -> list[Result]:
     return results
 
 
+def check_analyze_requirements(specs_dir: str, workflow: str) -> list[Result]:
+    if not ((Path(specs_dir) / "spec.yml").is_file() or (Path(specs_dir) / "progress.md").is_file()):
+        return [(True, "旧版 spec 兼容模式：未发现 spec.yml/progress.md，跳过 Analyze Requirements 强校验")]
+
+    if workflow == "bugfix":
+        return []
+
+    filename = "requirements.md" if workflow == "design-first" else "product.md"
+    content, load_errors = load_spec_file(specs_dir, filename)
+    if content is None:
+        return load_errors
+
+    results: list[Result] = []
+    if has_pattern(content, r"需求分析|Analyze Requirements|Requirement Analysis|歧义|冲突|遗漏"):
+        results.append((True, f"{filename} 包含 Analyze Requirements / 需求分析结论"))
+    else:
+        results.append((False, f"{filename} 缺少 Analyze Requirements / 需求分析结论"))
+
+    ambiguity_words = r"尽快|等等|之类|合理|适当|优化一下|更好|as needed|etc\.|fast|better|reasonable"
+    if has_pattern(content, ambiguity_words):
+        results.append((False, f"{filename} 仍含可能未澄清的模糊词"))
+    else:
+        results.append((True, f"{filename} 未发现常见模糊词残留"))
+
+    if has_pattern(content, r"失败路径|异常路径|Failure Path|并发|权限|授权|Security|数据一致性"):
+        results.append((True, f"{filename} 覆盖失败路径或关键风险约束"))
+    else:
+        results.append((False, f"{filename} 缺少失败路径、并发、权限或数据风险检查"))
+    return results
+
+
+def check_task_graph(specs_dir: str, workflow: str) -> list[Result]:
+    if not ((Path(specs_dir) / "spec.yml").is_file() or (Path(specs_dir) / "progress.md").is_file()):
+        return [(True, "旧版 spec 兼容模式：未发现 spec.yml/progress.md，跳过结构化任务图强校验")]
+
+    if parse_tasks is None or execution_waves is None:
+        return [(False, "spec_progress 模块不可用，无法检查任务图")]
+    try:
+        tasks = parse_tasks(specs_dir)
+    except SpecProgressError as exc:
+        return [(False, str(exc))]
+
+    results: list[Result] = []
+    missing_required: list[str] = []
+    ids = {task.task_id for task in tasks}
+    prefix = expected_task_prefix(workflow)
+    for task in tasks:
+        required = ("depends_on", "risk", "covers", "verify", "evidence", "parallelizable")
+        missing = [field for field in required if not task.fields.get(field)]
+        if missing:
+            missing_required.append(f"{task.task_id}: {', '.join(missing)}")
+        for dep in task.depends_on:
+            if dep not in ids:
+                results.append((False, f"{task.task_id} 依赖不存在的任务 {dep}"))
+        if not task.task_id.startswith(prefix):
+            results.append((False, f"{task.task_id} 不符合当前工作流任务前缀 {prefix}-xxx"))
+
+    if missing_required:
+        preview = "; ".join(missing_required[:5])
+        if len(missing_required) > 5:
+            preview += f"; 另有 {len(missing_required) - 5} 项"
+        results.append((False, f"tasks.md 结构化任务字段缺失: {preview}"))
+    else:
+        results.append((True, "tasks.md 所有任务包含任务图字段"))
+
+    waves = execution_waves(tasks)
+    if waves:
+        results.append((True, f"tasks.md 可计算执行 waves: {waves}"))
+    else:
+        results.append((False, "tasks.md 无法计算执行 waves"))
+    return results
+
+
+def check_progress_files(specs_dir: str, workflow: str) -> list[Result]:
+    results: list[Result] = []
+    progress_path = Path(specs_dir) / "progress.md"
+    index_path = Path(specs_dir) / "spec.yml"
+
+    if not progress_path.is_file() and not index_path.is_file():
+        results.append((True, "未发现 spec.yml/progress.md，按旧版 spec 兼容模式跳过恢复状态检查"))
+        return results
+
+    if not progress_path.is_file():
+        results.append((False, "缺失恢复入口: progress.md"))
+    else:
+        results.append((True, "progress.md 存在"))
+
+    if not index_path.is_file():
+        results.append((False, "缺失 Kiro 兼容索引: spec.yml"))
+    else:
+        results.append((True, "spec.yml 存在"))
+
+    if parse_progress is None or parse_flat_yml is None or parse_tasks is None:
+        results.append((False, "spec_progress 模块不可用，无法检查恢复状态"))
+        return results
+
+    try:
+        tasks = parse_tasks(specs_dir)
+        task_ids = {task.task_id for task in tasks}
+        progress = parse_progress(specs_dir)
+        index = parse_flat_yml(index_path)
+    except SpecProgressError as exc:
+        return [(False, str(exc))]
+
+    if progress.workflow in {"unknown", workflow}:
+        results.append((True, "progress.md workflow 与规范分支一致"))
+    else:
+        results.append((False, f"progress.md workflow 不一致: {progress.workflow} != {workflow}"))
+
+    if progress.status in VALID_PROGRESS_STATES:
+        results.append((True, f"progress.md 状态合法: {progress.status}"))
+    else:
+        results.append((False, f"progress.md 状态非法: {progress.status}"))
+
+    if progress.approval in VALID_APPROVAL_STATES:
+        results.append((True, f"progress.md approval 合法: {progress.approval}"))
+    else:
+        results.append((False, f"progress.md approval 非法: {progress.approval}"))
+
+    if progress.current_task == "n/a" or progress.current_task in task_ids:
+        results.append((True, "progress.md 当前任务存在或为 n/a"))
+    else:
+        results.append((False, f"progress.md 当前任务不存在: {progress.current_task}"))
+
+    if index.get("workflow") == workflow:
+        results.append((True, "spec.yml workflow 与规范分支一致"))
+    else:
+        results.append((False, f"spec.yml workflow 不一致: {index.get('workflow')} != {workflow}"))
+
+    required_index_keys = {
+        "schema_version",
+        "workflow",
+        "mode",
+        "approval",
+        "risk_level",
+        "current_task",
+        "artifacts",
+        "requirements",
+        "task_ids",
+        "task_graph",
+    }
+    missing = sorted(required_index_keys - set(index))
+    if missing:
+        results.append((False, f"spec.yml 缺少字段: {', '.join(missing)}"))
+    else:
+        results.append((True, "spec.yml 包含 Kiro 兼容索引字段"))
+
+    unchecked = [task.task_id for task in tasks if task.checkbox_state == "pending"]
+    if progress.status in {"Completed", "Accepted"} and unchecked:
+        results.append((False, f"progress.md 标记完成但仍有未完成任务: {', '.join(unchecked)}"))
+    else:
+        results.append((True, "progress.md 完成状态与 tasks.md 一致"))
+    return results
+
+
 def print_section(title: str) -> None:
     print(colorize(f"\n── {title} ──", Colors.BOLD))
 
@@ -549,6 +747,26 @@ def main() -> None:
         choices=("auto", "always", "never"),
         help="控制 ANSI 颜色输出，默认 auto；重定向或设置 NO_COLOR 时不输出颜色",
     )
+    parser.add_argument(
+        "--progress",
+        action="store_true",
+        help="输出 tasks.md/progress.md 的当前进度摘要后退出",
+    )
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="检查 spec.yml/progress.md/tasks.md 的断点恢复一致性后退出",
+    )
+    parser.add_argument(
+        "--sync-check",
+        action="store_true",
+        help="检查 spec.yml 与 spec/tasks 的漂移；发现 spec 变更时提示重新批准",
+    )
+    parser.add_argument(
+        "--pre-acceptance",
+        action="store_true",
+        help="运行本地预验收检查；通过也不等同于严格 multi-agent final acceptance",
+    )
     args = parser.parse_args()
     set_color_mode(args.color)
 
@@ -561,6 +779,61 @@ def main() -> None:
         print(colorize(f"✖ 目录不存在: {specs_dir}", Colors.RED))
         print("\n请先运行 Spec Coding 工作流生成规范文件。")
         sys.exit(1)
+
+    if args.progress:
+        if command_status is None:
+            print(colorize("✖ spec_progress 模块不可用，无法输出进度。", Colors.RED))
+            sys.exit(1)
+        try:
+            import json
+
+            print(json.dumps(command_status(specs_dir), ensure_ascii=False, indent=2))
+            sys.exit(0)
+        except SpecProgressError as exc:
+            print(colorize(f"✖ {exc}", Colors.RED))
+            sys.exit(1)
+
+    if args.resume:
+        if command_resume is None:
+            print(colorize("✖ spec_progress 模块不可用，无法执行恢复检查。", Colors.RED))
+            sys.exit(1)
+        try:
+            import json
+
+            result = command_resume(specs_dir)
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            sys.exit(1 if result["issues"] else 0)
+        except SpecProgressError as exc:
+            print(colorize(f"✖ {exc}", Colors.RED))
+            sys.exit(1)
+
+    if args.sync_check:
+        if command_sync_check is None:
+            print(colorize("✖ spec_progress 模块不可用，无法执行 sync-check。", Colors.RED))
+            sys.exit(1)
+        try:
+            import json
+
+            result = command_sync_check(specs_dir, write=False)
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            sys.exit(1 if result["issues"] else 0)
+        except SpecProgressError as exc:
+            print(colorize(f"✖ {exc}", Colors.RED))
+            sys.exit(1)
+
+    if args.pre_acceptance:
+        if command_pre_acceptance is None:
+            print(colorize("✖ spec_progress 模块不可用，无法执行 pre-acceptance。", Colors.RED))
+            sys.exit(1)
+        try:
+            import json
+
+            result = command_pre_acceptance(specs_dir)
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            sys.exit(0 if result["ok"] else 1)
+        except SpecProgressError as exc:
+            print(colorize(f"✖ {exc}", Colors.RED))
+            sys.exit(1)
 
     workflow = normalize_workflow(args.workflow)
     if workflow is None:
@@ -626,6 +899,21 @@ def main() -> None:
 
     print_section("tasks.md 内容检查")
     for result in check_tasks_spec(specs_dir, workflow):
+        all_results.append(result)
+        print_result(result)
+
+    print_section("Analyze Requirements 检查")
+    for result in check_analyze_requirements(specs_dir, workflow):
+        all_results.append(result)
+        print_result(result)
+
+    print_section("任务图与结构化字段检查")
+    for result in check_task_graph(specs_dir, workflow):
+        all_results.append(result)
+        print_result(result)
+
+    print_section("Kiro 兼容索引与恢复状态检查")
+    for result in check_progress_files(specs_dir, workflow):
         all_results.append(result)
         print_result(result)
 

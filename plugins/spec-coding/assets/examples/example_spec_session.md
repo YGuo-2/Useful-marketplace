@@ -48,6 +48,8 @@
 - `docs/specs/product.md`
 - `docs/specs/architecture.md`
 - `docs/specs/tasks.md`
+- `docs/specs/progress.md`
+- `docs/specs/spec.yml`
 
 #### `docs/specs/product.md` 节选
 
@@ -67,9 +69,23 @@
 
 ```markdown
 - [ ] **T-001:** 创建 comments 数据模型和迁移
+  - 状态: pending
+  - 验证命令: pytest tests/test_comments_migration.py
+  - 验证证据: pending
+  - 依赖: 无
+  - 风险: medium
+  - 覆盖: US-001, AC-001.1
+  - 可并行: 否
   - 验证标准：迁移可执行，comments 表包含文章、作者、内容和时间字段
 
 - [ ] **T-002:** 实现评论创建与删除服务
+  - 状态: pending
+  - 验证命令: pytest tests/test_comments_service.py
+  - 验证证据: pending
+  - 依赖: T-001
+  - 风险: medium
+  - 覆盖: US-001, AC-001.2
+  - 可并行: 否
   - 验证标准：作者和管理员权限测试通过
 
 - [ ] **T-003:** 接入评论 API 并补充验收测试
@@ -83,6 +99,8 @@
 >
 > ```bash
 > python plugins/spec-coding/scripts/validate_spec.py docs/specs/ --workflow requirements-first
+> python plugins/spec-coding/scripts/spec_progress.py init docs/specs/
+> python plugins/spec-coding/scripts/validate_spec.py docs/specs/ --resume
 > ```
 >
 > 通过校验仍不代表批准实施。确认无误后，请回复 `批准规范，启动执行`。
@@ -99,7 +117,17 @@
 
 > 锁定第一个未完成任务：T-001 创建 comments 数据模型和迁移。
 
-智能体只实现 T-001，运行该任务的验证，然后更新 `tasks.md`：
+智能体先记录断点，再只实现 T-001：
+
+```bash
+python plugins/spec-coding/scripts/spec_progress.py start docs/specs/ T-001
+```
+
+运行该任务的验证后，通过受控工具更新 `tasks.md`、`progress.md` 和 `spec.yml`：
+
+```bash
+python plugins/spec-coding/scripts/spec_progress.py complete docs/specs/ T-001 --evidence "pytest tests/test_comments_migration.py passed"
+```
 
 ```markdown
 - [x] **T-001:** 创建 comments 数据模型和迁移
@@ -114,6 +142,8 @@
 当 `docs/specs/tasks.md` 没有未完成的 `- [ ]` 任务后，智能体进入 `spec-acceptance`。
 
 **智能体：**
+
+> 本地 pre-acceptance 已通过，但这不等同于最终验收。
 
 > 结尾验收需要按 `tasks.md` 编排子 agent 进行审查和对抗审查。请明确授权我启动子 agent 后，我再继续验收流程。
 
@@ -141,5 +171,6 @@
 1. Intake 先检查上下文，再只问会改变规范的问题。
 2. `docs/specs/` 是实施依据，validator 只是结构检查。
 3. 首选审批短语是 `批准规范，启动执行`。
-4. 每次只实施一个 unchecked task。
-5. 最终完成必须经过严格的多 agent acceptance。
+4. 每次只实施一个可执行 task，并用 `spec_progress.py` 或 MCP 工具更新状态。
+5. `progress.md` 用于断线恢复，`spec.yml` 用于 Kiro 兼容索引。
+6. 最终完成必须经过严格的多 agent acceptance；pre-acceptance 只是本地预检。

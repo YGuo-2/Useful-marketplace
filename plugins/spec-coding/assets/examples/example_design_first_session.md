@@ -51,6 +51,8 @@
 - `docs/specs/design.md`
 - `docs/specs/requirements.md`
 - `docs/specs/tasks.md`
+- `docs/specs/progress.md`
+- `docs/specs/spec.yml`
 
 #### `docs/specs/design.md` 节选
 
@@ -84,18 +86,38 @@ flowchart TD
 
 ```markdown
 - [ ] **T-001:** 固化 outbox 持久化与 worker 基础约束
+  - 状态: pending
+  - 验证命令: pytest tests/test_outbox_design.py
+  - 验证证据: pending
+  - 依赖: 无
+  - 风险: high
+  - 覆盖: REQ-001
+  - 可并行: 否
   - 验证标准：事务边界和发布路径符合 design.md
 
 - [ ] **T-002:** 实现订单创建后的 outbox 写入与事件发布路径
+  - 状态: pending
+  - 验证命令: pytest tests/test_outbox_publish.py
+  - 验证证据: pending
+  - 依赖: T-001
+  - 风险: high
+  - 覆盖: REQ-001
+  - 可并行: 否
   - 验证标准：满足 requirements.md 的 GWT 验收标准
 ```
 
 **智能体输出：**
 
-> 规范工件已生成。请审查 `docs/specs/design.md`、`docs/specs/requirements.md` 和 `docs/specs/tasks.md`。
+> 规范工件已生成。请审查 `docs/specs/design.md`、`docs/specs/requirements.md`、`docs/specs/tasks.md`、`docs/specs/progress.md` 和 `docs/specs/spec.yml`。
 > 通过校验仍不代表批准实施。确认无误后，请回复 `批准规范，启动执行`。
 >
 > 兼容旧短语：`批准 design-first 规范，启动执行`。
+>
+> ```bash
+> python plugins/spec-coding/scripts/validate_spec.py docs/specs/ --workflow design-first
+> python plugins/spec-coding/scripts/spec_progress.py init docs/specs/
+> python plugins/spec-coding/scripts/validate_spec.py docs/specs/ --resume
+> ```
 
 ---
 
@@ -104,4 +126,5 @@ flowchart TD
 1. Design-First 的真实来源是固定技术方案，不是普通需求换个名字。
 2. 先选择 High Level Design 或 Low Level Design。
 3. `requirements.md` 必须从 `design.md` 派生，不能扩大产品范围。
-4. 实现中若发现设计冲突，必须回到规范阶段并重新获得批准。
+4. 实现中若发现设计冲突，必须运行 sync-check、回到规范阶段并重新获得批准。
+5. 任务开始/完成必须用 `spec_progress.py` 或 MCP 工具更新 `tasks.md`、`progress.md` 和 `spec.yml`。

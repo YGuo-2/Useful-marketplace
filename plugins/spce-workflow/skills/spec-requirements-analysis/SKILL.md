@@ -17,6 +17,7 @@ Use this as the Kiro-style Analyze Requirements step before generating or finali
 - Do not use this as approval. Passing analysis does not authorize implementation.
 - Quick Plan may skip the full analysis only for low-risk work with explicit human authorization, and the skip reason must be recorded.
 - If analysis discovers conflicting requirements or missing high-risk boundaries, stop spec generation and ask focused clarification questions.
+- Intake handoff items must be classified into the analysis. Do not drop accepted assumptions, unresolved risks, non-goals, or decision boundaries when moving from intake to `product.md` or `requirements.md`.
 
 ## Analysis Checklist
 
@@ -24,6 +25,7 @@ Check and record:
 
 - ambiguous wording, undefined concepts, and unclear actors
 - conflicting functional or non-functional requirements
+- intake assumptions, accepted unknowns, non-goals, and decision boundaries
 - missing acceptance criteria or non-testable criteria
 - empty states, invalid inputs, failure paths, retry behavior, and rollback expectations
 - permissions, authorization, privacy, sensitive data, and security boundaries
@@ -40,6 +42,7 @@ For Requirements-First, update `docs/specs/product.md` with:
 - **歧义检查：** ...
 - **冲突检查：** ...
 - **遗漏边界：** ...
+- **Intake 未决项归类：** ...
 - **并发 / 数据 / 安全风险：** ...
 - **Quick Plan 跳过原因：** n/a
 ```
@@ -53,5 +56,6 @@ For Design-First, update `docs/specs/requirements.md` with:
 - **设计一致性：** ...
 - **冲突检查：** ...
 - **失败路径：** ...
+- **Intake 未决项归类：** ...
 - **Quick Plan 跳过原因：** n/a
 ```

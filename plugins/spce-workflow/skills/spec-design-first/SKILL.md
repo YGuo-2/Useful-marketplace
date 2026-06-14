@@ -22,6 +22,7 @@ If the entry router has not already printed the announcement, print:
 - New specs must also generate `docs/specs/spec.yml` and `docs/specs/progress.md` from the templates in `../../assets/templates/`.
 - `design.md` is the primary truth source for this branch.
 - `requirements.md` must be derived from `design.md`; do not add unsupported product scope. It must include Kiro-style Analyze Requirements conclusions before finalizing tasks.
+- Carry the `Intake Handoff / 澄清交接摘要` into `requirements.md`; do not leave intake conclusions only in chat.
 - If the request is a pure product goal with no technical design intent, reroute to `../spec-requirements-first/SKILL.md`. If the user explicitly asks for Design-First but provides incomplete design input, stay in State A and clarify the design starting point.
 
 ## High-Risk Warning
@@ -35,7 +36,7 @@ If the task involves authentication, authorization, payments, billing, database 
 
 ## Intake Precondition
 
-Before choosing design granularity or entering State A, if the current conversation does not already include a `spec-intake` summary or a clear no-material-questions decision, read and follow `../spec-intake/SKILL.md`. If intake asks questions, stop and wait for the human answer before generating specs.
+Before choosing design granularity or entering State A, if the current conversation does not already include an `Intake Handoff / 澄清交接摘要` with `Status: complete` or `Status: assumptions-accepted`, read and follow `../spec-intake/SKILL.md`. If intake asks questions or is blocked, stop and wait for the human answer before generating specs.
 
 ## Design Granularity
 
@@ -50,16 +51,17 @@ If both are needed, start with High Level Design and expand to Low Level Design 
 
 Inspect project context before asking questions: existing specs, architecture docs, ADRs, manifests, interface drafts, migration notes, and related code paths.
 
-Clarify only design-critical gaps:
+Clarify all design-critical gaps:
 
 - design objective and fixed constraints
-- selected granularity
-- affected system boundary, components, APIs, data flow, and state changes
+- selected HLD/LLD granularity
+- affected system boundary, components, APIs, data flow, state changes, and public contracts
 - performance, security, compliance, compatibility, and migration constraints
 - decisions already locked vs. decisions still open
+- what requirements may be derived from the design and what product scope is explicitly out of bounds
 - alternatives considered and rejection reasons when available
 
-If clarification is needed, output a concise numbered question list. Unknowns may be recorded as assumptions or risks if the user accepts that.
+If clarification is needed, continue the multi-round intake loop instead of asking one batch and generating specs. Unknowns may be recorded as assumptions or risks only if the user explicitly accepts that.
 
 ## State B: Spec Artifact Generation
 
@@ -74,7 +76,7 @@ Use the plugin templates from `../../assets/templates/`:
 Generate:
 
 - `docs/specs/design.md`: design granularity, system or module boundaries, relationships, key interfaces, data flow, constraints, rejected alternatives, and risks
-- `docs/specs/requirements.md`: requirements and acceptance criteria derived from `design.md`, with clear markers for assumptions
+- `docs/specs/requirements.md`: intake handoff, requirements and acceptance criteria derived from `design.md`, with clear markers for assumptions
 - `docs/specs/tasks.md`: ordered atomic tasks that follow design dependencies, using `- [ ]`, with structured fields: status, files, verify, evidence, depends_on, risk, covers, and parallelizable
 - `docs/specs/progress.md`: resume entrypoint with workflow status, current task, approval state, branch, commit, blockers, and recovery notes
 - `docs/specs/spec.yml`: Kiro-compatible machine index with workflow, mode, approval, risk level, artifact paths, requirement IDs, task graph, current task, and checkpoint
@@ -107,22 +109,27 @@ python <plugin-root>/scripts/spec_progress.py init docs/specs/
 python <plugin-root>/scripts/validate_spec.py docs/specs/ --resume
 ```
 
-This is a structural integrity check only. Passing validation does not approve implementation; implementation still requires an accepted approval phrase.
+This is a structural integrity check only. Passing validation does not approve implementation; implementation still requires an accepted approval phrase. After the approval phrase is received, run:
+
+```bash
+python <plugin-root>/scripts/spec_progress.py approve docs/specs/ --evidence "批准规范，启动执行"
+```
 
 ## State C: Controlled Implementation
 
 Only enter this state after explicit approval.
 
-When the approval phrase is received, update any generated status or approval-record fields in the spec artifacts before implementation.
+When the approval phrase is received, freeze the baseline with `spec_approve` or `spec_progress.py approve` before implementation. Do not start a task until `spec.yml` shows `approval: approved`, `artifact_hashes`, and `task_plan_hash`.
 
 Implementation rules:
 
 - Read `docs/specs/design.md`, `docs/specs/requirements.md`, and `docs/specs/tasks.md`.
+- Run `spec_resume` or `spec_progress.py resume docs/specs/` and stop if it reports frozen-baseline drift.
 - Select only the first unchecked task in `tasks.md`.
 - Before editing business code for that task, call `spec_start_task` through MCP or run `python <plugin-root>/scripts/spec_progress.py start docs/specs/ T-xxx`.
 - Implement only behavior inside the approved design boundary.
 - Add or update tests that prove both design constraints and derived requirements.
-- If implementation conflicts with `design.md` or any approved spec artifact must change, stop code work, return to State B, update the specs, run sync-check, set approval to `reapproval-required`, and wait for an accepted approval phrase again before continuing.
+- If implementation conflicts with `design.md`, `requirements.md`, or the task plan in `tasks.md`, stop code work. Run `sync-check --write` to mark `reapproval-required`, return to State B, update specs, and wait for an accepted approval phrase plus a fresh `approve` before continuing. Progress fields may still be updated through the tools.
 - Run verification and perform at most three self-healing loops.
 - After passing verification, call `spec_complete_task` through MCP or run `python <plugin-root>/scripts/spec_progress.py complete docs/specs/ T-xxx --evidence "<verification evidence>"`. Do not manually mark `- [x]` without recorded evidence.
 - If blocked, call `spec_block_task` or `python <plugin-root>/scripts/spec_progress.py block docs/specs/ T-xxx --reason "<reason>"`.

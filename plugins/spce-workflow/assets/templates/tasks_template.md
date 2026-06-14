@@ -11,12 +11,13 @@
 
 ## 执行规则
 
-1. **受控入口：** 任务开始、完成、阻塞、跳过必须通过 `spec_progress.py` CLI 或 MCP 工具更新；工具会同步顶部状态、当前任务、进度和完成日志。
+1. **受控入口：** 批准后先运行 `spec_progress.py approve docs/specs/ --evidence "<批准依据>"` 或 MCP `spec_approve` 冻结基线；任务开始、完成、阻塞、跳过必须通过 `spec_progress.py` CLI 或 MCP 工具更新。
 2. **单任务约束：** 每个任务完成后必须记录验证证据，才可标记为 `- [x]`。
 3. **依赖优先：** 只能启动依赖已完成的任务；高风险任务必须单独执行和审查。
 4. **禁止跳跃：** 不得跳过任何任务，除非人类明确批准并记录为 `- [~]`。
-5. **退回机制：** 如发现需要修改 `product.md`、`architecture.md` 或 `tasks.md`，必须暂停实现、更新规范、运行 sync-check 并重新获得批准。
-6. **验收修复隔离：** final acceptance 发现的问题不得追加到本文件；修复项必须写入 `docs/specs/acceptance-fixes.md`。
+5. **冻结边界：** 批准后 `product.md`、`architecture.md` 和任务计划被冻结；只允许通过工具更新进度字段、证据、阻塞原因、完成日志、`progress.md` 和当前任务索引。
+6. **退回机制：** 如发现需要修改需求、架构或任务计划，必须暂停实现、运行 `sync-check --write` 标记 `reapproval-required`，更新规范并重新获得批准后再运行 `approve`。
+7. **验收修复隔离：** final acceptance 发现的问题不得追加到本文件；修复项必须写入 `docs/specs/acceptance-fixes.md`。
 
 ---
 

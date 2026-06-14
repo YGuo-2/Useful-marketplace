@@ -12,11 +12,12 @@
 ## 执行规则
 
 1. **先证据，后修复：** 第一项任务优先建立自动化复现或最强可用证据。
-2. **受控入口：** 任务开始、完成、阻塞、跳过必须通过 `spec_progress.py` CLI 或 MCP 工具更新；工具会同步顶部状态、当前任务、进度和完成日志。
+2. **受控入口：** 批准后先运行 `spec_progress.py approve docs/specs/ --evidence "<批准依据>"` 或 MCP `spec_approve` 冻结基线；任务开始、完成、阻塞、跳过必须通过 `spec_progress.py` CLI 或 MCP 工具更新。
 3. **最小变更：** 只修改解决当前问题所必需的代码路径。
 4. **必须防回归：** 至少保留一项验证“不变行为未被破坏”的任务。
-5. **退回机制：** 如果根因判断变化，必须暂停修复、更新 `bugfix.md` / `design.md` / `tasks.md`、运行 sync-check 并重新获得批准。
-6. **验收修复隔离：** final acceptance 发现的问题不得追加到本文件；修复项必须写入 `docs/specs/acceptance-fixes.md`。
+5. **冻结边界：** 批准后 `bugfix.md`、`design.md` 和任务计划被冻结；只允许通过工具更新进度字段、证据、阻塞原因、完成日志、`progress.md` 和当前任务索引。
+6. **退回机制：** 如果根因判断或修复范围变化，必须暂停修复、运行 `sync-check --write` 标记 `reapproval-required`，更新规范并重新获得批准后再运行 `approve`。
+7. **验收修复隔离：** final acceptance 发现的问题不得追加到本文件；修复项必须写入 `docs/specs/acceptance-fixes.md`。
 
 ---
 

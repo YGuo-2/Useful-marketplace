@@ -733,6 +733,8 @@ def check_progress_files(specs_dir: str, workflow: str) -> list[Result]:
         "requirements",
         "task_ids",
         "task_graph",
+        "artifact_hashes",
+        "task_plan_hash",
     }
     missing = sorted(required_index_keys - set(index))
     if missing:

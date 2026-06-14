@@ -19,7 +19,7 @@ The plugin source is at `plugins/spce-workflow`.
 
 It includes seven skills:
 
-- `spec-intake`: inspect context first, then ask only material clarification questions.
+- `spec-intake`: inspect context first, then run a multi-round clarification gate with an explicit handoff.
 - `spce-workflow`: route the request to the right workflow branch.
 - `spec-requirements-analysis`: run Kiro-style Analyze Requirements before artifact generation.
 - `spec-requirements-first`: create product-led feature specs.
@@ -36,7 +36,7 @@ Use it for complex features, cross-module refactors, design-first work, regressi
 All generated artifacts live in `docs/specs/`; chat-only plans are not the source of truth.
 
 1. Resume first if `docs/specs/progress.md` exists.
-2. Intake clarifies goal, scope, risk, and acceptance criteria.
+2. Intake clarifies goal, scope, risk, non-goals, decision boundaries, and acceptance criteria. It may ask multiple focused rounds and hands off only when status is `complete` or `assumptions-accepted`.
 3. Router selects one branch:
    - Requirements-First: product goal or new capability without fixed technical design.
    - Design-First: architecture, ADR, HLD/LLD, or fixed technical approach drives the work.
@@ -45,9 +45,10 @@ All generated artifacts live in `docs/specs/`; chat-only plans are not the sourc
 5. The selected branch writes Markdown artifacts plus:
    - `docs/specs/tasks.md`: human-readable task source of truth.
    - `docs/specs/progress.md`: resume entrypoint after interruption, shutdown, or lost thread.
-   - `docs/specs/spec.yml`: Kiro-compatible machine index for workflow, artifacts, approval, risk, requirement IDs, task graph, and current task.
-6. Implementation proceeds through Spec Progress CLI/MCP task updates, one safe task wave at a time.
-7. When no unchecked tasks remain, local pre-acceptance runs before strict final multi-agent acceptance.
+   - `docs/specs/spec.yml`: Kiro-compatible machine index for workflow, artifacts, approval, risk, requirement IDs, task graph, current task, `artifact_hashes`, and `task_plan_hash`.
+6. After human approval, `spec_progress.py approve` or MCP `spec_approve` freezes the approved spec and task-plan baseline.
+7. Implementation proceeds through Spec Progress CLI/MCP task updates, one safe task wave at a time.
+8. When no unchecked tasks remain, local pre-acceptance runs before strict final multi-agent acceptance.
 
 The preferred implementation approval phrase for every branch is:
 
@@ -62,7 +63,7 @@ Legacy phrases remain valid for compatibility:
 批准 bugfix 规范，启动执行
 ```
 
-Passing validation is not approval. The human approval phrase is still required before writing business source code.
+Passing validation is not approval. The human approval phrase plus the `approve` command are required before writing business source code.
 
 ## Kiro Compatibility
 
@@ -71,9 +72,9 @@ The plugin keeps its existing Markdown strengths while adding a machine-readable
 - Requirements-First keeps `product.md + architecture.md + tasks.md`.
 - Design-First keeps `design.md + requirements.md + tasks.md`.
 - Bugfix keeps `bugfix.md + design.md + tasks.md`.
-- `spec.yml` maps those artifacts into Kiro-style workflow metadata: `workflow`, `mode`, `approval`, `risk_level`, `artifacts`, `requirements`, `task_ids`, `task_graph`, and `current_task`.
+- `spec.yml` maps those artifacts into Kiro-style workflow metadata: `workflow`, `mode`, `approval`, `risk_level`, `artifacts`, `requirements`, `task_ids`, `task_graph`, `current_task`, `artifact_hashes`, and `task_plan_hash`.
 
-`product.md` and `requirements.md` include an `Analyze Requirements / 需求分析结论` section for ambiguity, conflicts, missing boundaries, failure paths, permissions, concurrency, data consistency, and risk checks.
+`product.md`, `requirements.md`, and `bugfix.md` include an `Intake Handoff / 澄清交接` section. `product.md` and `requirements.md` include an `Analyze Requirements / 需求分析结论` section for ambiguity, conflicts, intake unresolved-item classification, missing boundaries, failure paths, permissions, concurrency, data consistency, and risk checks.
 
 ## Progress And Resume
 
@@ -83,6 +84,7 @@ Use the CLI directly:
 
 ```bash
 python plugins/spce-workflow/scripts/spec_progress.py init docs/specs/
+python plugins/spce-workflow/scripts/spec_progress.py approve docs/specs/ --evidence "批准规范，启动执行"
 python plugins/spce-workflow/scripts/spec_progress.py status docs/specs/
 python plugins/spce-workflow/scripts/spec_progress.py resume docs/specs/
 python plugins/spce-workflow/scripts/spec_progress.py start docs/specs/ T-001
@@ -99,7 +101,9 @@ python plugins/spce-workflow/scripts/spec_progress.py acceptance-next-round docs
 python plugins/spce-workflow/scripts/spec_progress.py acceptance-finish docs/specs/
 ```
 
-`complete` requires verification evidence. `skip` requires explicit human approval evidence. Task updates also synchronize the top-level `tasks.md` status, current task, progress count, and completion log. If a task is active and the worktree has business-code changes after an interruption, `resume` reports `interrupted`; the next agent must inspect the diff and evidence before continuing.
+`approve` records the human approval and freezes the baseline. `complete` requires verification evidence. `skip` requires explicit human approval evidence. Task updates also synchronize the top-level `tasks.md` status, current task, progress count, and completion log. If a task is active and the worktree has business-code changes after an interruption, `resume` reports `interrupted`; the next agent must inspect the diff and evidence before continuing.
+
+After approval, primary spec artifacts and the task plan are immutable. Progress updates may change checkbox/status/evidence/completed_at/notes/blocker, top-level progress summary, completion log, `progress.md`, and current-task/index state. If requirements, design, root cause, or task plan must change, run `sync-check --write` to mark `reapproval-required`, update specs, obtain a new approval, and run `approve` again.
 
 ## MCP Tools
 
@@ -107,6 +111,7 @@ The plugin includes `.mcp.json` and a stdio server at `mcp/spec_progress_server.
 
 - `spec_status`
 - `spec_resume`
+- `spec_approve`
 - `spec_start_task`
 - `spec_complete_task`
 - `spec_block_task`

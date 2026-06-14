@@ -1,11 +1,11 @@
 ---
 name: spec-intake
-description: Use at the start of Spce workflow runs to clarify user intent before routing to Requirements-First, Design-First, or Bugfix. Trigger when a spce-workflow task needs requirement clarification, scope confirmation, risk or constraint discovery, or timely follow-up questions; inspect available project context first and ask only questions that materially affect the spec.
+description: Use at the start of Spce workflow runs to clarify user intent before routing to Requirements-First, Design-First, or Bugfix. Runs a repo-grounded, multi-round clarification gate with explicit handoff status before any spec artifact generation.
 ---
 
 # Spce workflow Intake
 
-Use this as the first step in the Spce workflow plugin. Its job is to clarify intent and unblock routing; it does not generate source code or create a standalone `docs/specs/intake.md`.
+Use this as the first step in the Spce workflow plugin. Its job is to turn a vague request into a route-ready, spec-ready handoff. It does not generate source code and does not create a standalone `docs/specs/intake.md`; the handoff must be carried into the selected branch's primary spec artifact.
 
 ## Required Announcement
 
@@ -17,56 +17,118 @@ If the entry router has not already printed the announcement, print:
 
 ## Hard Rules
 
-- Clarify first, classify second, then generate spec artifacts.
-- Inspect discoverable project context before asking questions.
-- Ask only questions that materially affect the spec, route, scope, risk, or acceptance criteria.
-- Ask at most 1-3 concise questions at a time. If more gaps exist, ask the blockers first.
-- Do not ask for facts that can be found in the repo, docs, configs, schemas, tests, or issue text.
-- Do not create `docs/specs/intake.md`; carry intake conclusions into the selected branch's spec artifacts.
-- If the user says to proceed with assumptions, record unknowns as assumptions or risks in the downstream spec.
-- Do not write business source code before the selected branch's approval phrase is received.
+- Clarify before routing and route before generating spec artifacts.
+- Inspect discoverable project context before asking user-facing questions.
+- Do not ask for facts that can be found in the repo, docs, configs, schemas, tests, logs, issue text, or existing specs.
+- Ask the highest-leverage unresolved question, normally one question per round. Use 2-3 tightly related options only when a structured choice materially reduces ambiguity.
+- Do not leave intake just because one question was answered. Leave only when the Intake Completion Gate is `complete` or `assumptions-accepted`.
+- Non-goals and decision boundaries are mandatory gates for non-trivial work.
+- If the user says to proceed with assumptions, record the accepted unknowns as assumptions or risks in the downstream spec.
+- Do not create `docs/specs/intake.md`; write the handoff into `product.md`, `requirements.md`, or `bugfix.md`.
+- Do not write business source code before the selected branch's approval phrase is received and frozen through `spec_progress.py approve`.
 
-## State A: Context Scan
+## State A: Preflight Context Scan
 
 Before asking, inspect likely sources of truth when available:
 
 - Existing specs under `docs/specs/`
-- Project rules such as `constitution.md`, `CONVENTIONS.md`, `README.md`, ADRs, architecture docs, and migration notes
+- Project rules such as `constitution.md`, `CONVENTIONS.md`, `README.md`, ADRs, architecture docs, migration notes, and glossary/context files
 - Stack manifests such as `package.json`, `pyproject.toml`, `Cargo.toml`, `go.mod`, Gradle/Maven files, or similar
 - Relevant code paths, tests, logs, screenshots, issue text, alerts, or recent changes named by the user
 
-Summarize what is already clear before deciding whether to ask.
+Classify collected facts:
 
-## State B: Gap Check
+- `[from-code][auto-confirmed]`: exact repo facts with no decision attached
+- `[from-code]`: repo patterns or inferred facts that need user confirmation before becoming requirements
+- `[from-user]`: goals, preferences, scope, non-goals, tradeoffs, acceptance criteria, and business rules
+- `[assumption]`: unknowns the user explicitly allows the workflow to carry forward
 
-Check for gaps that would change the selected spec branch or its content:
+Summarize what is already clear before asking.
 
-- Route identity: whether this is restoring existing behavior, adding or changing capability, or starting from a fixed technical design
-- Success criteria: user-visible goal, acceptance criteria, non-goals, and definition of done
-- Scope boundaries: affected modules, APIs, schemas, integrations, compatibility, migration, and rollback expectations
-- Design-first inputs: chosen design granularity, fixed constraints, locked decisions, key interfaces, data flow, and alternatives
-- Bugfix evidence: current incorrect behavior, expected behavior, reproduction steps, environment, affected inputs, and behavior that must remain unchanged
-- Risk constraints: authentication, authorization, payments, data repair, database schema changes, distributed consistency, cache consistency, secrets, encryption, sensitive data, incidents, hotfixes, performance, or privacy
+## State B: Multi-Round Gap Check
 
-## State C: Ask Or Summarize
+Progress through the stages in order. Stay on a stage until the answer is concrete enough to use in a spec, then move forward.
 
-If material gaps remain, stop and ask:
+1. Intent and outcome:
+   - goal, user value, expected end state, and why this change matters now
+2. Scope and boundaries:
+   - in-scope areas, out-of-scope areas, affected modules, public contracts, integrations, migration, compatibility, and rollback expectations
+3. Non-goals and decision boundaries:
+   - what must not be changed, what the agent may decide autonomously, and what needs human confirmation
+4. Success criteria:
+   - acceptance criteria, definition of done, verification evidence, and release/operational expectations
+5. Route-specific evidence:
+   - Requirements-First: user stories, EARS/GWT scenarios, non-functional requirements, safety/security/data/performance constraints
+   - Design-First: HLD/LLD granularity, fixed design constraints, locked decisions, open decisions, interfaces, data flow, state transitions, alternatives
+   - Bugfix: current incorrect behavior, expected behavior, unchanged behavior, reproduction, frequency, environment/version, recent changes, root-cause confidence
+6. Risk pressure pass:
+   - permissions, authorization, privacy, sensitive data, concurrency, data consistency, cache consistency, migrations, incidents, hotfixes, monitoring, and rollback
+
+For each user answer, pressure-test at least one of:
+
+- ask for a concrete example, counterexample, or evidence signal
+- expose a hidden assumption or dependency
+- force a tradeoff or boundary
+- compare a fuzzy term against repo terminology or code behavior
+- stress-test the boundary with one concrete scenario
+
+## State C: Ask Or Continue
+
+If a material gate remains unresolved, stop and ask only the next highest-value question:
 
 ```markdown
 ## 需求澄清问题
 
-1. [只问会影响规范或路由的问题]
-2. [可选]
-3. [可选]
+Round [n] | Target: [goal / scope / non-goals / decision-boundaries / success-criteria / route-specific-risk]
+
+[一个会改变规范、路由、范围、风险或验收标准的问题]
 ```
 
-If no material gaps remain, continue with a compact intake summary:
+If the user answers but another material gate is still open, ask the next round. Do not generate specs yet.
+
+## Intake Completion Gate
+
+Intake may hand off only when every item below is either confirmed or explicitly accepted as an assumption:
+
+- Goal and user-visible outcome
+- Success criteria and verification evidence
+- Scope and affected surfaces
+- Non-goals
+- Decision boundaries
+- Constraints: compatibility, migration, rollback, security/privacy, performance, concurrency/data consistency where relevant
+- Route: Requirements-First, Design-First, or Bugfix
+- Assumptions and risks that must enter the downstream spec
+
+Allowed handoff statuses:
+
+- `complete`: all gates are concrete enough for spec generation
+- `assumptions-accepted`: unresolved gates exist, but the user explicitly accepted them as assumptions/risks
+- `blocked`: a material gate is unresolved and cannot safely be assumed
+
+## State D: Intake Handoff
+
+When the gate is `complete` or `assumptions-accepted`, output this exact shape and continue to the router:
 
 ```markdown
-## 需求澄清摘要
+## Intake Handoff / 澄清交接摘要
 
-- 已确认：[目标 / 范围 / 约束 / 证据中的关键结论]
-- 假设：[需要进入后续规范的假设；无则写 n/a]
-- 风险：[需要后续规范重点处理的风险；无则写 n/a]
-- 下一步：返回 `spce-workflow` 路由。
+- Status: complete | assumptions-accepted
+- Route recommendation: Requirements-First | Design-First | Bugfix
+- Confirmed facts:
+  - [from-code/from-user facts that must enter the spec]
+- Scope:
+  - [in-scope surfaces]
+- Non-goals:
+  - [explicit exclusions]
+- Decision boundaries:
+  - [agent-owned vs human-owned decisions]
+- Success criteria:
+  - [acceptance and verification signals]
+- Assumptions:
+  - [accepted assumptions, or n/a]
+- Risks:
+  - [risks to carry into Analyze Requirements / design / tasks, or n/a]
+- Next step: return to `spce-workflow` routing.
 ```
+
+If the status is `blocked`, ask for the missing decision and stop.

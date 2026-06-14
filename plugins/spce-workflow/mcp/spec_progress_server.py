@@ -30,6 +30,7 @@ from spec_progress import (  # noqa: E402
     command_acceptance_record_issue,
     command_acceptance_start_agent,
     command_acceptance_status,
+    command_approve,
     command_block,
     command_complete,
     command_resume,
@@ -76,6 +77,18 @@ TOOLS = [
             "type": "object",
             "properties": {"specs_dir": {"type": "string"}},
             "required": ["specs_dir"],
+        },
+    },
+    {
+        "name": "spec_approve",
+        "description": "Record human approval and freeze the spec/task-plan baseline before implementation.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "specs_dir": {"type": "string"},
+                "evidence": {"type": "string"},
+            },
+            "required": ["specs_dir", "evidence"],
         },
     },
     {
@@ -259,6 +272,8 @@ def call_tool(name: str, args: dict[str, Any]) -> Any:
         return command_status(_checked_specs_dir(args))
     if name == "spec_resume":
         return command_resume(_checked_specs_dir(args))
+    if name == "spec_approve":
+        return command_approve(_checked_specs_dir(args), args["evidence"])
     if name == "spec_start_task":
         return command_start(_checked_specs_dir(args), args["task_id"])
     if name == "spec_complete_task":

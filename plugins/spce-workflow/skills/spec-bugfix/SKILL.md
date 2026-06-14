@@ -20,6 +20,7 @@ If the entry router has not already printed the announcement, print:
 - For compatibility, also accept the legacy Bugfix approval phrase `批准 bugfix 规范，启动执行`.
 - Generate or update spec artifacts in `docs/specs/`; they are the source of truth.
 - New specs must also generate `docs/specs/spec.yml` and `docs/specs/progress.md` from the templates in `../../assets/templates/`.
+- Carry the `Intake Handoff / 澄清交接摘要` into `bugfix.md`; do not leave intake conclusions only in chat.
 - Do not hide root cause behind symptom-only patches.
 - Do not delete failing tests, weaken assertions, or disable warnings just to pass validation.
 - Keep the fix minimal and avoid unrelated refactors.
@@ -37,22 +38,23 @@ If the task involves authentication, authorization, payments, billing, database 
 
 ## Intake Precondition
 
-Before State A, if the current conversation does not already include a `spec-intake` summary or a clear no-material-questions decision, read and follow `../spec-intake/SKILL.md`. If intake asks questions, stop and wait for the human answer before generating specs.
+Before State A, if the current conversation does not already include an `Intake Handoff / 澄清交接摘要` with `Status: complete` or `Status: assumptions-accepted`, read and follow `../spec-intake/SKILL.md`. If intake asks questions or is blocked, stop and wait for the human answer before generating specs.
 
 ## State A: Bug Analysis Clarification
 
 Inspect available evidence before asking questions: failing tests, logs, screenshots, issue text, alerts, recent changes, existing specs, manifests, and relevant code paths.
 
-Clarify only bug-critical gaps:
+Clarify all bug-critical gaps:
 
 - current incorrect behavior and evidence
 - expected behavior
 - behaviors that must remain unchanged
 - reproduction steps, frequency, and affected inputs
 - environment, version, and deployment context
-- suspected root cause or recent related changes
+- suspected root cause, root-cause confidence, and recent related changes
+- release, rollback, monitoring, and data-repair constraints when relevant
 
-If clarification is needed, output a concise numbered question list focused on reproduction, evidence, scope, and regression constraints. Unknowns may be recorded as assumptions or risks if the user accepts that.
+If clarification is needed, continue the multi-round intake loop focused on reproduction, evidence, scope, unchanged behavior, and regression constraints. Unknowns may be recorded as assumptions or risks only if the user explicitly accepts that.
 
 ## State B: Bugfix Spec Artifact Generation
 
@@ -76,7 +78,7 @@ Use the plugin templates from `../../assets/templates/`:
 
 Generate:
 
-- `docs/specs/bugfix.md`: defect summary, impact, environment, reproduction evidence, automated-reproduction status, substitute evidence when needed, current behavior, expected behavior, unchanged behavior, scope boundaries, and non-goals
+- `docs/specs/bugfix.md`: intake handoff, defect summary, impact, environment, reproduction evidence, automated-reproduction status, substitute evidence when needed, current behavior, expected behavior, unchanged behavior, scope boundaries, and non-goals
 - `docs/specs/design.md`: root-cause analysis, code-path trace, minimal fix strategy, alternatives, affected surface, explicitly untouched areas, test strategy, and non-automated verification risks when applicable
 - `docs/specs/tasks.md`: ordered atomic tasks using `- [ ]`, starting with reproduction or strongest available evidence, then minimal fix, regression protection, and verification. Each task must include status, files, verify, evidence, depends_on, risk, covers, and parallelizable.
 - `docs/specs/progress.md`: resume entrypoint with workflow status, current task, approval state, branch, commit, blockers, and recovery notes
@@ -108,22 +110,27 @@ python <plugin-root>/scripts/spec_progress.py init docs/specs/
 python <plugin-root>/scripts/validate_spec.py docs/specs/ --resume
 ```
 
-This is a structural integrity check only. It does not prove root-cause quality, minimal-fix scope, unchanged-behavior coverage, substitute reproduction strength, rollback safety, or monitoring sufficiency; review those semantics before implementation. Passing validation does not approve implementation; implementation still requires an accepted approval phrase.
+This is a structural integrity check only. It does not prove root-cause quality, minimal-fix scope, unchanged-behavior coverage, substitute reproduction strength, rollback safety, or monitoring sufficiency; review those semantics before implementation. Passing validation does not approve implementation; implementation still requires an accepted approval phrase. After the approval phrase is received, run:
+
+```bash
+python <plugin-root>/scripts/spec_progress.py approve docs/specs/ --evidence "批准规范，启动执行"
+```
 
 ## State C: Controlled Implementation
 
 Only enter this state after explicit approval.
 
-When the approval phrase is received, update any generated status or approval-record fields in the spec artifacts before implementation.
+When the approval phrase is received, freeze the baseline with `spec_approve` or `spec_progress.py approve` before implementation. Do not start a task until `spec.yml` shows `approval: approved`, `artifact_hashes`, and `task_plan_hash`.
 
 Implementation rules:
 
 - Read `docs/specs/bugfix.md`, `docs/specs/design.md`, and `docs/specs/tasks.md`.
+- Run `spec_resume` or `spec_progress.py resume docs/specs/` and stop if it reports frozen-baseline drift.
 - Select only the first unchecked task in `tasks.md`.
 - Before editing business code for that task, call `spec_start_task` through MCP or run `python <plugin-root>/scripts/spec_progress.py start docs/specs/ B-xxx`.
 - Implement only that task and keep the change tied to the recorded root cause.
 - Prefer proof order: reproduce the bug, prove the fix, prove unchanged behavior.
-- If implementation reveals that the recorded root cause is wrong, the fix scope must change, or `bugfix.md`, `design.md`, or `tasks.md` must change, stop code work, return to State B, update the specs, run sync-check, set approval to `reapproval-required`, and wait for an accepted approval phrase again before continuing.
+- If implementation reveals that the recorded root cause is wrong, the fix scope must change, or `bugfix.md`, `design.md`, or the task plan in `tasks.md` must change, stop code work. Run `sync-check --write` to mark `reapproval-required`, return to State B, update specs, and wait for an accepted approval phrase plus a fresh `approve` before continuing. Progress fields may still be updated through the tools.
 - Run verification and perform at most three self-healing loops.
 - After passing the selected task's verification criteria, call `spec_complete_task` through MCP or run `python <plugin-root>/scripts/spec_progress.py complete docs/specs/ B-xxx --evidence "<verification evidence>"`. For a reproduction task, passing means the failure proof behaves as expected on unfixed code or the substitute evidence is recorded and strong enough to constrain the fix.
 - If blocked, call `spec_block_task` or `python <plugin-root>/scripts/spec_progress.py block docs/specs/ B-xxx --reason "<reason>"`.

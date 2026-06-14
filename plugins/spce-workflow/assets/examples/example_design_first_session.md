@@ -34,13 +34,36 @@
 
 ## Design-First 澄清
 
+Round 1 | Target: design-boundaries
+
 1. 订单创建接口、订单表、消息 broker 中哪些契约已经锁定不能改？
-2. 出站事件需要满足哪些投递、延迟和幂等性约束？
-3. 本期明确不处理哪些能力，例如事件重放或跨区域复制？
 
 **用户回复：**
 
-> 订单创建接口不能改，orders 表可以加字段但不能改主键；broker 是 Kafka；至少一次投递，5 秒内可接受，消费方自己幂等；本期不做事件重放。
+> 订单创建接口不能改，orders 表可以加字段但不能改主键；broker 是 Kafka。
+
+## Design-First 澄清
+
+Round 2 | Target: success-criteria
+
+1. 出站事件需要满足哪些投递、延迟和幂等性约束？本期明确不处理哪些能力？
+
+**用户回复：**
+
+> 至少一次投递，5 秒内可接受，消费方自己幂等；本期不做事件重放和跨区域复制。
+
+## Intake Handoff / 澄清交接摘要
+
+- Status: complete
+- Route recommendation: Design-First
+- Confirmed facts: 固定 outbox + worker；Kafka；订单创建接口不可改；orders 可加字段但不可改主键
+- Scope: outbox 持久化、worker 发布、Kafka 出站事件、设计派生需求与验证
+- Non-goals: 事件重放、跨区域复制、消费方幂等实现
+- Decision boundaries: outbox + worker 为锁定方案；实现细节需满足 HLD 约束
+- Success criteria: 至少一次投递，5 秒内可接受，事务边界和发布路径测试通过
+- Assumptions: n/a
+- Risks: 高风险投递语义、事务一致性、重复投递需在 design/tasks 中覆盖
+- Next step: 返回 `spce-workflow` 路由。
 
 ---
 
@@ -119,6 +142,18 @@ flowchart TD
 > python plugins/spce-workflow/scripts/validate_spec.py docs/specs/ --resume
 > ```
 
+**用户回复：**
+
+> 批准规范，启动执行
+
+**智能体：**
+
+> 已收到批准，先冻结已批准设计、派生需求和任务计划基线。
+
+```bash
+python plugins/spce-workflow/scripts/spec_progress.py approve docs/specs/ --evidence "批准规范，启动执行"
+```
+
 ---
 
 ## 关键要点
@@ -126,5 +161,5 @@ flowchart TD
 1. Design-First 的真实来源是固定技术方案，不是普通需求换个名字。
 2. 先选择 High Level Design 或 Low Level Design。
 3. `requirements.md` 必须从 `design.md` 派生，不能扩大产品范围。
-4. 实现中若发现设计冲突，必须运行 sync-check、回到规范阶段并重新获得批准。
-5. 任务开始/完成必须用 `spec_progress.py` 或 MCP 工具更新 `tasks.md`、`progress.md` 和 `spec.yml`。
+4. 实现中若发现设计冲突，必须运行 `sync-check --write` 标记 `reapproval-required`，回到规范阶段并重新获得批准后再运行 `approve`。
+5. 批准后 `design.md`、`requirements.md` 和任务计划被冻结；任务开始/完成只能用 `spec_progress.py` 或 MCP 工具更新进度字段、`progress.md` 和 `spec.yml`。

@@ -31,13 +31,36 @@
 
 ## 需求澄清
 
+Round 1 | Target: scope
+
 1. 评论是否只支持平级评论，还是需要嵌套回复？
-2. 发表评论和删除评论分别需要哪些权限？
-3. 是否需要审核、敏感词或反垃圾机制进入本期范围？
 
 **用户回复：**
 
-> 只做平级评论；必须登录才能发，作者可以删自己的评论，管理员可以删任何评论；审核和反垃圾先不做。
+> 只做平级评论。
+
+## 需求澄清
+
+Round 2 | Target: decision-boundaries
+
+1. 发表评论和删除评论分别需要哪些权限？哪些能力明确不进入本期？
+
+**用户回复：**
+
+> 必须登录才能发，作者可以删自己的评论，管理员可以删任何评论；审核、敏感词和反垃圾先不做。
+
+## Intake Handoff / 澄清交接摘要
+
+- Status: complete
+- Route recommendation: Requirements-First
+- Confirmed facts: 新增平级评论；登录用户可发；作者和管理员可删
+- Scope: 评论数据、创建/删除服务、评论 API、权限测试
+- Non-goals: 嵌套回复、审核、敏感词、反垃圾
+- Decision boundaries: 权限规则按用户回复固定；实现细节可沿用现有栈
+- Success criteria: 登录发布、未登录拦截、作者/管理员删除权限通过验证
+- Assumptions: n/a
+- Risks: 权限和数据模型迁移需在 architecture/tasks 中覆盖
+- Next step: 返回 `spce-workflow` 路由。
 
 ---
 
@@ -103,7 +126,7 @@
 > python plugins/spce-workflow/scripts/validate_spec.py docs/specs/ --resume
 > ```
 >
-> 通过校验仍不代表批准实施。确认无误后，请回复 `批准规范，启动执行`。
+> 通过校验仍不代表批准实施。确认无误后，请回复 `批准规范，启动执行`；收到批准后我会运行 `spec_progress.py approve` 冻结规范基线。
 
 **用户回复：**
 
@@ -114,6 +137,12 @@
 ### 受控实施
 
 **智能体：**
+
+> 已收到批准，先冻结已批准规范和任务计划基线。
+
+```bash
+python plugins/spce-workflow/scripts/spec_progress.py approve docs/specs/ --evidence "批准规范，启动执行"
+```
 
 > 锁定第一个未完成任务：T-001 创建 comments 数据模型和迁移。
 
@@ -168,9 +197,9 @@ python plugins/spce-workflow/scripts/spec_progress.py complete docs/specs/ T-001
 
 ## 关键要点
 
-1. Intake 先检查上下文，再只问会改变规范的问题。
+1. Intake 先检查上下文，再通过多轮高价值问题关闭目标、范围、非目标、决策边界和验收标准。
 2. `docs/specs/` 是实施依据，validator 只是结构检查。
-3. 首选审批短语是 `批准规范，启动执行`。
+3. 首选审批短语是 `批准规范，启动执行`；批准后必须运行 `spec_progress.py approve` 或 MCP `spec_approve` 冻结基线。
 4. 每次只实施一个可执行 task，并用 `spec_progress.py` 或 MCP 工具更新状态。
-5. `progress.md` 用于断线恢复，`spec.yml` 用于 Kiro 兼容索引。
+5. `progress.md` 用于断线恢复，`spec.yml` 用于 Kiro 兼容索引和冻结基线。
 6. 最终完成必须经过严格的多 agent acceptance；pre-acceptance 只是本地预检。

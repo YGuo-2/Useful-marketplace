@@ -10,3 +10,4 @@ requirements: US-001, AC-001.1, NFR-001
 task_ids: T-001, T-002
 task_graph: T-001, T-001->T-002
 artifact_hashes: product.md=<hash>, architecture.md=<hash>
+task_plan_hash: <hash>

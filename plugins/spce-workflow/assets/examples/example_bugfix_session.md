@@ -34,13 +34,36 @@
 
 ## Bug 分析澄清
 
+Round 1 | Target: bug-evidence
+
 1. 重复扣库存时，是否也重复创建订单，还是只有库存被重复扣减？
-2. 是否已有日志、Trace ID、失败请求样本或最近相关改动？
-3. 哪些行为必须保持不变，例如接口契约、性能目标或幂等键策略？
 
 **用户回复：**
 
-> 订单只创建一次，但库存有时扣两次；有两条 Trace，最近把下单链路改成异步重试；不能改变现有接口契约，也不能影响正常下单性能。
+> 订单只创建一次，但库存有时扣两次；有两条 Trace，最近把下单链路改成异步重试。
+
+## Bug 分析澄清
+
+Round 2 | Target: unchanged-behavior
+
+1. 哪些行为必须保持不变，例如接口契约、性能目标、幂等键策略或回滚要求？
+
+**用户回复：**
+
+> 不能改变现有接口契约，也不能影响正常下单性能；不新增外部幂等键参数，回滚时移除内部保护即可。
+
+## Intake Handoff / 澄清交接摘要
+
+- Status: complete
+- Route recommendation: Bugfix
+- Confirmed facts: 订单只创建一次；库存偶发双扣；有两条 Trace；近期引入异步重试
+- Scope: 库存扣减重复消费路径、复现证明、最小幂等保护、回归测试
+- Non-goals: 改接口契约、新增外部幂等键参数、无关下单重构
+- Decision boundaries: 根因需由证据证明；修复必须保持现有接口和正常性能
+- Success criteria: 未修复前复现失败，修复后库存只扣一次，不变行为测试通过
+- Assumptions: n/a
+- Risks: 生产库存一致性和回滚路径需在 design/tasks 中覆盖
+- Next step: 返回 `spce-workflow` 路由。
 
 ---
 
@@ -141,6 +164,12 @@
 
 **智能体：**
 
+> 已收到批准，先冻结已批准 bugfix 规范、修复设计和任务计划基线。
+
+```bash
+python plugins/spce-workflow/scripts/spec_progress.py approve docs/specs/ --evidence "批准规范，启动执行"
+```
+
 > 锁定任务 B-001：建立重复消费导致双扣库存的失败证明。
 
 智能体先记录断点，再写失败证明，不直接跳到修复：
@@ -155,7 +184,7 @@ python plugins/spce-workflow/scripts/spec_progress.py start docs/specs/ B-001
 python plugins/spce-workflow/scripts/spec_progress.py complete docs/specs/ B-001 --evidence "pytest tests/test_inventory_retry.py fails on unfixed code"
 ```
 
-若实现 B-001 时发现原根因判断不成立，必须停止代码工作，回到 State B 更新 `bugfix.md`、`design.md`、`tasks.md`，运行 sync-check，并等待新的批准短语。
+若实现 B-001 时发现原根因判断不成立，必须停止代码工作，运行 `sync-check --write` 标记 `reapproval-required`，回到 State B 更新 `bugfix.md`、`design.md` 或任务计划，并等待新的批准短语后重新运行 `approve`。
 
 ---
 
@@ -164,5 +193,5 @@ python plugins/spce-workflow/scripts/spec_progress.py complete docs/specs/ B-001
 1. Bugfix 先证明错误行为，再做最小修复。
 2. `tasks.md` 使用 `B-xxx` 任务编号。
 3. 不能用症状补丁掩盖根因，也不能削弱测试凑过验证。
-4. 根因或范围变化必须回炉并重新批准。
-5. 任务开始/完成必须用 `spec_progress.py` 或 MCP 工具更新 `tasks.md`、`progress.md` 和 `spec.yml`。
+4. 根因或范围变化必须回炉、标记 `reapproval-required`、重新批准并重新 `approve`。
+5. 批准后 `bugfix.md`、`design.md` 和任务计划被冻结；任务开始/完成只能用 `spec_progress.py` 或 MCP 工具更新进度字段、`progress.md` 和 `spec.yml`。

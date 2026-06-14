@@ -18,6 +18,7 @@ PLUGIN_ROOT = SCRIPT_DIR.parent
 TEMPLATES = PLUGIN_ROOT / "assets" / "templates"
 VALIDATOR = SCRIPT_DIR / "validate_spec.py"
 PROGRESS = SCRIPT_DIR / "spec_progress.py"
+MCP_SERVER = PLUGIN_ROOT / "mcp" / "spec_progress_server.py"
 
 
 def run_validator(specs_dir: Path, workflow: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
@@ -389,6 +390,12 @@ def init_progress(specs_dir: Path) -> None:
         raise AssertionError(result.stdout + result.stderr)
 
 
+def approve_progress(specs_dir: Path, evidence: str = "批准规范，启动执行") -> None:
+    result = run_progress("approve", str(specs_dir), "--evidence", evidence)
+    if result.returncode != 0:
+        raise AssertionError(result.stdout + result.stderr)
+
+
 def make_design_first(specs_dir: Path, design: str | None = None) -> None:
     write(specs_dir / "design.md", design or valid_design())
     write(specs_dir / "requirements.md", valid_requirements())
@@ -561,6 +568,90 @@ class ValidatorRegressionTests(unittest.TestCase):
             self.assertEqual(resume.returncode, 0, resume.stdout + resume.stderr)
             self.assertIn("spec.yml", (specs_dir / "spec.yml").read_text(encoding="utf-8"))
 
+    def test_start_requires_explicit_approval(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            specs_dir = Path(tmp)
+            make_requirements_first(specs_dir)
+            init_progress(specs_dir)
+
+            result = run_progress("start", str(specs_dir), "T-001")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("not approved", result.stderr)
+
+    def test_approve_records_frozen_baseline(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            specs_dir = Path(tmp)
+            make_requirements_first(specs_dir)
+            init_progress(specs_dir)
+            approved = run_progress("approve", str(specs_dir), "--evidence", "批准规范，启动执行")
+
+            self.assertEqual(approved.returncode, 0, approved.stdout + approved.stderr)
+            progress = (specs_dir / "progress.md").read_text(encoding="utf-8")
+            index = (specs_dir / "spec.yml").read_text(encoding="utf-8")
+            self.assertIn("> **Approval:** approved", progress)
+            self.assertIn("approval: approved", index)
+            self.assertIn("artifact_hashes:", index)
+            self.assertIn("task_plan_hash:", index)
+
+    def test_approved_primary_artifact_drift_blocks_sync_and_start(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            specs_dir = Path(tmp)
+            make_requirements_first(specs_dir)
+            init_progress(specs_dir)
+            approve_progress(specs_dir)
+            (specs_dir / "product.md").write_text(
+                valid_product() + "\n## Extra section\nNew content.\n",
+                encoding="utf-8",
+            )
+
+            sync = run_progress("sync-check", str(specs_dir))
+            start = run_progress("start", str(specs_dir), "T-001")
+
+            self.assertNotEqual(sync.returncode, 0)
+            self.assertIn("product.md changed", sync.stdout)
+            self.assertNotEqual(start.returncode, 0)
+            self.assertIn("baseline drift", start.stderr)
+
+    def test_approved_task_plan_drift_blocks_sync_and_start(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            specs_dir = Path(tmp)
+            make_requirements_first(specs_dir)
+            init_progress(specs_dir)
+            approve_progress(specs_dir)
+            tasks = (specs_dir / "tasks.md").read_text(encoding="utf-8")
+            tasks = tasks.replace("Implement comment storage", "Implement contract-backed comment storage")
+            (specs_dir / "tasks.md").write_text(tasks, encoding="utf-8")
+
+            sync = run_progress("sync-check", str(specs_dir))
+            start = run_progress("start", str(specs_dir), "T-001")
+
+            self.assertNotEqual(sync.returncode, 0)
+            self.assertIn("tasks.md plan changed", sync.stdout)
+            self.assertNotEqual(start.returncode, 0)
+            self.assertIn("tasks.md plan changed", start.stderr)
+
+    def test_sync_check_write_marks_reapproval_without_refreshing_baseline(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            specs_dir = Path(tmp)
+            make_requirements_first(specs_dir)
+            init_progress(specs_dir)
+            approve_progress(specs_dir)
+            before = (specs_dir / "spec.yml").read_text(encoding="utf-8")
+            tasks = (specs_dir / "tasks.md").read_text(encoding="utf-8")
+            tasks = tasks.replace("Implement comment storage", "Implement contract-backed comment storage")
+            (specs_dir / "tasks.md").write_text(tasks, encoding="utf-8")
+
+            written = run_progress("sync-check", str(specs_dir), "--write")
+            after = (specs_dir / "spec.yml").read_text(encoding="utf-8")
+
+            self.assertNotEqual(written.returncode, 0)
+            self.assertIn("approval: reapproval-required", after)
+            self.assertIn("> **Approval:** reapproval-required", (specs_dir / "progress.md").read_text(encoding="utf-8"))
+            before_hash = next(line for line in before.splitlines() if line.startswith("task_plan_hash:"))
+            after_hash = next(line for line in after.splitlines() if line.startswith("task_plan_hash:"))
+            self.assertEqual(before_hash, after_hash)
+
     def test_complete_requires_evidence_and_updates_all_state_files(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             specs_dir = Path(tmp)
@@ -571,6 +662,7 @@ class ValidatorRegressionTests(unittest.TestCase):
             self.assertNotEqual(no_evidence.returncode, 0)
             self.assertIn("evidence", no_evidence.stderr)
 
+            approve_progress(specs_dir)
             started = run_progress("start", str(specs_dir), "T-001")
             completed = run_progress(
                 "complete",
@@ -587,6 +679,9 @@ class ValidatorRegressionTests(unittest.TestCase):
             self.assertIn("current_task:", (specs_dir / "spec.yml").read_text(encoding="utf-8"))
             self.assertIn("> **进度：** 3 / 3 已完成", (specs_dir / "tasks.md").read_text(encoding="utf-8"))
             self.assertIn("| T-001 |", (specs_dir / "tasks.md").read_text(encoding="utf-8"))
+
+            sync = run_progress("sync-check", str(specs_dir))
+            self.assertEqual(sync.returncode, 0, sync.stdout + sync.stderr)
 
     def test_validator_flags_stale_tasks_progress_summary(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -711,6 +806,7 @@ class ValidatorRegressionTests(unittest.TestCase):
             tasks = tasks.replace("- 状态: done", "- 状态: pending", 1)
             make_requirements_first(specs_dir, tasks=tasks)
             init_progress(specs_dir)
+            approve_progress(specs_dir)
 
             result = run_progress("start", str(specs_dir), "T-002")
 
@@ -725,6 +821,7 @@ class ValidatorRegressionTests(unittest.TestCase):
             specs_dir.mkdir(parents=True)
             make_requirements_first(specs_dir)
             init_progress(specs_dir)
+            approve_progress(specs_dir)
             subprocess.run(["git", "add", "."], cwd=repo, check=True, capture_output=True)
             subprocess.run(
                 ["git", "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-m", "init"],
@@ -797,6 +894,7 @@ class ValidatorRegressionTests(unittest.TestCase):
             specs_dir = Path(tmp)
             make_requirements_first(specs_dir)
             init_progress(specs_dir)
+            approve_progress(specs_dir)
 
             no_reason = run_progress("block", str(specs_dir), "T-001", "--reason", "")
             blocked = run_progress("block", str(specs_dir), "T-001", "--reason", "waiting on upstream API")
@@ -856,6 +954,30 @@ class ValidatorRegressionTests(unittest.TestCase):
             # ../ traversal outside the base is rejected.
             with self.assertRaises(spec_progress.SpecProgressError):
                 spec_progress.specs_path(base / ".." / "outside", base_dir=base)
+
+    def test_mcp_tools_list_exposes_spec_approve(self) -> None:
+        requests = "\n".join(
+            [
+                json.dumps({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}}),
+                json.dumps({"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}}),
+                "",
+            ]
+        )
+        result = subprocess.run(
+            [sys.executable, str(MCP_SERVER)],
+            input=requests,
+            check=False,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        replies = [json.loads(line) for line in result.stdout.splitlines() if line.strip()]
+        tools_reply = next(reply for reply in replies if reply.get("id") == 2)
+        names = {tool["name"] for tool in tools_reply["result"]["tools"]}
+        self.assertIn("spec_approve", names)
 
 
 if __name__ == "__main__":

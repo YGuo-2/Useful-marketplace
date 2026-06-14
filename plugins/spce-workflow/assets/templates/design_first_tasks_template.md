@@ -12,11 +12,12 @@
 ## 执行规则
 
 1. **设计优先：** 任务必须首先满足 `design.md` 中已批准的约束与边界。
-2. **受控入口：** 任务开始、完成、阻塞、跳过必须通过 `spec_progress.py` CLI 或 MCP 工具更新；工具会同步顶部状态、当前任务、进度和完成日志。
-3. **需求从设计派生：** 若 `requirements.md` 与 `design.md` 冲突，必须暂停实现、更新文档、运行 sync-check 并重新获得批准。
+2. **受控入口：** 批准后先运行 `spec_progress.py approve docs/specs/ --evidence "<批准依据>"` 或 MCP `spec_approve` 冻结基线；任务开始、完成、阻塞、跳过必须通过 `spec_progress.py` CLI 或 MCP 工具更新。
+3. **需求从设计派生：** 若 `requirements.md` 与 `design.md` 冲突，必须暂停实现、运行 `sync-check --write` 标记 `reapproval-required`，更新文档并重新获得批准后再运行 `approve`。
 4. **单任务约束：** 每个任务完成后必须记录验证证据，才可标记为 `- [x]`。
 5. **禁止越界：** 不得实现未在 `design.md` 明确支撑的能力。
-6. **验收修复隔离：** final acceptance 发现的问题不得追加到本文件；修复项必须写入 `docs/specs/acceptance-fixes.md`。
+6. **冻结边界：** 批准后 `design.md`、`requirements.md` 和任务计划被冻结；只允许通过工具更新进度字段、证据、阻塞原因、完成日志、`progress.md` 和当前任务索引。
+7. **验收修复隔离：** final acceptance 发现的问题不得追加到本文件；修复项必须写入 `docs/specs/acceptance-fixes.md`。
 
 ---
 

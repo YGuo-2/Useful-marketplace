@@ -515,6 +515,24 @@ def task_digest(tasks: list[Task]) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:12]
 
 
+def task_plan_digest(tasks: list[Task]) -> str:
+    """Hash only the approved task plan, excluding progress fields."""
+    plan_fields = ("files", "verify", "depends_on", "risk", "covers", "parallelizable")
+    payload = "\n".join(
+        json.dumps(
+            {
+                "task_id": task.task_id,
+                "title": task.title,
+                "fields": {key: task.fields.get(key, "") for key in plan_fields},
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+        for task in tasks
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:12]
+
+
 def task_phase_for_line(lines: list[str], start: int) -> str:
     phase = "Unphased"
     for line in lines[: start + 1]:
@@ -1090,6 +1108,7 @@ def write_spec_index(
     mode: str = "strict",
     risk_level: str | None = None,
     preserve_hashes: bool = False,
+    preserve_task_plan_hash: bool = False,
 ) -> None:
     root = specs_path(specs_dir)
     tasks = parse_tasks(root)
@@ -1103,6 +1122,10 @@ def write_spec_index(
         hashes = ", ".join(
             f"{name}={sha256_file(root / name)}" for name in primary_artifacts(workflow)
         )
+    if preserve_task_plan_hash:
+        task_plan_hash = existing.get("task_plan_hash", "n/a")
+    else:
+        task_plan_hash = task_plan_digest(tasks)
     content = "\n".join(
         [
             "schema_version: 1",
@@ -1117,6 +1140,7 @@ def write_spec_index(
             f"task_ids: {', '.join(task.task_id for task in tasks) or 'n/a'}",
             f"task_graph: {task_graph_value(tasks)}",
             f"artifact_hashes: {hashes or 'n/a'}",
+            f"task_plan_hash: {task_plan_hash}",
         ]
     )
     write_text(root / "spec.yml", content)
@@ -1141,6 +1165,7 @@ def command_status(specs_dir: str | Path) -> dict[str, object]:
     ready = [task.task_id for task in next_executable_tasks(tasks)]
     progress = parse_progress(specs_dir)
     waves = execution_waves(tasks)
+    sync = command_sync_check(specs_dir)
     return {
         "workflow": workflow,
         "progress_status": progress.status,
@@ -1149,7 +1174,36 @@ def command_status(specs_dir: str | Path) -> dict[str, object]:
         "tasks": stats,
         "next_executable": ready,
         "execution_waves": waves,
+        "freeze": {
+            "ok": not sync["issues"],
+            "issues": sync["issues"],
+        },
     }
+
+
+def command_approve(specs_dir: str | Path, evidence: str) -> str:
+    if not evidence.strip():
+        raise SpecProgressError("Approving specs requires evidence, such as the approval phrase/context")
+    root = specs_path(specs_dir)
+    workflow = detect_workflow(root)
+    if workflow == "unknown":
+        raise SpecProgressError("Cannot approve unknown workflow; required spec artifacts are missing")
+    tasks = parse_tasks(root)
+    current = next_executable_tasks(tasks)
+    current_task = current[0].task_id if current else "n/a"
+    update_tasks_metadata(root, status="Approved", current_task=current_task)
+    write_progress(
+        root,
+        workflow,
+        "Approved",
+        current_task,
+        "approved",
+        "pending",
+        verification=evidence,
+        note=f"Approved specs and froze baseline: {evidence}",
+    )
+    write_spec_index(root, workflow, current_task, "approved")
+    return f"Approved {workflow} specs; frozen baseline recorded"
 
 
 def command_acceptance_init(specs_dir: str | Path) -> dict[str, object]:
@@ -1477,6 +1531,7 @@ def assert_can_start(specs_dir: str | Path, task_id: str) -> Task:
 
 
 def command_start(specs_dir: str | Path, task_id: str) -> str:
+    assert_approved_baseline(specs_dir)
     workflow = detect_workflow(specs_dir)
     task = assert_can_start(specs_dir, task_id)
     update_task_fields(specs_dir, task_id, None, {"status": "active"})
@@ -1493,13 +1548,14 @@ def command_start(specs_dir: str | Path, task_id: str) -> str:
         goal=task.title,
         files_expected=task.fields.get("files", "") or "n/a",
     )
-    write_spec_index(specs_dir, workflow, task_id, "approved")
+    write_spec_index(specs_dir, workflow, task_id, "approved", preserve_hashes=True, preserve_task_plan_hash=True)
     return f"Started {task_id}"
 
 
 def command_complete(specs_dir: str | Path, task_id: str, evidence: str, notes: str = "") -> str:
     if not evidence.strip():
         raise SpecProgressError("Completion requires verification evidence")
+    assert_approved_baseline(specs_dir)
     workflow = detect_workflow(specs_dir)
     task = get_task(specs_dir, task_id)
     if task.state not in {"pending", "active", "interrupted"}:
@@ -1534,13 +1590,14 @@ def command_complete(specs_dir: str | Path, task_id: str, evidence: str, notes: 
         note=f"Completed {task_id}",
         append_log=log_row,
     )
-    write_spec_index(specs_dir, workflow, current, "approved")
+    write_spec_index(specs_dir, workflow, current, "approved", preserve_hashes=True, preserve_task_plan_hash=True)
     return f"Completed {task_id}; workflow status: {status}"
 
 
 def command_block(specs_dir: str | Path, task_id: str, reason: str) -> str:
     if not reason.strip():
         raise SpecProgressError("Blocking a task requires a reason")
+    assert_approved_baseline(specs_dir)
     workflow = detect_workflow(specs_dir)
     update_task_fields(specs_dir, task_id, None, {"status": "blocked", "blocker": reason})
     update_tasks_metadata(specs_dir, status="Blocked", current_task=task_id)
@@ -1554,13 +1611,14 @@ def command_block(specs_dir: str | Path, task_id: str, reason: str) -> str:
         blockers=reason,
         note=f"Blocked {task_id}",
     )
-    write_spec_index(specs_dir, workflow, task_id, "approved")
+    write_spec_index(specs_dir, workflow, task_id, "approved", preserve_hashes=True, preserve_task_plan_hash=True)
     return f"Blocked {task_id}"
 
 
 def command_skip(specs_dir: str | Path, task_id: str, approval: str) -> str:
     if not approval.strip():
         raise SpecProgressError("Skipping a task requires explicit human approval evidence")
+    assert_approved_baseline(specs_dir)
     workflow = detect_workflow(specs_dir)
     update_task_fields(
         specs_dir,
@@ -1586,7 +1644,7 @@ def command_skip(specs_dir: str | Path, task_id: str, approval: str) -> str:
         note=f"Skipped {task_id}",
         append_log=log_row,
     )
-    write_spec_index(specs_dir, workflow, current, "approved")
+    write_spec_index(specs_dir, workflow, current, "approved", preserve_hashes=True, preserve_task_plan_hash=True)
     return f"Skipped {task_id}; workflow status: {status}"
 
 
@@ -1623,6 +1681,9 @@ def command_resume(specs_dir: str | Path) -> dict[str, object]:
         issues.append(f"progress.md current task does not exist: {progress.current_task}")
     if index.get("current_task") not in task_ids and index.get("current_task") not in {None, "n/a"}:
         issues.append(f"spec.yml current task does not exist: {index.get('current_task')}")
+    freeze = command_sync_check(root)
+    if progress.approval == "approved" or index.get("approval") == "approved":
+        issues.extend(freeze["issues"])
     active = [task for task in tasks if task.state == "active"]
     interrupted = False
     git_ok = git_available(root)
@@ -1641,6 +1702,10 @@ def command_resume(specs_dir: str | Path) -> dict[str, object]:
         "warnings": warnings,
         "current_task": progress.current_task,
         "next_executable": [task.task_id for task in next_executable_tasks(tasks)],
+        "freeze": {
+            "ok": not freeze["issues"],
+            "issues": freeze["issues"],
+        },
     }
 
 
@@ -1658,9 +1723,11 @@ def command_sync_check(specs_dir: str | Path, write: bool = False) -> dict[str, 
     root = specs_path(specs_dir)
     workflow = detect_workflow(root)
     index = parse_flat_yml(root / "spec.yml")
+    progress = parse_progress(root)
     issues: list[str] = []
     suggestions: list[str] = []
-    task_ids = ", ".join(task.task_id for task in parse_tasks(root)) or "n/a"
+    tasks = parse_tasks(root)
+    task_ids = ", ".join(task.task_id for task in tasks) or "n/a"
     if index.get("task_ids") and index.get("task_ids") != task_ids:
         issues.append("spec.yml task_ids drift from tasks.md")
     old_hashes = parse_hashes(index.get("artifact_hashes", ""))
@@ -1676,19 +1743,59 @@ def command_sync_check(specs_dir: str | Path, write: bool = False) -> dict[str, 
             # Baseline exists but this artifact was never hashed: a newly added
             # spec file that bypassed reapproval.
             issues.append(f"{artifact} is new and missing from the approved index")
+    old_task_plan_hash = index.get("task_plan_hash", "")
+    if old_task_plan_hash:
+        new_task_plan_hash = task_plan_digest(tasks)
+        if old_task_plan_hash != new_task_plan_hash:
+            issues.append("tasks.md plan changed since last approved index")
+    elif index.get("approval") == "approved" or progress.approval == "approved":
+        issues.append("task_plan_hash is missing from the approved index")
     if issues:
         suggestions.append("Review spec changes, rebuild tasks if needed, then request reapproval.")
         if write:
+            current_task = index.get("current_task", "n/a")
             write_spec_index(
                 root,
                 workflow,
-                index.get("current_task", "n/a"),
+                current_task,
                 "reapproval-required",
                 mode=index.get("mode", "strict"),
                 risk_level=index.get("risk_level", "medium"),
                 preserve_hashes=True,
+                preserve_task_plan_hash=True,
+            )
+            write_progress(
+                root,
+                workflow,
+                "Blocked",
+                current_task,
+                "reapproval-required",
+                "blocked",
+                blockers="; ".join(issues),
+                note="Spec baseline drift detected; reapproval required",
             )
     return {"issues": issues, "suggestions": suggestions}
+
+
+def assert_approved_baseline(specs_dir: str | Path) -> None:
+    root = specs_path(specs_dir)
+    progress = parse_progress(root)
+    index = parse_flat_yml(root / "spec.yml")
+    approval = progress.approval if progress.approval != "pending" else index.get("approval", "pending")
+    if approval != "approved":
+        raise SpecProgressError(
+            "Spec artifacts are not approved. Run "
+            'python <plugin-root>/scripts/spec_progress.py approve <specs_dir> --evidence "<approval phrase/context>" '
+            "after human approval before implementation."
+        )
+    sync = command_sync_check(root)
+    if sync["issues"]:
+        raise SpecProgressError(
+            "Approved spec baseline drift detected: "
+            + "; ".join(str(issue) for issue in sync["issues"])
+            + ". Stop implementation, run sync-check --write to mark reapproval-required, "
+            "then obtain a new approval before continuing."
+        )
 
 
 def progress_file_paths(specs_dir: str | Path) -> set[str]:
@@ -1781,6 +1888,9 @@ def build_parser() -> argparse.ArgumentParser:
     start = sub.add_parser("start")
     start.add_argument("specs_dir")
     start.add_argument("task_id")
+    approve = sub.add_parser("approve")
+    approve.add_argument("specs_dir")
+    approve.add_argument("--evidence", required=True)
     complete = sub.add_parser("complete")
     complete.add_argument("specs_dir")
     complete.add_argument("task_id")
@@ -1843,6 +1953,9 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.command == "start":
             print(command_start(args.specs_dir, args.task_id))
+            return 0
+        if args.command == "approve":
+            print(command_approve(args.specs_dir, args.evidence))
             return 0
         if args.command == "complete":
             print(command_complete(args.specs_dir, args.task_id, args.evidence, args.notes))

@@ -42,7 +42,15 @@ It includes these user-facing skills:
 
 The plugin is released under the MIT license and keeps the upstream [`Yuan1z0825/nature-skills`](https://github.com/Yuan1z0825/nature-skills) source structure for the packaged Nature skills.
 
-The plugin also adds a small workflow state layer under `docs/nature-workflows/` by default. It is intentionally lighter than `spce-workflow`: no spec approval freeze, no acceptance rounds, no commit guard, and no business-code enforcement. Each workflow has `nature.yml`, `progress.md`, and `tasks.md`; `nature.yml` keeps its historical name for compatibility, but its content is JSON. Read-only commands such as `status` and `resume` do not rewrite those files.
+The plugin also adds a small workflow state layer under `docs/nature-workflows/` by default. It is intentionally lighter than `spce-workflow`: no spec approval freeze, no acceptance rounds, no spec-style business-code commit guard, and no business-code enforcement. Each workflow has `nature.yml`, `progress.md`, and `tasks.md`; `nature.yml` keeps its historical name for compatibility, but its content is JSON. Read-only commands such as `status` and `resume` do not rewrite those files.
+
+Each workflow can also keep a concise paper-level `memory.md` beside those files.
+Agents write durable project facts in entries such as `## M3 · 引用风格`, while
+`nature_memory.py touch` stamps the UTC timestamp from the system clock. The
+memory checker enforces at most 12 entries, title length at most 40 characters,
+body length at most 280 characters and 4 lines, and valid generated timestamps.
+`nature_memory.py index` maintains a sentinel section in the project-root
+`AGENTS.md` so future Codex runs can discover available paper memory quickly.
 
 CLI examples:
 
@@ -54,6 +62,9 @@ python plugins/nature-workflow/scripts/nature_progress.py start T1
 python plugins/nature-workflow/scripts/nature_progress.py complete T1 --evidence "reader exported"
 python plugins/nature-workflow/scripts/nature_progress.py block T2 --reason "waiting for source PDF"
 python plugins/nature-workflow/scripts/nature_progress.py resume
+python plugins/nature-workflow/scripts/nature_memory.py touch M1 --workflow <workflow-dir>
+python plugins/nature-workflow/scripts/nature_memory.py check --workflow <workflow-dir>
+python plugins/nature-workflow/scripts/nature_memory.py index --root docs/nature-workflows
 ```
 
 MCP tools are exposed through `plugins/nature-workflow/mcp/nature_progress_server.py`:
@@ -66,8 +77,21 @@ MCP tools are exposed through `plugins/nature-workflow/mcp/nature_progress_serve
 - `nature_complete_task`
 - `nature_block_task`
 - `nature_log_note`
+- `nature_memory_check`
+- `nature_memory_touch`
+- `nature_memory_index`
+- `nature_memory_list`
 
 When calling these MCP tools from a project, pass `project_root` to anchor the default `docs/nature-workflows/` directory in that project instead of the plugin directory.
+
+A pre-commit hook template for memory validation lives at:
+
+```text
+plugins/nature-workflow/assets/hooks/pre-commit-nature-memory
+```
+
+This hook only validates `memory.md` format; it does not gate business-code
+changes.
 
 ## What It Does
 

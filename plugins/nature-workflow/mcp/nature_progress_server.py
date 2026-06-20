@@ -24,6 +24,19 @@ from nature_progress import (  # noqa: E402
     command_start,
     command_status,
 )
+from nature_memory import (  # noqa: E402
+    command_memory_check,
+    command_memory_index,
+    command_memory_list,
+    command_memory_touch,
+)
+
+
+WORKFLOW_INPUTS = {
+    "workflow_root": {"type": "string"},
+    "project_root": {"type": "string"},
+    "workflow_dir": {"type": "string"},
+}
 
 
 TOOLS = [
@@ -136,6 +149,42 @@ TOOLS = [
             "required": ["note"],
         },
     },
+    {
+        "name": "nature_memory_check",
+        "description": "Validate a Nature workflow memory.md against project-memory rules.",
+        "inputSchema": {
+            "type": "object",
+            "properties": WORKFLOW_INPUTS,
+        },
+    },
+    {
+        "name": "nature_memory_touch",
+        "description": "Refresh one memory.md entry timestamp from the system clock.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                **WORKFLOW_INPUTS,
+                "entry_id": {"type": "string"},
+            },
+            "required": ["entry_id"],
+        },
+    },
+    {
+        "name": "nature_memory_index",
+        "description": "Rewrite the project AGENTS.md Nature memory sentinel index.",
+        "inputSchema": {
+            "type": "object",
+            "properties": WORKFLOW_INPUTS,
+        },
+    },
+    {
+        "name": "nature_memory_list",
+        "description": "List memory.md entry summaries for a Nature workflow.",
+        "inputSchema": {
+            "type": "object",
+            "properties": WORKFLOW_INPUTS,
+        },
+    },
 ]
 
 
@@ -227,6 +276,14 @@ def call_tool(name: str, args: dict[str, Any]) -> Any:
         )
     if name == "nature_log_note":
         return command_log_note(_root(args), _workflow(args), _required_string(args, "note"), args.get("task_id"), base=base)
+    if name == "nature_memory_check":
+        return command_memory_check(_root(args), _workflow(args), base=base)
+    if name == "nature_memory_touch":
+        return command_memory_touch(_root(args), _workflow(args), _required_string(args, "entry_id"), base=base)
+    if name == "nature_memory_index":
+        return command_memory_index(_root(args), _workflow(args), base=base, all_workflows=_workflow(args) is None)
+    if name == "nature_memory_list":
+        return command_memory_list(_root(args), _workflow(args), base=base)
     raise NatureProgressError(f"Unknown tool: {name}")
 
 

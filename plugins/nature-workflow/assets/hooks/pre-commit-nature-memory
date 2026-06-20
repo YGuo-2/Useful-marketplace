@@ -1,0 +1,20 @@
+#!/usr/bin/env sh
+# Nature workflow memory guard.
+#
+# Install by copying this file to .git/hooks/pre-commit and making it executable.
+# It blocks commits when any docs/nature-workflows/*/memory.md violates the
+# project-memory format rules.
+
+set -eu
+
+if [ ! -d "docs/nature-workflows" ]; then
+  exit 0
+fi
+
+SCRIPT="plugins/nature-workflow/scripts/nature_memory.py"
+if [ ! -f "$SCRIPT" ]; then
+  echo "Nature workflow memory hook skipped: $SCRIPT not found." >&2
+  exit 0
+fi
+
+python "$SCRIPT" check --all docs/nature-workflows/

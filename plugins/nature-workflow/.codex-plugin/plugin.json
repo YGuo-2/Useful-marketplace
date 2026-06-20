@@ -15,13 +15,14 @@
     "writing",
     "citation",
     "workflow",
+    "memory",
     "mcp"
   ],
   "skills": "./skills/",
   "interface": {
     "displayName": "Nature workflow",
     "shortDescription": "Use Nature research skills with simple local progress state.",
-    "longDescription": "Nature workflow packages the usable skills from Yuan1z0825/nature-skills, preserves shared skill dependencies, and adds a small docs/nature-workflows state system for starting, resuming, blocking, completing, and logging academic workflow tasks. Individual nature-* skills remain the primary entrypoints; the workflow tools only track local progress.",
+    "longDescription": "Nature workflow packages the usable skills from Yuan1z0825/nature-skills, preserves shared skill dependencies, and adds a small docs/nature-workflows state system for starting, resuming, blocking, completing, logging, and maintaining concise paper-level project memory for academic workflow tasks. Individual nature-* skills remain the primary entrypoints; the workflow tools only track local progress and memory.",
     "developerName": "Yuan1z0825 and Useful-marketplace",
     "category": "Education",
     "capabilities": [

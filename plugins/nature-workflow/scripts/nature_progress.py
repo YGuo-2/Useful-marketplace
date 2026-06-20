@@ -8,6 +8,7 @@ import json
 import os
 import re
 import sys
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -147,12 +148,26 @@ def load_record(workflow_dir: Path) -> dict[str, Any]:
 def save_record(workflow_dir: Path, record: dict[str, Any]) -> None:
     record["updated_at"] = now_utc()
     workflow_dir.mkdir(parents=True, exist_ok=True)
-    (workflow_dir / "nature.yml").write_text(
+    _atomic_write_text(
+        workflow_dir / "nature.yml",
         json.dumps(record, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
     )
-    (workflow_dir / "progress.md").write_text(render_progress(record), encoding="utf-8")
-    (workflow_dir / "tasks.md").write_text(render_tasks(record), encoding="utf-8")
+    _atomic_write_text(workflow_dir / "progress.md", render_progress(record))
+    _atomic_write_text(workflow_dir / "tasks.md", render_tasks(record))
+
+
+def _atomic_write_text(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(
+        "w",
+        encoding="utf-8",
+        dir=str(path.parent),
+        delete=False,
+        newline="",
+    ) as tmp:
+        tmp.write(text)
+        tmp_name = tmp.name
+    os.replace(tmp_name, path)
 
 
 def find_task(record: dict[str, Any], task_id: str) -> dict[str, Any]:
@@ -257,8 +272,10 @@ def command_new_workflow(
     slug: str | None = None,
     title: str | None = None,
     tasks: list[str] | None = None,
+    *,
+    base: Path | None = None,
 ) -> dict[str, Any]:
-    root = checked_root(workflow_root)
+    root = checked_root(workflow_root, base=base)
     root.mkdir(parents=True, exist_ok=True)
     clean_slug = slugify(slug or title)
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%SZ")
@@ -284,8 +301,8 @@ def command_new_workflow(
     return {"ok": True, "action": "new", **summarize(record, workflow_dir)}
 
 
-def command_discover(workflow_root: str | None = None) -> dict[str, Any]:
-    root = checked_root(workflow_root)
+def command_discover(workflow_root: str | None = None, *, base: Path | None = None) -> dict[str, Any]:
+    root = checked_root(workflow_root, base=base)
     workflows: list[dict[str, Any]] = []
     if root.exists():
         for item in sorted(root.iterdir(), key=lambda p: p.name):
@@ -296,19 +313,27 @@ def command_discover(workflow_root: str | None = None) -> dict[str, Any]:
     return {"ok": True, "action": "discover", "workflow_root": str(root), "workflows": workflows}
 
 
-def command_status(workflow_root: str | None = None, workflow: str | None = None) -> dict[str, Any]:
-    workflow_dir = checked_workflow_dir(workflow, workflow_root)
+def command_status(
+    workflow_root: str | None = None,
+    workflow: str | None = None,
+    *,
+    base: Path | None = None,
+) -> dict[str, Any]:
+    workflow_dir = checked_workflow_dir(workflow, workflow_root, base=base)
     record = load_record(workflow_dir)
     update_workflow_status(record)
-    save_record(workflow_dir, record)
     return {"ok": True, "action": "status", **summarize(record, workflow_dir), "tasks": record.get("tasks", [])}
 
 
-def command_resume(workflow_root: str | None = None, workflow: str | None = None) -> dict[str, Any]:
-    workflow_dir = checked_workflow_dir(workflow, workflow_root)
+def command_resume(
+    workflow_root: str | None = None,
+    workflow: str | None = None,
+    *,
+    base: Path | None = None,
+) -> dict[str, Any]:
+    workflow_dir = checked_workflow_dir(workflow, workflow_root, base=base)
     record = load_record(workflow_dir)
     update_workflow_status(record)
-    save_record(workflow_dir, record)
     summary = summarize(record, workflow_dir)
     if record.get("status") == "blocked":
         resume_state = "blocked"
@@ -319,8 +344,14 @@ def command_resume(workflow_root: str | None = None, workflow: str | None = None
     return {"ok": True, "action": "resume", "resume_state": resume_state, **summary}
 
 
-def command_start(workflow_root: str | None, workflow: str | None, task_id: str) -> dict[str, Any]:
-    workflow_dir = checked_workflow_dir(workflow, workflow_root)
+def command_start(
+    workflow_root: str | None,
+    workflow: str | None,
+    task_id: str,
+    *,
+    base: Path | None = None,
+) -> dict[str, Any]:
+    workflow_dir = checked_workflow_dir(workflow, workflow_root, base=base)
     record = load_record(workflow_dir)
     task = find_task(record, task_id)
     if task.get("status") == "completed":
@@ -345,10 +376,12 @@ def command_complete(
     task_id: str,
     evidence: str,
     notes: str = "",
+    *,
+    base: Path | None = None,
 ) -> dict[str, Any]:
     if not evidence.strip():
         raise NatureProgressError("Completion evidence is required")
-    workflow_dir = checked_workflow_dir(workflow, workflow_root)
+    workflow_dir = checked_workflow_dir(workflow, workflow_root, base=base)
     record = load_record(workflow_dir)
     task = find_task(record, task_id)
     task["status"] = "completed"
@@ -365,14 +398,24 @@ def command_complete(
     return {"ok": True, "action": "complete", **summarize(record, workflow_dir)}
 
 
-def command_block(workflow_root: str | None, workflow: str | None, task_id: str, reason: str) -> dict[str, Any]:
+def command_block(
+    workflow_root: str | None,
+    workflow: str | None,
+    task_id: str,
+    reason: str,
+    *,
+    base: Path | None = None,
+) -> dict[str, Any]:
     if not reason.strip():
         raise NatureProgressError("Block reason is required")
-    workflow_dir = checked_workflow_dir(workflow, workflow_root)
+    workflow_dir = checked_workflow_dir(workflow, workflow_root, base=base)
     record = load_record(workflow_dir)
     task = find_task(record, task_id)
     if task.get("status") == "completed":
         raise NatureProgressError(f"Task {task_id} is already completed")
+    active = next((item for item in record.get("tasks", []) if item.get("status") == "active"), None)
+    if active and active.get("id") != task_id:
+        raise NatureProgressError(f"Task {active.get('id')} is already active")
     task["status"] = "blocked"
     task["blocked_at"] = now_utc()
     task["blocker"] = reason.strip()
@@ -388,10 +431,12 @@ def command_log_note(
     workflow: str | None,
     note: str,
     task_id: str | None = None,
+    *,
+    base: Path | None = None,
 ) -> dict[str, Any]:
     if not note.strip():
         raise NatureProgressError("Note is required")
-    workflow_dir = checked_workflow_dir(workflow, workflow_root)
+    workflow_dir = checked_workflow_dir(workflow, workflow_root, base=base)
     record = load_record(workflow_dir)
     if task_id:
         find_task(record, task_id)

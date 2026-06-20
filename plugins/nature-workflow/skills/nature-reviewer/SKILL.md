@@ -115,7 +115,7 @@ Risk / unsupported claims
 | [references/report-structure.md](references/report-structure.md) | You need the default output contract or section anatomy |
 | [references/role-boundaries.md](references/role-boundaries.md) | You need constraints on reviewer differences and editor-versus-reviewer boundaries |
 | [references/qa-checklist.md](references/qa-checklist.md) | You are finalizing an output and need groundedness / non-invention checks |
-| [references/editorial criteria and processes.md](references/editorial criteria and processes.md) | You need the primary local Nature source text |
+| [references/editorial criteria and processes.md](<references/editorial criteria and processes.md>) | You need the primary local Nature source text |
 
 ## Source hierarchy
 

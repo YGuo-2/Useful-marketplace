@@ -1,6 +1,6 @@
 ---
 name: nature-workflow
-description: Track lightweight progress for Nature skill work and route users toward the specific nature-* skill that should do the real academic task. Use when the user asks to start, resume, discover, block, complete, or log a Nature workflow, or when they ask which Nature skill to use before beginning research writing, reading, citation, figure, data, reviewer-response, paper-to-PPT, paper-to-patent, academic-search, or medical-skill work.
+description: Track lightweight progress for Nature skill work and route users toward the specific nature-* skill that should do the real academic task. Use when the user asks to start, resume, discover, block, complete, or log a Nature workflow, or when they ask which Nature skill to use before beginning research writing, reading, citation, figure, data, reviewer-response, paper-to-PPT, paper-to-patent, or academic-search work.
 ---
 
 # Nature Workflow Router
@@ -16,7 +16,6 @@ The individual skills remain the primary entrypoints for academic work:
 - `nature-data` for data availability, repository, and FAIR metadata work.
 - `nature-response` and `nature-reviewer` for reviewer responses and mock peer review.
 - `nature-paper-to-patent` for evidence-grounded Chinese invention patent drafts.
-- `openclaw-medical-skills` for biomedical and clinical workflows.
 
 Use the workflow state tools only to create or maintain local progress records under
 `docs/nature-workflows/` by default. They do not approve specs, enforce code guards,
@@ -31,4 +30,5 @@ The plugin provides both CLI and MCP access to the same state engine:
 
 Supported actions are `new`, `discover`, `status`, `start`, `complete`, `block`,
 `resume`, and `log`. Each workflow directory contains `nature.yml`, `progress.md`,
-and `tasks.md`.
+and `tasks.md`. The `nature.yml` file keeps its historical name for compatibility;
+its contents are JSON.

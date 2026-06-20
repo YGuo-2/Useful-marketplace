@@ -28,6 +28,7 @@ import sys
 import time
 import json
 import argparse
+import re
 import xml.etree.ElementTree as ET
 from urllib.request import urlopen
 from urllib.parse import urlencode
@@ -43,6 +44,7 @@ EUTILS_BASE = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils"
 CROSSREF_BASE = "https://api.crossref.org/works"
 ARXIV_BASE = "https://export.arxiv.org/api/query"
 DELAY = 0.5
+PMID_RE = re.compile(r"^\d+$")
 
 
 # ── PubMed ──────────────────────────────────────────────────────
@@ -82,6 +84,8 @@ def download_pubmed(pmid, output_dir, fmt, retries=1):
     pmid = pmid.strip()
     if not pmid:
         return False, "Empty PMID"
+    if not PMID_RE.match(pmid):
+        return False, f"Invalid PMID {pmid!r}: digits only"
 
     print(f"  Downloading PMID: {pmid}")
     time.sleep(DELAY)

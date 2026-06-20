@@ -34,6 +34,7 @@ TOOLS = [
             "type": "object",
             "properties": {
                 "workflow_root": {"type": "string"},
+                "project_root": {"type": "string"},
                 "slug": {"type": "string"},
                 "title": {"type": "string"},
                 "tasks": {"type": "array", "items": {"type": "string"}},
@@ -45,7 +46,10 @@ TOOLS = [
         "description": "List Nature workflow directories under a workflow root.",
         "inputSchema": {
             "type": "object",
-            "properties": {"workflow_root": {"type": "string"}},
+            "properties": {
+                "workflow_root": {"type": "string"},
+                "project_root": {"type": "string"},
+            },
         },
     },
     {
@@ -55,6 +59,7 @@ TOOLS = [
             "type": "object",
             "properties": {
                 "workflow_root": {"type": "string"},
+                "project_root": {"type": "string"},
                 "workflow_dir": {"type": "string"},
             },
         },
@@ -66,6 +71,7 @@ TOOLS = [
             "type": "object",
             "properties": {
                 "workflow_root": {"type": "string"},
+                "project_root": {"type": "string"},
                 "workflow_dir": {"type": "string"},
             },
         },
@@ -77,6 +83,7 @@ TOOLS = [
             "type": "object",
             "properties": {
                 "workflow_root": {"type": "string"},
+                "project_root": {"type": "string"},
                 "workflow_dir": {"type": "string"},
                 "task_id": {"type": "string"},
             },
@@ -90,6 +97,7 @@ TOOLS = [
             "type": "object",
             "properties": {
                 "workflow_root": {"type": "string"},
+                "project_root": {"type": "string"},
                 "workflow_dir": {"type": "string"},
                 "task_id": {"type": "string"},
                 "evidence": {"type": "string"},
@@ -105,6 +113,7 @@ TOOLS = [
             "type": "object",
             "properties": {
                 "workflow_root": {"type": "string"},
+                "project_root": {"type": "string"},
                 "workflow_dir": {"type": "string"},
                 "task_id": {"type": "string"},
                 "reason": {"type": "string"},
@@ -119,6 +128,7 @@ TOOLS = [
             "type": "object",
             "properties": {
                 "workflow_root": {"type": "string"},
+                "project_root": {"type": "string"},
                 "workflow_dir": {"type": "string"},
                 "task_id": {"type": "string"},
                 "note": {"type": "string"},
@@ -152,6 +162,15 @@ def _root(args: dict[str, Any]) -> str:
     return raw
 
 
+def _base(args: dict[str, Any]) -> Path | None:
+    raw = args.get("project_root")
+    if raw is None or raw == "":
+        return None
+    if not isinstance(raw, str):
+        raise NatureProgressError("project_root must be a string")
+    return Path(raw).expanduser().resolve(strict=False)
+
+
 def _workflow(args: dict[str, Any]) -> str | None:
     raw = args.get("workflow_dir")
     if raw is None or raw == "":
@@ -178,16 +197,17 @@ def _required_string(args: dict[str, Any], name: str) -> str:
 
 
 def call_tool(name: str, args: dict[str, Any]) -> Any:
+    base = _base(args)
     if name == "nature_new_workflow":
-        return command_new_workflow(_root(args), args.get("slug"), args.get("title"), _tasks(args))
+        return command_new_workflow(_root(args), args.get("slug"), args.get("title"), _tasks(args), base=base)
     if name == "nature_discover_workflows":
-        return command_discover(_root(args))
+        return command_discover(_root(args), base=base)
     if name == "nature_status":
-        return command_status(_root(args), _workflow(args))
+        return command_status(_root(args), _workflow(args), base=base)
     if name == "nature_resume":
-        return command_resume(_root(args), _workflow(args))
+        return command_resume(_root(args), _workflow(args), base=base)
     if name == "nature_start_task":
-        return command_start(_root(args), _workflow(args), _required_string(args, "task_id"))
+        return command_start(_root(args), _workflow(args), _required_string(args, "task_id"), base=base)
     if name == "nature_complete_task":
         return command_complete(
             _root(args),
@@ -195,6 +215,7 @@ def call_tool(name: str, args: dict[str, Any]) -> Any:
             _required_string(args, "task_id"),
             _required_string(args, "evidence"),
             args.get("notes", "") if isinstance(args.get("notes", ""), str) else "",
+            base=base,
         )
     if name == "nature_block_task":
         return command_block(
@@ -202,9 +223,10 @@ def call_tool(name: str, args: dict[str, Any]) -> Any:
             _workflow(args),
             _required_string(args, "task_id"),
             _required_string(args, "reason"),
+            base=base,
         )
     if name == "nature_log_note":
-        return command_log_note(_root(args), _workflow(args), _required_string(args, "note"), args.get("task_id"))
+        return command_log_note(_root(args), _workflow(args), _required_string(args, "note"), args.get("task_id"), base=base)
     raise NatureProgressError(f"Unknown tool: {name}")
 
 
@@ -238,8 +260,11 @@ def main() -> int:
     for line in sys.stdin:
         if not line.strip():
             continue
+        request_id = None
         try:
             message = json.loads(line)
+            if isinstance(message, dict):
+                request_id = message.get("id")
             reply = handle(message)
             if reply is not None:
                 print(json.dumps(reply, ensure_ascii=False), flush=True)
@@ -248,7 +273,7 @@ def main() -> int:
                 json.dumps(
                     {
                         "jsonrpc": "2.0",
-                        "id": None,
+                        "id": request_id,
                         "error": {"code": -32099, "message": str(exc)},
                     },
                     ensure_ascii=False,

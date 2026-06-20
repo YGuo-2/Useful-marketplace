@@ -6,11 +6,17 @@ All external HTTP calls are mocked -- no network access required.
 from __future__ import annotations
 
 import json
+import importlib.util
 import re
+import sys
+import urllib.parse
 import xml.etree.ElementTree as ET
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+
+TEST_ROOT = Path(__file__).resolve()
 
 # ---------------------------------------------------------------------------
 # Fixtures / helpers
@@ -567,7 +573,7 @@ class TestArxivSearch:
         called_params = mock_request.call_args[0][0]
         search_query = called_params["search_query"]
         assert "submittedDate:[" in search_query
-        assert "202401010000+TO+202406302359" in search_query
+        assert "202401010000 TO 202406302359" in search_query
 
     @patch("sources.arxiv.get_config")
     @patch.object(
@@ -652,7 +658,7 @@ class TestArxivSearch:
         from sources.arxiv import ArxivSource
 
         result = ArxivSource._build_date_filter("2024-01-01", "2024-12-31")
-        assert result == "submittedDate:[202401010000+TO+202412312359]"
+        assert result == "submittedDate:[202401010000 TO 202412312359]"
 
     def test_build_date_filter_only_from(self):
         from sources.arxiv import ArxivSource
@@ -666,6 +672,22 @@ class TestArxivSearch:
         from sources.arxiv import ArxivSource
 
         assert ArxivSource._build_date_filter(None, None) == ""
+
+    def test_build_url_encodes_query_once(self):
+        from sources.arxiv import _build_url
+
+        params = {
+            "search_query": "(LLM) AND submittedDate:[202401010000 TO 202406302359]",
+            "start": 0,
+            "max_results": 5,
+        }
+        url = _build_url(params)
+
+        assert "%2BAND%2B" not in url
+        decoded = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)
+        assert decoded["search_query"] == [
+            "(LLM) AND submittedDate:[202401010000 TO 202406302359]"
+        ]
 
 
 # ===================================================================
@@ -740,3 +762,29 @@ class TestResolveIdType:
 
         with pytest.raises(ValueError, match="Unsupported"):
             _resolve_id_type("anything", "invalid_type")
+
+
+class TestFormatConverter:
+    """Test direct converter script validation that protects local writes."""
+
+    def test_download_pubmed_rejects_non_numeric_pmid(self, tmp_path):
+        module_path = (
+            TEST_ROOT
+            .parents[2]
+            / "scripts"
+            / "format-converter.py"
+        )
+        sys.path.insert(0, str(module_path.parent))
+        spec = importlib.util.spec_from_file_location("format_converter_test", module_path)
+        assert spec and spec.loader
+        module = importlib.util.module_from_spec(spec)
+        try:
+            spec.loader.exec_module(module)
+        finally:
+            sys.path.remove(str(module_path.parent))
+
+        ok, result = module.download_pubmed("../../../evil", str(tmp_path), "ris")
+
+        assert ok is False
+        assert "Invalid PMID" in result
+        assert not list(tmp_path.iterdir())

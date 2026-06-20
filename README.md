@@ -37,11 +37,12 @@ It includes these user-facing skills:
 - `nature-response`
 - `nature-reviewer`
 - `nature-writing`
-- `openclaw-medical-skills`
 
 `skills/_shared` is preserved as support content for relative references and is not meant to be used as a standalone workflow.
 
-The plugin also adds a small workflow state layer under `docs/nature-workflows/` by default. It is intentionally lighter than `spce-workflow`: no spec approval freeze, no acceptance rounds, no commit guard, and no business-code enforcement.
+The plugin is released under the MIT license and keeps the upstream [`Yuan1z0825/nature-skills`](https://github.com/Yuan1z0825/nature-skills) source structure for the packaged Nature skills.
+
+The plugin also adds a small workflow state layer under `docs/nature-workflows/` by default. It is intentionally lighter than `spce-workflow`: no spec approval freeze, no acceptance rounds, no commit guard, and no business-code enforcement. Each workflow has `nature.yml`, `progress.md`, and `tasks.md`; `nature.yml` keeps its historical name for compatibility, but its content is JSON. Read-only commands such as `status` and `resume` do not rewrite those files.
 
 CLI examples:
 
@@ -65,6 +66,8 @@ MCP tools are exposed through `plugins/nature-workflow/mcp/nature_progress_serve
 - `nature_complete_task`
 - `nature_block_task`
 - `nature_log_note`
+
+When calling these MCP tools from a project, pass `project_root` to anchor the default `docs/nature-workflows/` directory in that project instead of the plugin directory.
 
 ## What It Does
 
@@ -187,6 +190,8 @@ The plugin includes `.mcp.json` and a stdio server at `mcp/spec_progress_server.
 - `spec_acceptance_finish`
 
 Agents should use MCP task tools when available. The CLI is the fallback and remains the canonical implementation.
+
+When launching the Spce MCP server outside the Codex plugin runtime, set `SPEC_CODING_BASE_DIR` to the project root so relative `specs_dir` values resolve under the target project rather than the plugin directory.
 
 ## Hook Guard
 

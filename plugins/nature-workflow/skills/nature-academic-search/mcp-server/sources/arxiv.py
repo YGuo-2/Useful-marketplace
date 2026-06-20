@@ -74,7 +74,7 @@ class ArxivSource:
             "sortOrder": "descending",
         }
         if date_filter:
-            params["search_query"] = f"{search_query}+AND+{date_filter}"
+            params["search_query"] = f"{search_query} AND {date_filter}"
 
         raw = self._request(params)
         results = self._parse_feed(raw)
@@ -120,21 +120,15 @@ class ArxivSource:
         """Build the search_query parameter.
 
         Combines user query with optional category restrictions.
-        Returns a string with +AND+/+OR+ connectors (URL-ready).
+        Returns a raw arXiv search expression. The HTTP layer performs URL
+        encoding once for the complete parameter set.
         """
         parts: list[str] = []
         parts.append(f"({user_query})")
         if categories:
             cat_expr = " OR ".join(f"cat:{cat}" for cat in categories)
             parts.append(f"({cat_expr})")
-        combined = " AND ".join(parts)
-        # Replace connectors and spaces for URL embedding
-        combined = (
-            combined.replace(" AND ", "+AND+")
-            .replace(" OR ", "+OR+")
-            .replace(" ", "+")
-        )
-        return combined
+        return " AND ".join(parts)
 
     @staticmethod
     def _build_date_filter(
@@ -142,8 +136,8 @@ class ArxivSource:
     ) -> str:
         """Build submittedDate filter expression.
 
-        The arXiv API requires the literal +TO+ syntax and 14-digit
-        timestamps in the format YYYYMMDDHHMM.
+        The arXiv API requires the TO range syntax and 14-digit timestamps in
+        the format YYYYMMDDHHMM. URL encoding is handled by `_build_url`.
 
         Returns empty string when no date bounds are given.
         """
@@ -159,7 +153,7 @@ class ArxivSource:
         if date_to:
             end_ts = _date_to_ts(date_to, end_of_day=True)
 
-        return f"submittedDate:[{start_ts}+TO+{end_ts}]"
+        return f"submittedDate:[{start_ts} TO {end_ts}]"
 
     # ------------------------------------------------------------------
     # HTTP
@@ -168,7 +162,7 @@ class ArxivSource:
     def _request(self, params: dict) -> str:
         """Execute an HTTP GET to the arXiv API with rate limiting."""
         self._enforce_rate_limit()
-        url = f"{ARXIV_API_URL}?{urllib.parse.urlencode(params)}"
+        url = _build_url(params)
         timeout = self._get_timeout()
         logger.debug("arXiv request: %s", url)
 
@@ -327,6 +321,10 @@ def _text(parent: ET.Element, xpath: str, ns: dict) -> str | None:
     if el is not None and el.text:
         return el.text.strip()
     return None
+
+
+def _build_url(params: dict) -> str:
+    return f"{ARXIV_API_URL}?{urllib.parse.urlencode(params)}"
 
 
 def _date_to_ts(date_str: str, end_of_day: bool = False) -> str:

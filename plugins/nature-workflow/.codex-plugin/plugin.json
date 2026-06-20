@@ -1,0 +1,39 @@
+{
+  "name": "nature-workflow",
+  "version": "0.1.0",
+  "description": "Nature research skills packaged with lightweight workflow progress tracking.",
+  "author": {
+    "name": "Yuan1z0825 and Useful-marketplace"
+  },
+  "homepage": "https://github.com/Yuan1z0825/nature-skills",
+  "repository": "https://github.com/YGuo-2/Useful-marketplace",
+  "license": "Apache-2.0",
+  "keywords": [
+    "nature",
+    "academic",
+    "research",
+    "writing",
+    "citation",
+    "workflow",
+    "mcp"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Nature workflow",
+    "shortDescription": "Use Nature research skills with simple local progress state.",
+    "longDescription": "Nature workflow packages the usable skills from Yuan1z0825/nature-skills, preserves shared skill dependencies, and adds a small docs/nature-workflows state system for starting, resuming, blocking, completing, and logging academic workflow tasks. Individual nature-* skills remain the primary entrypoints; the workflow tools only track local progress.",
+    "developerName": "Yuan1z0825 and Useful-marketplace",
+    "category": "Education",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "brandColor": "#2F855A",
+    "defaultPrompt": [
+      "Start a Nature workflow for this paper.",
+      "Resume my Nature workflow.",
+      "Use the right nature skill for this academic task."
+    ]
+  },
+  "mcpServers": "./.mcp.json"
+}

@@ -1,6 +1,6 @@
 # Useful-marketplace
 
-This repository provides the Codex plugin marketplace entry for `spce-workflow`.
+This repository provides Codex plugin marketplace entries for `spce-workflow` and `nature-workflow`.
 
 ## Import in Codex
 
@@ -11,7 +11,60 @@ Use the Codex "Add plugin marketplace" dialog:
 - Sparse path: leave empty
 
 Codex expects the marketplace manifest at `.agents/plugins/marketplace.json`.
-The plugin source is at `plugins/spce-workflow`.
+Plugin sources live under `plugins/`.
+
+## Plugins
+
+- `spce-workflow`: spec-first development workflow for complex code changes.
+- `nature-workflow`: Nature research skills packaged with lightweight workflow progress tracking.
+
+## Nature Workflow
+
+![Nature workflow logo](plugins/nature-workflow/assets/icon.png)
+
+`nature-workflow` packages the usable skills from [`Yuan1z0825/nature-skills`](https://github.com/Yuan1z0825/nature-skills) into this marketplace while preserving shared dependencies and full skill subtrees such as `nature-academic-search/mcp-server`.
+
+It includes these user-facing skills:
+
+- `nature-academic-search`
+- `nature-citation`
+- `nature-data`
+- `nature-figure`
+- `nature-paper-to-patent`
+- `nature-paper2ppt`
+- `nature-polishing`
+- `nature-reader`
+- `nature-response`
+- `nature-reviewer`
+- `nature-writing`
+- `openclaw-medical-skills`
+
+`skills/_shared` is preserved as support content for relative references and is not meant to be used as a standalone workflow.
+
+The plugin also adds a small workflow state layer under `docs/nature-workflows/` by default. It is intentionally lighter than `spce-workflow`: no spec approval freeze, no acceptance rounds, no commit guard, and no business-code enforcement.
+
+CLI examples:
+
+```bash
+python plugins/nature-workflow/scripts/nature_progress.py new --slug "paper-reader"
+python plugins/nature-workflow/scripts/nature_progress.py discover
+python plugins/nature-workflow/scripts/nature_progress.py status
+python plugins/nature-workflow/scripts/nature_progress.py start T1
+python plugins/nature-workflow/scripts/nature_progress.py complete T1 --evidence "reader exported"
+python plugins/nature-workflow/scripts/nature_progress.py block T2 --reason "waiting for source PDF"
+python plugins/nature-workflow/scripts/nature_progress.py resume
+```
+
+MCP tools are exposed through `plugins/nature-workflow/mcp/nature_progress_server.py`:
+
+- `nature_new_workflow`
+- `nature_discover_workflows`
+- `nature_status`
+- `nature_resume`
+- `nature_start_task`
+- `nature_complete_task`
+- `nature_block_task`
+- `nature_log_note`
 
 ## What It Does
 
@@ -33,9 +86,11 @@ Use it for complex features, cross-module refactors, design-first work, regressi
 
 ![Spce workflow plugin workflow](spce-workflow-flowchart.png)
 
-All generated artifacts live in `docs/specs/`; chat-only plans are not the source of truth.
+Generated artifacts live in an isolated workflow directory under `docs/specs/<run-id>/`; chat-only plans are not the source of truth. Legacy root-level `docs/specs/tasks.md` workflows remain readable, but new workflows must not write to the root directory.
 
-1. Resume first if `docs/specs/progress.md` exists.
+1. Discover workflow directories first with `spec_progress.py discover docs/specs/`.
+   - If open workflows exist, list them and ask whether to continue one or create a new workflow.
+   - If no open workflow exists, create a new isolated directory with `spec_progress.py new docs/specs/ --slug "<short-slug>"`.
 2. Intake clarifies goal, scope, risk, non-goals, decision boundaries, and acceptance criteria. It may ask multiple focused rounds and hands off only when status is `complete` or `assumptions-accepted`.
 3. Router selects one branch:
    - Requirements-First: product goal or new capability without fixed technical design.
@@ -43,9 +98,9 @@ All generated artifacts live in `docs/specs/`; chat-only plans are not the sourc
    - Bugfix: restore existing expected behavior with evidence and regression protection.
 4. Requirements-First and Design-First run Analyze Requirements before finalizing specs.
 5. The selected branch writes Markdown artifacts plus:
-   - `docs/specs/tasks.md`: human-readable task source of truth.
-   - `docs/specs/progress.md`: resume entrypoint after interruption, shutdown, or lost thread.
-   - `docs/specs/spec.yml`: Kiro-compatible machine index for workflow, artifacts, approval, risk, requirement IDs, task graph, current task, `artifact_hashes`, and `task_plan_hash`.
+   - `<specs_dir>/tasks.md`: human-readable task source of truth.
+   - `<specs_dir>/progress.md`: resume entrypoint after interruption, shutdown, or lost thread.
+   - `<specs_dir>/spec.yml`: Kiro-compatible machine index for workflow, artifacts, approval, risk, requirement IDs, task graph, current task, `artifact_hashes`, and `task_plan_hash`.
 6. After human approval, `spec_progress.py approve` or MCP `spec_approve` freezes the approved spec and task-plan baseline.
 7. Implementation proceeds through Spec Progress CLI/MCP task updates, one safe task wave at a time.
 8. When no unchecked tasks remain, local pre-acceptance runs before strict final multi-agent acceptance.
@@ -78,27 +133,29 @@ The plugin keeps its existing Markdown strengths while adding a machine-readable
 
 ## Progress And Resume
 
-Task state is enforced through `tasks.md`, `progress.md`, and `spec.yml`.
+Task state is enforced through `<specs_dir>/tasks.md`, `<specs_dir>/progress.md`, and `<specs_dir>/spec.yml`.
 
 Use the CLI directly:
 
 ```bash
-python plugins/spce-workflow/scripts/spec_progress.py init docs/specs/
-python plugins/spce-workflow/scripts/spec_progress.py approve docs/specs/ --evidence "批准规范，启动执行"
-python plugins/spce-workflow/scripts/spec_progress.py status docs/specs/
-python plugins/spce-workflow/scripts/spec_progress.py resume docs/specs/
-python plugins/spce-workflow/scripts/spec_progress.py start docs/specs/ T-001
-python plugins/spce-workflow/scripts/spec_progress.py complete docs/specs/ T-001 --evidence "pytest tests/test_feature.py passed"
-python plugins/spce-workflow/scripts/spec_progress.py block docs/specs/ T-001 --reason "needs API decision"
-python plugins/spce-workflow/scripts/spec_progress.py skip docs/specs/ T-001 --approval "human approved skip"
-python plugins/spce-workflow/scripts/spec_progress.py waves docs/specs/
-python plugins/spce-workflow/scripts/spec_progress.py sync-check docs/specs/
-python plugins/spce-workflow/scripts/spec_progress.py pre-acceptance docs/specs/
-python plugins/spce-workflow/scripts/spec_progress.py acceptance-init docs/specs/
-python plugins/spce-workflow/scripts/spec_progress.py acceptance-status docs/specs/
-python plugins/spce-workflow/scripts/spec_progress.py acceptance-plan-fixes docs/specs/
-python plugins/spce-workflow/scripts/spec_progress.py acceptance-next-round docs/specs/
-python plugins/spce-workflow/scripts/spec_progress.py acceptance-finish docs/specs/
+python plugins/spce-workflow/scripts/spec_progress.py discover docs/specs/
+python plugins/spce-workflow/scripts/spec_progress.py new docs/specs/ --slug "comments-api"
+python plugins/spce-workflow/scripts/spec_progress.py init <specs_dir>
+python plugins/spce-workflow/scripts/spec_progress.py approve <specs_dir> --evidence "批准规范，启动执行"
+python plugins/spce-workflow/scripts/spec_progress.py status <specs_dir>
+python plugins/spce-workflow/scripts/spec_progress.py resume <specs_dir>
+python plugins/spce-workflow/scripts/spec_progress.py start <specs_dir> T-001
+python plugins/spce-workflow/scripts/spec_progress.py complete <specs_dir> T-001 --evidence "pytest tests/test_feature.py passed"
+python plugins/spce-workflow/scripts/spec_progress.py block <specs_dir> T-001 --reason "needs API decision"
+python plugins/spce-workflow/scripts/spec_progress.py skip <specs_dir> T-001 --approval "human approved skip"
+python plugins/spce-workflow/scripts/spec_progress.py waves <specs_dir>
+python plugins/spce-workflow/scripts/spec_progress.py sync-check <specs_dir>
+python plugins/spce-workflow/scripts/spec_progress.py pre-acceptance <specs_dir>
+python plugins/spce-workflow/scripts/spec_progress.py acceptance-init <specs_dir>
+python plugins/spce-workflow/scripts/spec_progress.py acceptance-status <specs_dir>
+python plugins/spce-workflow/scripts/spec_progress.py acceptance-plan-fixes <specs_dir>
+python plugins/spce-workflow/scripts/spec_progress.py acceptance-next-round <specs_dir>
+python plugins/spce-workflow/scripts/spec_progress.py acceptance-finish <specs_dir>
 ```
 
 `approve` records the human approval and freezes the baseline. `complete` requires verification evidence. `skip` requires explicit human approval evidence. Task updates also synchronize the top-level `tasks.md` status, current task, progress count, and completion log. If a task is active and the worktree has business-code changes after an interruption, `resume` reports `interrupted`; the next agent must inspect the diff and evidence before continuing.
@@ -111,6 +168,8 @@ The plugin includes `.mcp.json` and a stdio server at `mcp/spec_progress_server.
 
 - `spec_status`
 - `spec_resume`
+- `spec_discover_workflows`
+- `spec_new_workflow`
 - `spec_approve`
 - `spec_start_task`
 - `spec_complete_task`
@@ -137,16 +196,16 @@ A pre-commit hook template lives at:
 plugins/spce-workflow/assets/hooks/pre-commit-spec-progress
 ```
 
-Install it into a target repository by copying it to `.git/hooks/pre-commit` and making it executable. It blocks commits that stage business-code changes while an active spec workflow exists but no legal `docs/specs/tasks.md`, `docs/specs/progress.md`, or `docs/specs/spec.yml` update is staged.
+Install it into a target repository by copying it to `.git/hooks/pre-commit` and making it executable. It scans `docs/specs/` for open workflows, including legacy root-level specs and `docs/specs/<run-id>/` directories, and blocks commits that stage business-code changes while the matching workflow progress files are unchanged.
 
 ## Validation
 
 Run the structural validator against the generated specs:
 
 ```bash
-python plugins/spce-workflow/scripts/validate_spec.py docs/specs/ --workflow requirements-first
-python plugins/spce-workflow/scripts/validate_spec.py docs/specs/ --workflow design-first
-python plugins/spce-workflow/scripts/validate_spec.py docs/specs/ --workflow bugfix
+python plugins/spce-workflow/scripts/validate_spec.py <specs_dir> --workflow requirements-first
+python plugins/spce-workflow/scripts/validate_spec.py <specs_dir> --workflow design-first
+python plugins/spce-workflow/scripts/validate_spec.py <specs_dir> --workflow bugfix
 ```
 
 `--workflow auto` is the default when the directory contains exactly one recognizable artifact set.
@@ -156,25 +215,25 @@ The validator checks required files, unresolved template placeholders, formal GW
 Color output defaults to `auto` and can be controlled with:
 
 ```bash
-python plugins/spce-workflow/scripts/validate_spec.py docs/specs/ --color never
+python plugins/spce-workflow/scripts/validate_spec.py <specs_dir> --color never
 ```
 
 Progress and acceptance checks:
 
 ```bash
-python plugins/spce-workflow/scripts/validate_spec.py docs/specs/ --progress
-python plugins/spce-workflow/scripts/validate_spec.py docs/specs/ --resume
-python plugins/spce-workflow/scripts/validate_spec.py docs/specs/ --sync-check
-python plugins/spce-workflow/scripts/validate_spec.py docs/specs/ --pre-acceptance
+python plugins/spce-workflow/scripts/validate_spec.py <specs_dir> --progress
+python plugins/spce-workflow/scripts/validate_spec.py <specs_dir> --resume
+python plugins/spce-workflow/scripts/validate_spec.py <specs_dir> --sync-check
+python plugins/spce-workflow/scripts/validate_spec.py <specs_dir> --pre-acceptance
 ```
 
 ## Final Acceptance
 
 Final acceptance is intentionally strict. Local `pre-acceptance` may verify readiness when sub-agents are unavailable, but it is not final acceptance. Strict final acceptance requires explicit authorization to orchestrate sub-agents for first-wave review and adversarial review. If the current environment cannot run sub-agents, the workflow is blocked at acceptance; it must not be downgraded to a single-agent self-review or reported as complete.
 
-Acceptance is resumable through `docs/specs/acceptance_state.json`. The state file freezes the original `tasks.md` task IDs, records review units, tracks which sub-agents are planned/running/completed, and records issue/fix/deferred status. After context compaction or interruption, agents must run `acceptance-status` and resume only the missing agents instead of rebuilding all review units.
+Acceptance is resumable through `<specs_dir>/acceptance_state.json`. The state file freezes the original `tasks.md` task IDs, records review units, tracks which sub-agents are planned/running/completed, and records issue/fix/deferred status. After context compaction or interruption, agents must run `acceptance-status` and resume only the missing agents instead of rebuilding all review units.
 
-Confirmed acceptance issues are repaired through `docs/specs/acceptance-fixes.md`, not by appending tasks to the original `docs/specs/tasks.md`. Rounds 1-3 may fix all evidence-backed actionable issues. From round 4 onward, only P0-P2 issues are auto-fixed; P3/P4 issues are deferred unless a human upgrades them. Round 6 is the hard stop for unresolved P0-P2 issues.
+Confirmed acceptance issues are repaired through `<specs_dir>/acceptance-fixes.md`, not by appending tasks to the original `<specs_dir>/tasks.md`. Rounds 1-3 may fix all evidence-backed actionable issues. From round 4 onward, only P0-P2 issues are auto-fixed; P3/P4 issues are deferred unless a human upgrades them. Round 6 is the hard stop for unresolved P0-P2 issues.
 
 ## High-Risk Work
 
@@ -198,5 +257,5 @@ git diff --check
 For a spec directory that has entered final acceptance, also run:
 
 ```bash
-python plugins/spce-workflow/scripts/spec_progress.py acceptance-status docs/specs/
+python plugins/spce-workflow/scripts/spec_progress.py acceptance-status <specs_dir>
 ```

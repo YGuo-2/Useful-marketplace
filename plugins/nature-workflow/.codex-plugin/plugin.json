@@ -29,6 +29,8 @@
       "Write"
     ],
     "brandColor": "#2F855A",
+    "composerIcon": "./assets/icon.png",
+    "logo": "./assets/logo.png",
     "defaultPrompt": [
       "Start a Nature workflow for this paper.",
       "Resume my Nature workflow.",

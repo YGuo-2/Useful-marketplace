@@ -5,10 +5,10 @@
   },
   "plugins": [
     {
-      "name": "spce-workflow",
+      "name": "spec-workflow",
       "source": {
         "source": "local",
-        "path": "./plugins/spce-workflow"
+        "path": "./plugins/spec-workflow"
       },
       "policy": {
         "installation": "AVAILABLE",

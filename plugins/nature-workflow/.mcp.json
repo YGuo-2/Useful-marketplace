@@ -3,9 +3,8 @@
     "nature_workflow_progress": {
       "command": "python",
       "args": [
-        "./mcp/nature_progress_server.py"
-      ],
-      "cwd": "."
+        "${CLAUDE_PLUGIN_ROOT}/mcp/nature_progress_server.py"
+      ]
     }
   }
 }

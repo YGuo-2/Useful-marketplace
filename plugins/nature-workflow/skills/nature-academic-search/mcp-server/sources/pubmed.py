@@ -6,6 +6,11 @@ import time
 import xml.etree.ElementTree as ET
 from typing import Any
 
+try:
+    from defusedxml.ElementTree import fromstring as _safe_fromstring
+except ImportError:
+    from xml.etree.ElementTree import fromstring as _safe_fromstring
+
 import requests
 
 from utils.config import get_config
@@ -199,7 +204,7 @@ class PubMedSource:
             "sort": sort_param,
         }
         resp = _get("esearch.fcgi", search_params)
-        root = ET.fromstring(resp.content)
+        root = _safe_fromstring(resp.content)
 
         count_el = root.find("Count")
         total = int(count_el.text) if count_el is not None and count_el.text else 0
@@ -224,7 +229,7 @@ class PubMedSource:
             "rettype": "abstract",
         }
         resp = _get("efetch.fcgi", fetch_params)
-        fetch_root = ET.fromstring(resp.content)
+        fetch_root = _safe_fromstring(resp.content)
 
         results: list[dict[str, Any]] = []
         for article in fetch_root.findall("PubmedArticle"):
@@ -265,7 +270,7 @@ class PubMedSource:
             "rettype": "abstract",
         }
         resp = _get("efetch.fcgi", fetch_params)
-        root = ET.fromstring(resp.content)
+        root = _safe_fromstring(resp.content)
 
         article = root.find("PubmedArticle")
         if article is None:
@@ -303,7 +308,7 @@ class PubMedSource:
             "retmode": "xml",
         }
         resp = _get("esearch.fcgi", search_params)
-        root = ET.fromstring(resp.content)
+        root = _safe_fromstring(resp.content)
 
         id_list = root.find("IdList")
         if id_list is None or len(id_list) == 0:
@@ -321,7 +326,7 @@ class PubMedSource:
             "retmode": "xml",
         }
         resp = _get("efetch.fcgi", fetch_params)
-        fetch_root = ET.fromstring(resp.content)
+        fetch_root = _safe_fromstring(resp.content)
 
         results: list[dict[str, str]] = []
         for descriptor in fetch_root.findall(".//DescriptorRecord"):

@@ -1,5 +1,6 @@
 """CrossRef data source for academic search."""
 
+import re
 from urllib.parse import quote
 
 import requests
@@ -8,6 +9,17 @@ from utils.config import get_config
 from utils.errors import DataSourceError
 
 CROSSREF_API = "https://api.crossref.org"
+
+_DOI_RE = re.compile(r"^10\.\d+/.+")
+
+
+def _validate_doi(doi: str) -> str:
+    """Reject DOIs that don't match the canonical ``10.<registrant>/<suffix>``
+    shape so a value like ``../`` cannot rewrite the request path."""
+    doi = doi.strip()
+    if not _DOI_RE.match(doi):
+        raise ValueError(f"Invalid DOI: {doi!r}")
+    return doi
 
 
 class CrossRefSource:
@@ -60,7 +72,7 @@ class CrossRefSource:
         Returns:
             Unified result dict with extra fields (abstract, volume, etc.).
         """
-        data = self._request(f"/works/{quote(doi, safe='/')}")
+        data = self._request(f"/works/{quote(_validate_doi(doi), safe='/')}")
         return self._normalize_detail_item(data)
 
     def get_citation(self, doi: str, style: str = "apa") -> str:
@@ -73,7 +85,7 @@ class CrossRefSource:
         Returns:
             Formatted citation string.
         """
-        url = f"{CROSSREF_API}/works/{quote(doi, safe='/')}/transform"
+        url = f"{CROSSREF_API}/works/{quote(_validate_doi(doi), safe='/')}/transform"
         headers = {
             **self._headers,
             "Accept": f"text/x-bibliography; style={style}",

@@ -26,7 +26,9 @@ class JSONFormatter(logging.Formatter):
 def setup_logging(level: str = "INFO") -> logging.Logger:
     logger = logging.getLogger("academic-search")
     logger.setLevel(getattr(logging, level.upper()))
-    handler = logging.StreamHandler(sys.stderr)
-    handler.setFormatter(JSONFormatter())
-    logger.addHandler(handler)
+    if not logger.handlers:
+        handler = logging.StreamHandler(sys.stderr)
+        handler.setFormatter(JSONFormatter())
+        logger.addHandler(handler)
+    logger.propagate = False
     return logger

@@ -44,15 +44,14 @@ if [ "${#missing_paths[@]}" -gt 0 ]; then
     exit 1
 fi
 
-# 1. Install Python dependencies
-echo "[1/5] Installing Python dependencies..."
-pip install --quiet -r "${SCRIPT_DIR}/mcp-server/requirements.txt" 2>/dev/null || {
-    echo "  pip failed, trying pip3..."
-    pip3 install --quiet -r "${SCRIPT_DIR}/mcp-server/requirements.txt" 2>/dev/null || {
-        echo "  WARNING: Could not install Python deps. Install manually:"
-        echo "    pip install -r mcp-server/requirements.txt"
-    }
-}
+# 1. Check for uv (deps are installed on demand by `uv run --with`)
+echo "[1/5] Checking uv..."
+if command -v uv >/dev/null 2>&1; then
+    echo "  uv found; Python dependencies will be resolved on demand via 'uv run --with'."
+else
+    echo "  WARNING: uv not found. The academic-search MCP server starts with 'uv run'."
+    echo "    Install uv first: https://docs.astral.sh/uv/getting-started/installation/"
+fi
 
 # 2. Copy MCP server
 echo "[2/5] Copying MCP server..."
@@ -83,8 +82,18 @@ import json, sys
 with open('${MCP_JSON}', 'r') as f:
     cfg = json.load(f)
 cfg.setdefault('mcpServers', {})['academic-search'] = {
-    'command': 'python3',
-    'args': ['${MCP_TARGET}/academic_search_server.py'],
+    'command': 'uv',
+    'args': [
+        'run', '--no-project',
+        '--directory', '${MCP_TARGET}',
+        '--with', 'mcp>=1.0.0,<2.0.0',
+        '--with', 'requests>=2.28.0,<3.0.0',
+        '--with', 'toml>=0.10.2,<2.0.0',
+        '--with', 'lxml>=4.9.0,<6.0.0',
+        '--with', 'defusedxml>=0.7.0',
+        '--with', 'pybliometrics>=4.4.1,<5.0.0',
+        'python', 'academic_search_server.py'
+    ],
     'env': {'PUBMED_EMAIL': '${PUBMED_EMAIL}'}
 }
 with open('${MCP_JSON}', 'w') as f:
@@ -98,8 +107,27 @@ else
 {
   "mcpServers": {
     "academic-search": {
-      "command": "python3",
-      "args": ["${MCP_TARGET}/academic_search_server.py"],
+      "command": "uv",
+      "args": [
+        "run",
+        "--no-project",
+        "--directory",
+        "${MCP_TARGET}",
+        "--with",
+        "mcp>=1.0.0,<2.0.0",
+        "--with",
+        "requests>=2.28.0,<3.0.0",
+        "--with",
+        "toml>=0.10.2,<2.0.0",
+        "--with",
+        "lxml>=4.9.0,<6.0.0",
+        "--with",
+        "defusedxml>=0.7.0",
+        "--with",
+        "pybliometrics>=4.4.1,<5.0.0",
+        "python",
+        "academic_search_server.py"
+      ],
       "env": {
         "PUBMED_EMAIL": "${PUBMED_EMAIL}"
       }

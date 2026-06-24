@@ -33,6 +33,11 @@ import xml.etree.ElementTree as ET
 from urllib.request import urlopen
 from urllib.parse import urlencode
 
+try:
+    from defusedxml.ElementTree import fromstring as _safe_fromstring
+except ImportError:
+    from xml.etree.ElementTree import fromstring as _safe_fromstring
+
 from converters import (
     convert_from_medline,
     convert_from_crossref,
@@ -55,7 +60,7 @@ def esearch(query, max_results=5):
     try:
         with urlopen(url, timeout=30) as resp:
             xml_data = resp.read().decode("utf-8")
-        root = ET.fromstring(xml_data)
+        root = _safe_fromstring(xml_data)
         id_list = root.find("IdList")
         if id_list is not None:
             return [e.text for e in id_list.findall("Id")]
@@ -182,7 +187,7 @@ def download_arxiv(arxiv_id, output_dir, fmt, retries=1):
                 return False, f"arXiv API error for ID {arxiv_id}: {e}"
             time.sleep(DELAY * (attempt + 1))
 
-    root = ET.fromstring(xml_data)
+    root = _safe_fromstring(xml_data)
     content = convert_from_arxiv(root, fmt)
     if not content:
         return False, f"arXiv ID {arxiv_id}: no entry found in response"

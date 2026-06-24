@@ -59,9 +59,15 @@ def main() -> int:
         parser.error(f"No PDF files found under: {args.source}")
 
     low_text = []
+    failed = []
     for pdf in pdfs:
         destination = output_path(pdf, args.source, args.output)
-        pages, characters = extract(pdf, destination)
+        try:
+            pages, characters = extract(pdf, destination)
+        except Exception as error:  # noqa: BLE001 - isolate one bad PDF from the batch
+            failed.append((pdf, error))
+            print(f"WARNING: failed to extract {pdf}: {error}")
+            continue
         print(f"{pdf}\t{pages} pages\t{characters} characters\t{destination}")
         if characters < max(200, pages * 50):
             low_text.append(pdf)
@@ -70,6 +76,13 @@ def main() -> int:
         print("\nOCR may be required for:")
         for pdf in low_text:
             print(f"- {pdf}")
+
+    if failed:
+        print("\nFailed to extract:")
+        for pdf, error in failed:
+            print(f"- {pdf}: {error}")
+
+    if failed or low_text:
         return 2
     return 0
 

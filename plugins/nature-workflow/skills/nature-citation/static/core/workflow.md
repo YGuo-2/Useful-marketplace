@@ -25,10 +25,10 @@ If the claim is too broad, split it into citable subclaims rather than searching
 
 ## 3. Search candidate papers
 
-Prefer `scripts/nature_citation.py` when internet access is available. The full flag list, polite-pool/rate-limit options, and the long-article batch strategy are in `references/script-usage.md`. A minimal run:
+Prefer `plugins/nature-workflow/skills/nature-citation/scripts/nature_citation.py` when internet access is available. The full flag list, polite-pool/rate-limit options, and the long-article batch strategy are in `references/script-usage.md`. A minimal run (from the repository root):
 
 ```bash
-python scripts/nature_citation.py \
+python plugins/nature-workflow/skills/nature-citation/scripts/nature_citation.py \
   --text "PASTE MANUSCRIPT TEXT HERE" \
   --scope cns \
   --outdir /tmp/nature-citation \

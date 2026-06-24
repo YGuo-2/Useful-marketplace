@@ -23,7 +23,9 @@ run acceptance rounds, or replace the domain-specific skills.
 
 ## Progress Tools
 
-The plugin provides both CLI and MCP access to the same state engine:
+The plugin provides both CLI and MCP access to the same state engine. Run all
+CLI commands below from the repository root (repo root); the paths are relative
+to it:
 
 - CLI: `python plugins/nature-workflow/scripts/nature_progress.py <command>`
 - MCP server: `plugins/nature-workflow/mcp/nature_progress_server.py`
@@ -62,7 +64,7 @@ script stamps `<!-- updated: <ISO8601 UTC> -->` from the system clock. Then run
 `check`, and finally run `index` to synchronize the project-root `AGENTS.md`
 sentinel index. The index command only rewrites the sentinel section.
 
-CLI examples:
+CLI examples (run from the repository root):
 
 ```bash
 python plugins/nature-workflow/scripts/nature_memory.py touch M3 --workflow <workflow-dir>

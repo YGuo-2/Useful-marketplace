@@ -244,6 +244,12 @@ def validate(data: dict) -> None:
     numbers = [claim.get("number") for claim in data["claims"]]
     if numbers != list(range(1, len(numbers) + 1)):
         raise ValueError(f"Claim numbers must be consecutive integers starting at 1: {numbers}")
+    for index, claim in enumerate(data["claims"], start=1):
+        if not claim.get("text"):
+            raise ValueError(f"Claim {index} is missing a non-empty 'text' field")
+    for index, figure in enumerate(data.get("figures", []), start=1):
+        if figure.get("number") is None:
+            raise ValueError(f"Figure at position {index} is missing a 'number' field")
 
 
 def main() -> int:

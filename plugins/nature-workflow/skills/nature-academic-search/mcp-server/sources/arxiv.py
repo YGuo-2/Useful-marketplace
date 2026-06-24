@@ -7,6 +7,11 @@ import urllib.request
 import xml.etree.ElementTree as ET
 from datetime import datetime
 
+try:
+    from defusedxml.ElementTree import fromstring as _safe_fromstring
+except ImportError:
+    from xml.etree.ElementTree import fromstring as _safe_fromstring
+
 from utils.config import get_config
 from utils.errors import DataSourceError
 from utils.logging import setup_logging
@@ -214,7 +219,7 @@ class ArxivSource:
     def _parse_feed(self, xml_text: str) -> list[dict]:
         """Parse arXiv Atom XML into a list of unified result dicts."""
         try:
-            root = ET.fromstring(xml_text)
+            root = _safe_fromstring(xml_text)
         except ET.ParseError as exc:
             raise DataSourceError(
                 _SOURCE_NAME,

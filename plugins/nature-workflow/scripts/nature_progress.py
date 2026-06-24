@@ -177,6 +177,21 @@ def find_task(record: dict[str, Any], task_id: str) -> dict[str, Any]:
     raise NatureProgressError(f"Unknown task id: {task_id}")
 
 
+def assert_no_other_active(record: dict[str, Any], task_id: str) -> None:
+    """Reject starting/blocking ``task_id`` while a different task is active.
+
+    Only an in-progress (``active``) task counts as occupying the workflow. A
+    ``blocked`` task does not, so the user may switch to another task while one
+    is parked on a blocker.
+    """
+    active = next(
+        (item for item in record.get("tasks", []) if item.get("status") == "active"),
+        None,
+    )
+    if active and active.get("id") != task_id:
+        raise NatureProgressError(f"Task {active.get('id')} is already active")
+
+
 def append_log(record: dict[str, Any], event: str, message: str, task_id: str | None = None) -> None:
     record.setdefault("log", []).append(
         {
@@ -189,17 +204,36 @@ def append_log(record: dict[str, Any], event: str, message: str, task_id: str | 
 
 
 def update_workflow_status(record: dict[str, Any]) -> None:
+    """Recompute ``status``/``active_task`` purely from task statuses.
+
+    This is the single source of truth for workflow-level state and must be
+    called at the end of every write command (and may be called by read
+    commands). Because it is deterministic, a read command that recomputes in
+    memory yields the same values already persisted on disk, so reads never
+    drift from the saved ``nature.yml``.
+
+    Priority: an in-progress (``active``) task wins and drives ``active_task``
+    with workflow ``status="open"``; otherwise a ``blocked`` task surfaces with
+    ``status="blocked"``; all-completed is ``completed``; everything else is an
+    idle ``open`` workflow with no active task.
+    """
     tasks = record.get("tasks", [])
     if tasks and all(task.get("status") == "completed" for task in tasks):
         record["status"] = "completed"
         record["active_task"] = None
         return
-    if any(task.get("status") == "blocked" for task in tasks):
+    active = next((task for task in tasks if task.get("status") == "active"), None)
+    if active is not None:
+        record["status"] = "open"
+        record["active_task"] = active.get("id")
+        return
+    blocked = next((task for task in tasks if task.get("status") == "blocked"), None)
+    if blocked is not None:
         record["status"] = "blocked"
-        blocked = next(task for task in tasks if task.get("status") == "blocked")
         record["active_task"] = blocked.get("id")
         return
     record["status"] = "open"
+    record["active_task"] = None
 
 
 def summarize(record: dict[str, Any], workflow_dir: Path) -> dict[str, Any]:
@@ -356,16 +390,13 @@ def command_start(
     task = find_task(record, task_id)
     if task.get("status") == "completed":
         raise NatureProgressError(f"Task {task_id} is already completed")
-    active = next((item for item in record.get("tasks", []) if item.get("status") == "active"), None)
-    if active and active.get("id") != task_id:
-        raise NatureProgressError(f"Task {active.get('id')} is already active")
+    assert_no_other_active(record, task_id)
     task["status"] = "active"
     task["started_at"] = task.get("started_at") or now_utc()
     task["blocked_at"] = None
     task["blocker"] = ""
-    record["status"] = "open"
-    record["active_task"] = task_id
     append_log(record, "start", "Task started", task_id)
+    update_workflow_status(record)
     save_record(workflow_dir, record)
     return {"ok": True, "action": "start", **summarize(record, workflow_dir)}
 
@@ -413,15 +444,12 @@ def command_block(
     task = find_task(record, task_id)
     if task.get("status") == "completed":
         raise NatureProgressError(f"Task {task_id} is already completed")
-    active = next((item for item in record.get("tasks", []) if item.get("status") == "active"), None)
-    if active and active.get("id") != task_id:
-        raise NatureProgressError(f"Task {active.get('id')} is already active")
+    assert_no_other_active(record, task_id)
     task["status"] = "blocked"
     task["blocked_at"] = now_utc()
     task["blocker"] = reason.strip()
-    record["status"] = "blocked"
-    record["active_task"] = task_id
     append_log(record, "block", reason.strip(), task_id)
+    update_workflow_status(record)
     save_record(workflow_dir, record)
     return {"ok": True, "action": "block", **summarize(record, workflow_dir)}
 

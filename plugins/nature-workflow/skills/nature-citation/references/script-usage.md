@@ -1,13 +1,13 @@
 # Script usage and long-article strategy
 
-Open this reference when running `scripts/nature_citation.py` or when the input is long enough to need batching. It expands step 3 of the workflow.
+Open this reference when running `plugins/nature-workflow/skills/nature-citation/scripts/nature_citation.py` or when the input is long enough to need batching. It expands step 3 of the workflow.
 
 ## Running the script
 
-Start with `scripts/nature_citation.py` when internet access is available:
+Start with `plugins/nature-workflow/skills/nature-citation/scripts/nature_citation.py` when internet access is available. Run it from the repository root (repo root):
 
 ```bash
-python scripts/nature_citation.py \
+python plugins/nature-workflow/skills/nature-citation/scripts/nature_citation.py \
   --text "PASTE MANUSCRIPT TEXT HERE" \
   --scope cns \
   --outdir /tmp/nature-citation \

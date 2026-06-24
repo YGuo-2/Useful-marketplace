@@ -11,10 +11,12 @@ if [ ! -d "docs/nature-workflows" ]; then
   exit 0
 fi
 
-SCRIPT="plugins/nature-workflow/scripts/nature_memory.py"
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+SCRIPT="${REPO_ROOT}/plugins/nature-workflow/scripts/nature_memory.py"
 if [ ! -f "$SCRIPT" ]; then
   echo "Nature workflow memory hook skipped: $SCRIPT not found." >&2
   exit 0
 fi
 
-python "$SCRIPT" check --all docs/nature-workflows/
+PYTHON="$(command -v python3 || command -v python)"
+"$PYTHON" "$SCRIPT" check --all docs/nature-workflows/

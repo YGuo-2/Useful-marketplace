@@ -16,6 +16,8 @@
         "--with",
         "lxml>=4.9.0,<6.0.0",
         "--with",
+        "defusedxml>=0.7.0",
+        "--with",
         "pybliometrics>=4.4.1,<5.0.0",
         "python",
         "academic_search_server.py"

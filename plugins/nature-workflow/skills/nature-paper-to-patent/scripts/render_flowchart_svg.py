@@ -4,7 +4,9 @@
 import argparse
 import html
 import json
+import os
 import re
+import sys
 import textwrap
 from pathlib import Path
 
@@ -245,14 +247,29 @@ def render(figure: dict) -> str:
 def load_font(size: int):
     from PIL import ImageFont
 
-    candidates = (
+    candidates = []
+    override = os.environ.get("NATURE_FLOWCHART_FONT")
+    if override:
+        candidates.append(Path(override))
+    candidates += [
         Path(r"C:\Windows\Fonts\simsun.ttc"),
         Path(r"C:\Windows\Fonts\msyh.ttc"),
         Path(r"C:\Windows\Fonts\simhei.ttf"),
-    )
+        Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"),
+        Path("/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc"),
+        Path("/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc"),
+        Path("/System/Library/Fonts/PingFang.ttc"),
+        Path("/System/Library/Fonts/Songti.ttc"),
+        Path("/System/Library/Fonts/STHeiti Medium.ttc"),
+    ]
     for candidate in candidates:
         if candidate.exists():
             return ImageFont.truetype(str(candidate), size=size)
+    print(
+        "WARNING: no CJK font found; Chinese labels may render as blank boxes. "
+        "Set NATURE_FLOWCHART_FONT to a .ttc/.ttf file with CJK glyphs.",
+        file=sys.stderr,
+    )
     return ImageFont.load_default()
 
 

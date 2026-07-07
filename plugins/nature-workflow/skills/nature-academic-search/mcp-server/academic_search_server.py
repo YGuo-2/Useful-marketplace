@@ -16,9 +16,11 @@ from mcp.server import FastMCP
 from sources import (
     ArxivSource,
     CrossRefSource,
+    OpenAlexSource,
     PubMedSource,
     ScienceDirectSource,
     ScopusSource,
+    UnpaywallSource,
 )
 from utils import AcademicSearchError, DataSourceError, setup_logging
 
@@ -31,6 +33,8 @@ _pubmed = PubMedSource()
 _arxiv = ArxivSource()
 _scopus = ScopusSource()
 _sciencedirect = ScienceDirectSource()
+_openalex = OpenAlexSource()
+_unpaywall = UnpaywallSource()
 
 
 # ---------------------------------------------------------------------------
@@ -104,6 +108,10 @@ async def _search_sciencedirect(query: str, rows: int) -> dict:
     return await asyncio.to_thread(_sciencedirect.search, query, rows)
 
 
+async def _search_openalex(query: str, rows: int) -> dict:
+    return await asyncio.to_thread(_openalex.search, query, rows)
+
+
 async def _search_all(
     query: str,
     sources: list[str],
@@ -129,6 +137,9 @@ async def _search_all(
     if "sciencedirect" in sources:
         tasks.append(asyncio.create_task(_search_sciencedirect(query, rows)))
         source_order.append("sciencedirect")
+    if "openalex" in sources:
+        tasks.append(asyncio.create_task(_search_openalex(query, rows)))
+        source_order.append("openalex")
 
     if not tasks:
         return {"total": 0, "results": [], "errors": []}
@@ -172,9 +183,9 @@ async def search_papers(
     Args:
         query: Search keywords or query string.
         sources: List of source names to query. Defaults to CrossRef, PubMed,
-            and arXiv. Add "scopus" and/or "sciencedirect" explicitly to use
-            Elsevier-backed providers; they require local pybliometrics config
-            and may consume Elsevier API quota.
+            arXiv, and OpenAlex (all free, no key needed). Add "scopus" and/or
+            "sciencedirect" explicitly to use Elsevier-backed providers; they
+            require local pybliometrics config and may consume Elsevier quota.
         rows: Number of results per source (max 50), not total result count.
         type: Optional CrossRef-only work type filter (e.g. "journal-article").
 
@@ -185,10 +196,10 @@ async def search_papers(
         return _json_error("Empty search query")
 
     if sources is None:
-        sources = ["crossref", "pubmed", "arxiv"]
+        sources = ["crossref", "pubmed", "arxiv", "openalex"]
 
     # Validate source names
-    valid_sources = {"crossref", "pubmed", "arxiv", "scopus", "sciencedirect"}
+    valid_sources = {"crossref", "pubmed", "arxiv", "scopus", "sciencedirect", "openalex"}
     invalid = [s for s in sources if s not in valid_sources]
     if invalid:
         return _json_error(f"Invalid sources: {invalid}. Valid: {sorted(valid_sources)}")
@@ -637,6 +648,41 @@ def lookup_mesh(term: str) -> str:
         return _json_error(str(exc), source=exc.source)
     except Exception as exc:
         logger.exception("lookup_mesh failed unexpectedly")
+        return _json_error(f"Unexpected error: {exc}")
+
+    return _json_ok(result)
+
+
+@mcp.tool()
+def get_open_access(doi: str) -> str:
+    """Find the best legal open-access full text for a DOI via Unpaywall.
+
+    Returns the open-access status and, when available, a direct PDF URL and
+    landing-page URL from a legitimate OA source (publisher or repository).
+    Never returns paywalled or pirated locations. Requires an Unpaywall email
+    ([unpaywall] email in config.toml or the UNPAYWALL_EMAIL env var).
+
+    Args:
+        doi: Digital Object Identifier (e.g. "10.1038/nature12373").
+
+    Returns:
+        JSON string with is_oa, oa_status, pdf_url, landing_url, and license.
+    """
+    if not doi or not doi.strip():
+        return _json_error("Empty DOI")
+
+    logger.info("get_open_access called", extra={
+        "tool": "get_open_access",
+        "doi": doi,
+    })
+
+    try:
+        result = _unpaywall.get_oa(doi.strip())
+    except DataSourceError as exc:
+        logger.error("get_open_access failed: %s", exc)
+        return _json_error(str(exc), source=exc.source)
+    except Exception as exc:
+        logger.exception("get_open_access failed unexpectedly")
         return _json_error(f"Unexpected error: {exc}")
 
     return _json_ok(result)

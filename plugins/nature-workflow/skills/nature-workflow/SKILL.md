@@ -31,9 +31,58 @@ to it:
 - MCP server: `plugins/nature-workflow/mcp/nature_progress_server.py`
 
 Supported actions are `new`, `discover`, `status`, `start`, `complete`, `block`,
-`resume`, and `log`. Each workflow directory contains `nature.yml`, `progress.md`,
-and `tasks.md`. The `nature.yml` file keeps its historical name for compatibility;
-its contents are JSON.
+`resume`, `log`, and `spec`. Each workflow directory contains `nature.yml`,
+`progress.md`, and `tasks.md`, plus an optional `spec.md` format contract (see
+the Spec gate below). The `nature.yml` file keeps its historical name for
+compatibility; its contents are JSON.
+
+## Spec Gate (optional format contract)
+
+A workflow may keep a `spec.md` beside `nature.yml`: a **format-only** contract —
+the per-element typographic style sheet (font, size, weight, alignment, indent,
+line spacing, space before/after, numbering) that output skills follow so a
+manuscript's formatting stays consistent. It is journal-agnostic: the same table
+holds different values per target venue. It is **not** content, word budgets, or
+submission rules, and it is a **soft** contract — editable anytime, never frozen.
+
+**Trigger — lazy, user's choice.** Do not force this at `new`. The first time a
+producing skill runs (`nature-writing`, `nature-polishing`, `nature-figure`) and
+the workflow's spec status is `unset`, ask the user whether to build a format
+spec. Reader/search/citation work needs no spec, so never gate on it there.
+
+- User declines → record `spec --status skipped` so no skill re-prompts; skills
+  use their own defaults (current behavior).
+- User accepts → author `spec.md`, then record `spec --status ready
+  --source <template|dictation> [--path spec.md]`. Downstream producing skills
+  read `spec.md` as the format contract.
+
+See `plugins/nature-workflow/assets/templates/spec_nature_example.md` for a worked
+example of the style-sheet table (Nature Article) — author `spec.md` in that same
+shape, swapping values for the target venue.
+
+Two branches to author `spec.md`:
+
+- **① Template file provided.** The user supplies a format source (journal
+  guideline, thesis format rules, a laid-out sample `.docx`/`.tex`/`.pdf`, or a
+  submission guide). Parse it, extract each element's typographic properties into
+  the style-sheet table. Where the template is silent, **ask the user
+  element-by-element — do not invent values**; mark anything still unknown as
+  `未指定 · 按模板默认`.
+- **② No template → dictation.** The user describes the format verbally. Map each
+  stated rule into the matching style-sheet row. For elements the user did not
+  mention, prefill sensible defaults and **flag which rows are defaults** for the
+  user to confirm; do not silently decide for them.
+
+Record the decision through the state engine so it persists and stops re-prompts:
+
+```bash
+python plugins/nature-workflow/scripts/nature_progress.py spec --status ready --source dictation --workflow <workflow-dir>
+python plugins/nature-workflow/scripts/nature_progress.py spec --status skipped --workflow <workflow-dir>
+```
+
+The MCP tool `nature_spec` mirrors the same operation. `status` is `unset` by
+default on a new workflow, `skipped` after the user declines, `ready` once a
+`spec.md` exists.
 
 ## Project Memory
 

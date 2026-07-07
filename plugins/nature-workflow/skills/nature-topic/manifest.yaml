@@ -1,0 +1,29 @@
+name: nature-topic
+version: 0.1.0
+description: >
+  Declarative manifest for the static/dynamic split. SKILL.md uses this to
+  decide which fragments to load for a topic / research-gap request. nature-topic
+  is one atomic step delegated by nature-orchestrator: analyze the exported
+  RIS/reference records, cluster real literature patterns, compare research gaps,
+  and emit three decision-ready candidate topics.
+
+# Design note: nature-topic is a linear, single-pass analysis step (inspect
+# year/title/abstract -> cluster -> compare gaps -> derive three candidates ->
+# recommend). Its variation — research field, target partition, user language —
+# is handled inline, not by loading different large content bodies, so there is
+# no content axis. The split is core (always loaded) plus a couple of on-demand
+# shared references. All domain logic lives in static/core. The shared ethics
+# red lines are always loaded because this step reasons over literature.
+
+always_load:
+  - static/core/stance.md
+  - static/core/workflow.md
+  - static/core/output-contract.md
+  - ../_shared/core/ethics.md
+
+references:
+  on_demand:
+    - condition: naming clusters or candidate topics and keeping Chinese/English term forms consistent
+      path: ../_shared/core/terminology-ledger.md
+    - condition: framing the review angle or paper type of a candidate topic
+      path: ../_shared/core/paper-type-taxonomy.md

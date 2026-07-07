@@ -6,7 +6,11 @@ description: Track lightweight progress for Nature skill work and route users to
 # Nature Workflow Router
 
 This skill is a light wrapper around the Nature skill collection packaged in this plugin.
-The individual skills remain the primary entrypoints for academic work:
+
+For an **end-to-end manuscript** (topic → submission), use `nature-orchestrator`: it
+drives the whole lifecycle as a task sequence in the state engine and delegates each
+step to the skill that owns it. For a **single isolated task**, the individual skills
+remain the primary entrypoints for academic work:
 
 - `nature-reader` for full paper reading, translation, and source-anchored Markdown readers.
 - `nature-paper2ppt` for paper-to-PPTX journal club or group meeting decks.

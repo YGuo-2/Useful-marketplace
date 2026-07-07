@@ -1,0 +1,24 @@
+name: nature-submission
+version: 0.1.0
+description: >
+  Declarative manifest for the static/dynamic split. SKILL.md uses this to decide
+  which fragments to load for a submission-preparation request. nature-submission
+  is an atomic step delegated by nature-orchestrator: it assembles the final
+  submission package, plans file naming and upload order, drafts submission-system
+  field suggestions, runs a missing-material and risk check, and produces a Word
+  deliverable plus a pre-submit confirmation checklist and post-submission record.
+
+# Design note: nature-submission is a linear, parameterised workflow (gather ->
+# verify guidelines online -> build material checklist -> plan naming/upload ->
+# field suggestions -> risk check -> pre-submit checklist -> package). Its
+# variation — available materials, target journal, user language — is identified
+# at runtime, not by loading different large content bodies. There is therefore no
+# content axis; the split is core (always loaded) plus the shared ethics red lines.
+# All submission domain logic lives in the three core files, so there is no
+# on-demand references layer to defer to.
+
+always_load:
+  - static/core/stance.md
+  - static/core/workflow.md
+  - static/core/output-contract.md
+  - ../_shared/core/ethics.md

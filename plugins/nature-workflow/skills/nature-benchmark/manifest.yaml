@@ -1,0 +1,28 @@
+name: nature-benchmark
+version: 0.1.0
+description: >
+  Declarative manifest for the static/dynamic split. SKILL.md uses this to decide
+  which fragments to load for a benchmark-review-corpus request. nature-benchmark
+  is an atomic step delegated by nature-orchestrator (review genre, Phase 3).
+
+# Design note: nature-benchmark is a linear, parameterised workflow (identify
+# reviews -> rank -> select ~10 -> export RIS -> Zotero import -> await PDFs ->
+# deep-read obtained PDFs -> classification guide). Its variation — upstream
+# inputs, Zotero state, PDF availability — is handled at runtime by inline rules,
+# not by loading different large content bodies. There is therefore no content
+# axis; the split is core (always loaded) plus the shared ethics red lines. Only
+# structure/narrative/layout strategy is learned; source PDFs, titles, sections,
+# prose, figures, and viewpoints are never copied.
+
+always_load:
+  - static/core/stance.md
+  - static/core/workflow.md
+  - static/core/output-contract.md
+  - ../_shared/core/ethics.md
+
+references:
+  on_demand:
+    - condition: scoring and ranking candidate reviews by topical fit then journal/article quality
+      path: static/core/workflow.md
+    - condition: the deliverable list, RIS + report formats, and quality gates
+      path: static/core/output-contract.md

@@ -1,0 +1,21 @@
+name: nature-cover-letter
+version: 0.1.0
+description: >
+  Declarative manifest for the static/dynamic split. SKILL.md uses this to decide
+  which fragments to load for a Cover Letter drafting request.
+
+# Design note: nature-cover-letter is a linear, parameterised workflow (confirm
+# inputs -> verify target-journal requirements -> extract manuscript facts ->
+# extract declarations -> list user-confirmation gaps -> draft the seven-paragraph
+# letter -> fill the declaration checklist -> QA -> render .docx). Its variation —
+# target journal, article type, which declarations apply, user language — is handled
+# at runtime by inline rules and live verification, not by loading different large
+# content bodies. There is therefore no content axis; the split is core only. It is
+# an atomic step delegated by nature-orchestrator (step `coverletter`); the shared
+# ethics red line is loaded so the no-fabrication rule carries through to this step.
+
+always_load:
+  - static/core/stance.md
+  - static/core/workflow.md
+  - static/core/output-contract.md
+  - ../_shared/core/ethics.md

@@ -1,0 +1,28 @@
+name: nature-journal
+version: 0.1.0
+description: >
+  Declarative manifest for the static/dynamic split. SKILL.md uses this to load
+  the core layer for a target-journal selection and deep-learning request.
+
+# Design note: nature-journal is a linear, parameterised decision step (intake ->
+# match -> verify -> score -> risk-check -> stratify into tiers -> [user confirms]
+# -> deep-learn the confirmed journal -> adaptation standard). It fuses SCI steps
+# 14 (target-journal selector) and 15 (target-journal deep learner). Its variation
+# — manuscript profile, user target partition/preferences, and select-vs-deep-learn
+# stage — is identified at runtime, not by loading different large content bodies.
+# There is therefore no content axis; the split is core (always loaded) plus a
+# small on-demand reference. All journal metrics/scope/APC/rules are dynamic and
+# must be verified online at use time, never recalled from memory.
+
+always_load:
+  # Shared layer — ethics and citation red lines inherited by every nature-* skill
+  - ../_shared/core/ethics.md
+  # Skill-local core — carries all domain logic
+  - static/core/stance.md
+  - static/core/workflow.md
+  - static/core/output-contract.md
+
+references:
+  on_demand:
+    - condition: judging whether a candidate journal accepts the manuscript's article type / genre
+      path: ../_shared/core/paper-type-taxonomy.md

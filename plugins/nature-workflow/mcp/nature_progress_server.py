@@ -21,6 +21,7 @@ from nature_progress import (  # noqa: E402
     command_log_note,
     command_new_workflow,
     command_resume,
+    command_spec,
     command_start,
     command_status,
 )
@@ -150,6 +151,22 @@ TOOLS = [
         },
     },
     {
+        "name": "nature_spec",
+        "description": "Record the optional format-spec gate decision (unset/skipped/ready) for a Nature workflow.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "workflow_root": {"type": "string"},
+                "project_root": {"type": "string"},
+                "workflow_dir": {"type": "string"},
+                "status": {"type": "string", "enum": ["unset", "skipped", "ready"]},
+                "source": {"type": "string", "enum": ["template", "dictation"]},
+                "path": {"type": "string"},
+            },
+            "required": ["status"],
+        },
+    },
+    {
         "name": "nature_memory_check",
         "description": "Validate a Nature workflow memory.md against project-memory rules.",
         "inputSchema": {
@@ -276,6 +293,15 @@ def call_tool(name: str, args: dict[str, Any]) -> Any:
         )
     if name == "nature_log_note":
         return command_log_note(_root(args), _workflow(args), _required_string(args, "note"), args.get("task_id"), base=base)
+    if name == "nature_spec":
+        return command_spec(
+            _root(args),
+            _workflow(args),
+            _required_string(args, "status"),
+            args.get("source") or None,
+            args.get("path") or None,
+            base=base,
+        )
     if name == "nature_memory_check":
         return command_memory_check(_root(args), _workflow(args), base=base)
     if name == "nature_memory_touch":

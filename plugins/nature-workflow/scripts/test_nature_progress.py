@@ -127,6 +127,50 @@ class StateEngineTests(unittest.TestCase):
         with self.assertRaises(np.NatureProgressError):
             np.command_complete(None, wf, "T1", "   ", base=self.base)
 
+    # --- optional format-spec gate --------------------------------------
+
+    def test_new_workflow_spec_defaults_to_unset(self) -> None:
+        wf = self.make(["T1: first"])
+        disk = read_state(wf)
+        self.assertEqual(disk["spec"], {"status": "unset", "source": None, "path": None})
+
+    def test_spec_ready_records_source_and_path_and_surfaces_in_status(self) -> None:
+        wf = self.make(["T1: first"])
+        result = np.command_spec(None, wf, "ready", "template", base=self.base)
+        self.assertEqual(result["spec"]["status"], "ready")
+        self.assertEqual(result["spec"]["source"], "template")
+        self.assertEqual(result["spec"]["path"], "spec.md")
+        # read command surfaces the same spec state as disk
+        status = np.command_status(None, wf, base=self.base)
+        disk = read_state(wf)
+        self.assertEqual(status["spec"], disk["spec"])
+        self.assertEqual(disk["spec"]["path"], "spec.md")
+        # and the human progress file mentions it
+        progress = (Path(wf) / "progress.md").read_text(encoding="utf-8")
+        self.assertIn("Spec: ready (template)", progress)
+
+    def test_spec_skipped_clears_source_and_path(self) -> None:
+        wf = self.make(["T1: first"])
+        np.command_spec(None, wf, "ready", "dictation", base=self.base)
+        np.command_spec(None, wf, "skipped", base=self.base)
+        disk = read_state(wf)
+        self.assertEqual(disk["spec"], {"status": "skipped", "source": None, "path": None})
+
+    def test_spec_rejects_invalid_status(self) -> None:
+        wf = self.make(["T1: first"])
+        with self.assertRaises(np.NatureProgressError):
+            np.command_spec(None, wf, "bogus", base=self.base)
+
+    def test_spec_absent_in_legacy_record_reads_as_unset(self) -> None:
+        wf = self.make(["T1: first"])
+        # simulate a pre-spec nature.yml written before this field existed
+        state_path = Path(wf) / "nature.yml"
+        data = json.loads(state_path.read_text(encoding="utf-8"))
+        data.pop("spec", None)
+        state_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+        status = np.command_status(None, wf, base=self.base)
+        self.assertEqual(status["spec"], {"status": "unset", "source": None, "path": None})
+
     # --- read commands are side-effect free ------------------------------
 
     def test_status_does_not_mutate_disk(self) -> None:

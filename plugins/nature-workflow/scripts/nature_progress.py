@@ -17,6 +17,13 @@ from typing import Any
 DEFAULT_ROOT = "docs/nature-workflows"
 SCHEMA_VERSION = 1
 TASK_ID_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.-]{0,31}$")
+SPEC_STATES = {"unset", "skipped", "ready"}
+SPEC_SOURCES = {"template", "dictation"}
+
+
+def default_spec() -> dict[str, Any]:
+    """Format-spec gate state for one paper (see the optional Spec gate in SKILL.md)."""
+    return {"status": "unset", "source": None, "path": None}
 
 
 class NatureProgressError(Exception):
@@ -248,6 +255,7 @@ def summarize(record: dict[str, Any], workflow_dir: Path) -> dict[str, Any]:
         "slug": record.get("slug", ""),
         "status": record.get("status", "unknown"),
         "active_task": record.get("active_task"),
+        "spec": record.get("spec") or default_spec(),
         "task_counts": counts,
         "next_task": next_task,
         "files": {
@@ -260,6 +268,10 @@ def summarize(record: dict[str, Any], workflow_dir: Path) -> dict[str, Any]:
 
 def render_progress(record: dict[str, Any]) -> str:
     active = record.get("active_task") or "none"
+    spec = record.get("spec") or default_spec()
+    spec_line = spec.get("status", "unset")
+    if spec.get("source"):
+        spec_line += f" ({spec.get('source')})"
     lines = [
         "# Nature Workflow Progress",
         "",
@@ -267,6 +279,7 @@ def render_progress(record: dict[str, Any]) -> str:
         f"- Slug: {record.get('slug', '')}",
         f"- Status: {record.get('status', '')}",
         f"- Active task: {active}",
+        f"- Spec: {spec_line}",
         f"- Created: {record.get('created_at', '')}",
         f"- Updated: {record.get('updated_at', '')}",
         "",
@@ -327,6 +340,7 @@ def command_new_workflow(
         "title": title or clean_slug.replace("-", " ").title(),
         "status": "open",
         "active_task": None,
+        "spec": default_spec(),
         "tasks": parse_tasks(tasks),
         "log": [],
     }
@@ -473,6 +487,48 @@ def command_log_note(
     return {"ok": True, "action": "log", **summarize(record, workflow_dir)}
 
 
+def command_spec(
+    workflow_root: str | None,
+    workflow: str | None,
+    status: str,
+    source: str | None = None,
+    path: str | None = None,
+    *,
+    base: Path | None = None,
+) -> dict[str, Any]:
+    """Record the optional format-spec gate decision for a paper workflow.
+
+    ``status`` moves between ``unset`` (never asked), ``skipped`` (user declined,
+    so downstream skills stop re-prompting), and ``ready`` (a ``spec.md`` exists
+    and is the format contract). This only tracks the decision; the spec.md file
+    itself is authored by the agent per the two branches described in SKILL.md.
+    """
+    if status not in SPEC_STATES:
+        raise NatureProgressError(f"Invalid spec status: {status}")
+    if source is not None and source not in SPEC_SOURCES:
+        raise NatureProgressError(f"Invalid spec source: {source}")
+    workflow_dir = checked_workflow_dir(workflow, workflow_root, base=base)
+    record = load_record(workflow_dir)
+    spec = record.get("spec")
+    if not isinstance(spec, dict):
+        spec = default_spec()
+    spec["status"] = status
+    if status == "ready":
+        spec["source"] = source or spec.get("source")
+        spec["path"] = path or spec.get("path") or "spec.md"
+    elif status == "skipped":
+        spec["source"] = None
+        spec["path"] = None
+    else:  # unset
+        spec["source"] = source
+        spec["path"] = None
+    record["spec"] = spec
+    detail = f"spec {status}" + (f" ({spec['source']})" if spec.get("source") else "")
+    append_log(record, "spec", detail)
+    save_record(workflow_dir, record)
+    return {"ok": True, "action": "spec", **summarize(record, workflow_dir)}
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Manage lightweight Nature workflow state.")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -517,6 +573,13 @@ def build_parser() -> argparse.ArgumentParser:
     log.add_argument("--task-id", default="")
     log.add_argument("--root", default=DEFAULT_ROOT)
     log.add_argument("--workflow", default="")
+
+    spec = sub.add_parser("spec", help="Record the optional format-spec gate decision.")
+    spec.add_argument("--status", required=True, choices=sorted(SPEC_STATES))
+    spec.add_argument("--source", default="", choices=["", *sorted(SPEC_SOURCES)])
+    spec.add_argument("--path", default="")
+    spec.add_argument("--root", default=DEFAULT_ROOT)
+    spec.add_argument("--workflow", default="")
     return parser
 
 
@@ -537,6 +600,14 @@ def dispatch(args: argparse.Namespace) -> dict[str, Any]:
         return command_block(args.root, args.workflow or None, args.task_id, args.reason)
     if args.command == "log":
         return command_log_note(args.root, args.workflow or None, args.note, args.task_id or None)
+    if args.command == "spec":
+        return command_spec(
+            args.root,
+            args.workflow or None,
+            args.status,
+            args.source or None,
+            args.path or None,
+        )
     raise NatureProgressError(f"Unknown command: {args.command}")
 
 

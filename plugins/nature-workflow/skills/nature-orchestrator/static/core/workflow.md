@@ -14,17 +14,22 @@ template gives the exact task strings; do not retype them from memory.
 ```bash
 python plugins/nature-workflow/scripts/nature_progress.py new \
   --slug review-<short-topic> --title "<paper title or topic>" \
+  --genre review \
   --task "search: 检索式生成与多源检索" \
   --task "topic: 选题与研究空白识别" \
   ...   # one --task per template row, in order
 ```
 
-MCP equivalent: `nature_new_workflow` with `slug`, `title`, and `tasks` as the
-array of `"id: title"` strings.
+MCP equivalent: `nature_new_workflow` with `slug`, `title`, `genre`, and `tasks`
+as the array of `"id: title"` strings.
 
 Task ids must be ASCII and ≤32 chars (engine constraint), so the template uses
-English slugs for ids and Chinese for titles. Seed the whole sequence at `new`;
-there is no "append a task later" command.
+English slugs for ids and Chinese for titles. Pass `--genre <paper_type>` so the
+detected genre is persisted on the record (it seeds the whole sequence but is
+otherwise lost). Seed the full sequence at `new`; to adjust it mid-flow use
+`add-task "id: title" [--after <id>]` / `remove-task <id>` (MCP `nature_add_task`
+/ `nature_remove_task`) — remove only accepts a pending or blocked step. To fix
+the genre later, `genre <paper_type>` (MCP `nature_genre`).
 
 ## 2. Drive cycle (repeat per step)
 

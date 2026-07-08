@@ -198,6 +198,128 @@ class StateEngineTests(unittest.TestCase):
         status = np.command_status(None, wf, base=self.base)
         self.assertEqual(status["spec"], {"status": "unset", "source": None, "path": None})
 
+    # --- add-task: dynamic sequence growth -------------------------------
+
+    def test_add_task_appends_pending_and_surfaces_next(self) -> None:
+        wf = self.make(["T1: first"])
+        np.command_add_task(None, wf, "T2: second", base=self.base)
+        disk = read_state(wf)
+        self.assertEqual([t["id"] for t in disk["tasks"]], ["T1", "T2"])
+        t2 = next(t for t in disk["tasks"] if t["id"] == "T2")
+        self.assertEqual(t2["status"], "pending")
+        # first pending is still T1, so next_task stays T1 (appended after it)
+        status = np.command_status(None, wf, base=self.base)
+        self.assertEqual(status["next_task"]["id"], "T1")
+
+    def test_add_task_after_inserts_at_position(self) -> None:
+        wf = self.make(["T1: first", "T3: third"])
+        np.command_add_task(None, wf, "T2: second", after="T1", base=self.base)
+        disk = read_state(wf)
+        self.assertEqual([t["id"] for t in disk["tasks"]], ["T1", "T2", "T3"])
+
+    def test_add_task_duplicate_id_errors(self) -> None:
+        wf = self.make(["T1: first"])
+        with self.assertRaises(np.NatureProgressError):
+            np.command_add_task(None, wf, "T1: dup", base=self.base)
+
+    def test_add_task_unknown_after_errors(self) -> None:
+        wf = self.make(["T1: first"])
+        with self.assertRaises(np.NatureProgressError):
+            np.command_add_task(None, wf, "T2: second", after="TX", base=self.base)
+
+    def test_add_task_auto_numbers_unlabeled(self) -> None:
+        wf = self.make(["T1: first"])
+        np.command_add_task(None, wf, "second, no id", base=self.base)
+        disk = read_state(wf)
+        # first free T{n} after the existing T1
+        self.assertEqual([t["id"] for t in disk["tasks"]], ["T1", "T2"])
+        self.assertEqual(disk["tasks"][1]["title"], "second, no id")
+
+    def test_add_task_reopens_completed_workflow(self) -> None:
+        wf = self.make(["T1: only"])
+        np.command_start(None, wf, "T1", base=self.base)
+        np.command_complete(None, wf, "T1", "done", base=self.base)
+        self.assertEqual(read_state(wf)["status"], "completed")
+        np.command_add_task(None, wf, "T2: more work", base=self.base)
+        disk = read_state(wf)
+        # a fresh pending task means the workflow is no longer completed
+        self.assertEqual(disk["status"], "open")
+        self.assertIsNone(disk["active_task"])
+
+    # --- remove-task: guarded deletion -----------------------------------
+
+    def test_remove_pending_task(self) -> None:
+        wf = self.make(["T1: first", "T2: second"])
+        np.command_remove_task(None, wf, "T2", base=self.base)
+        disk = read_state(wf)
+        self.assertEqual([t["id"] for t in disk["tasks"]], ["T1"])
+
+    def test_remove_blocked_task_ok(self) -> None:
+        wf = self.make(["T1: first", "T2: second"])
+        np.command_block(None, wf, "T1", "stuck", base=self.base)
+        np.command_remove_task(None, wf, "T1", base=self.base)
+        disk = read_state(wf)
+        self.assertEqual([t["id"] for t in disk["tasks"]], ["T2"])
+        # removing the only blocker clears the blocked status
+        self.assertEqual(disk["status"], "open")
+
+    def test_remove_active_task_errors(self) -> None:
+        wf = self.make(["T1: first"])
+        np.command_start(None, wf, "T1", base=self.base)
+        with self.assertRaises(np.NatureProgressError):
+            np.command_remove_task(None, wf, "T1", base=self.base)
+
+    def test_remove_completed_task_errors(self) -> None:
+        wf = self.make(["T1: first", "T2: second"])
+        np.command_start(None, wf, "T1", base=self.base)
+        np.command_complete(None, wf, "T1", "done", base=self.base)
+        with self.assertRaises(np.NatureProgressError):
+            np.command_remove_task(None, wf, "T1", base=self.base)
+
+    def test_remove_unknown_task_errors(self) -> None:
+        wf = self.make(["T1: first"])
+        with self.assertRaises(np.NatureProgressError):
+            np.command_remove_task(None, wf, "TX", base=self.base)
+
+    # --- genre: top-level paper-type persistence -------------------------
+
+    def test_new_with_genre_persists_and_surfaces(self) -> None:
+        result = np.command_new_workflow(None, "wf", "WF", ["T1: x"], "Review", base=self.base)
+        wf = result["workflow_dir"]
+        disk = read_state(wf)
+        self.assertEqual(disk["genre"], "review")  # normalized via slugify
+        status = np.command_status(None, wf, base=self.base)
+        self.assertEqual(status["genre"], "review")
+        progress = (Path(wf) / "progress.md").read_text(encoding="utf-8")
+        self.assertIn("Genre: review", progress)
+
+    def test_new_without_genre_defaults_none(self) -> None:
+        wf = self.make(["T1: x"])
+        self.assertIsNone(read_state(wf)["genre"])
+        progress = (Path(wf) / "progress.md").read_text(encoding="utf-8")
+        self.assertIn("Genre: unset", progress)
+
+    def test_genre_command_sets_and_changes(self) -> None:
+        wf = self.make(["T1: x"])
+        np.command_genre(None, wf, "research", base=self.base)
+        self.assertEqual(read_state(wf)["genre"], "research")
+        np.command_genre(None, wf, "methods", base=self.base)
+        self.assertEqual(read_state(wf)["genre"], "methods")
+
+    def test_genre_command_requires_value(self) -> None:
+        wf = self.make(["T1: x"])
+        with self.assertRaises(np.NatureProgressError):
+            np.command_genre(None, wf, "   ", base=self.base)
+
+    def test_genre_absent_in_legacy_record_reads_as_none(self) -> None:
+        wf = self.make(["T1: x"])
+        state_path = Path(wf) / "nature.yml"
+        data = json.loads(state_path.read_text(encoding="utf-8"))
+        data.pop("genre", None)
+        state_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+        status = np.command_status(None, wf, base=self.base)
+        self.assertIsNone(status["genre"])
+
     # --- read commands are side-effect free ------------------------------
 
     def test_status_does_not_mutate_disk(self) -> None:

@@ -41,6 +41,17 @@ def slugify(value: str | None, default: str = "nature-workflow") -> str:
     return (text or default)[:64].strip("-") or default
 
 
+def clean_genre(value: str | None) -> str | None:
+    """Normalize a paper-type genre to a slug, or None when unset.
+
+    The allowed set (review/research/…) lives in the orchestrator's manifest,
+    not here — this only normalizes case/spacing to match the
+    ``paper_type/<genre>.md`` filename convention.
+    """
+    text = (value or "").strip()
+    return slugify(text) if text else None
+
+
 def base_dir() -> Path:
     return Path(os.environ.get("NATURE_WORKFLOW_BASE_DIR", os.getcwd())).resolve()
 
@@ -96,6 +107,56 @@ def checked_workflow_dir(
     return resolved
 
 
+def make_task(task_id: str, title: str) -> dict[str, Any]:
+    return {
+        "id": task_id,
+        "title": title,
+        "status": "pending",
+        "started_at": None,
+        "completed_at": None,
+        "blocked_at": None,
+        "evidence": "",
+        "blocker": "",
+        "notes": "",
+    }
+
+
+def split_id_title(text: str) -> tuple[str | None, str]:
+    """Parse a ``id: title`` (or ``id | title``) row into its parts.
+
+    Returns ``(None, text)`` when the row carries no explicit id.
+    """
+    match = re.match(r"^\s*([A-Za-z][A-Za-z0-9_.-]{0,31})\s*[:|]\s*(.+)$", text)
+    if match:
+        return match.group(1), match.group(2).strip()
+    return None, text
+
+
+def build_task(text: str, existing_ids: set[str]) -> dict[str, Any]:
+    """Validate and build one task, giving an unlabeled row the first free ``T{n}``.
+
+    Used for a mid-flow ``add-task`` where the id must not collide with any
+    existing task in the record.
+    """
+    raw = (text or "").strip()
+    if not raw:
+        raise NatureProgressError("Task text is required")
+    explicit_id, title = split_id_title(raw)
+    task_id = explicit_id
+    if task_id is None:
+        n = 1
+        while f"T{n}" in existing_ids:
+            n += 1
+        task_id = f"T{n}"
+    if not TASK_ID_RE.match(task_id):
+        raise NatureProgressError(f"Invalid task id: {task_id}")
+    if task_id in existing_ids:
+        raise NatureProgressError(f"Duplicate task id: {task_id}")
+    if not title:
+        raise NatureProgressError(f"Task {task_id} is missing a title")
+    return make_task(task_id, title)
+
+
 def parse_tasks(task_texts: list[str] | None) -> list[dict[str, Any]]:
     texts = task_texts or [
         "Select the nature skill and collect inputs",
@@ -108,12 +169,8 @@ def parse_tasks(task_texts: list[str] | None) -> list[dict[str, Any]]:
         text = raw.strip()
         if not text:
             continue
-        task_id = f"T{index}"
-        title = text
-        match = re.match(r"^\s*([A-Za-z][A-Za-z0-9_.-]{0,31})\s*[:|]\s*(.+)$", text)
-        if match:
-            task_id = match.group(1)
-            title = match.group(2).strip()
+        explicit_id, title = split_id_title(text)
+        task_id = explicit_id or f"T{index}"
         if not TASK_ID_RE.match(task_id):
             raise NatureProgressError(f"Invalid task id: {task_id}")
         if task_id in seen:
@@ -121,19 +178,7 @@ def parse_tasks(task_texts: list[str] | None) -> list[dict[str, Any]]:
         if not title:
             raise NatureProgressError(f"Task {task_id} is missing a title")
         seen.add(task_id)
-        tasks.append(
-            {
-                "id": task_id,
-                "title": title,
-                "status": "pending",
-                "started_at": None,
-                "completed_at": None,
-                "blocked_at": None,
-                "evidence": "",
-                "blocker": "",
-                "notes": "",
-            }
-        )
+        tasks.append(make_task(task_id, title))
     if not tasks:
         raise NatureProgressError("At least one task is required")
     return tasks
@@ -263,6 +308,7 @@ def summarize(record: dict[str, Any], workflow_dir: Path) -> dict[str, Any]:
         "slug": record.get("slug", ""),
         "status": record.get("status", "unknown"),
         "active_task": record.get("active_task"),
+        "genre": record.get("genre"),
         "spec": record.get("spec") or default_spec(),
         "task_counts": counts,
         "next_task": next_task,
@@ -285,6 +331,7 @@ def render_progress(record: dict[str, Any]) -> str:
         "",
         f"- Title: {record.get('title', '')}",
         f"- Slug: {record.get('slug', '')}",
+        f"- Genre: {record.get('genre') or 'unset'}",
         f"- Status: {record.get('status', '')}",
         f"- Active task: {active}",
         f"- Spec: {spec_line}",
@@ -327,6 +374,7 @@ def command_new_workflow(
     slug: str | None = None,
     title: str | None = None,
     tasks: list[str] | None = None,
+    genre: str | None = None,
     *,
     base: Path | None = None,
 ) -> dict[str, Any]:
@@ -346,6 +394,7 @@ def command_new_workflow(
         "updated_at": created,
         "slug": clean_slug,
         "title": title or clean_slug.replace("-", " ").title(),
+        "genre": clean_genre(genre),
         "status": "open",
         "active_task": None,
         "spec": default_spec(),
@@ -537,6 +586,86 @@ def command_spec(
     return {"ok": True, "action": "spec", **summarize(record, workflow_dir)}
 
 
+def command_genre(
+    workflow_root: str | None,
+    workflow: str | None,
+    genre: str,
+    *,
+    base: Path | None = None,
+) -> dict[str, Any]:
+    """Persist the top-level paper-type genre for a workflow (mirrors ``spec``).
+
+    Genre is normally known at ``new`` and set there; this command lets the
+    orchestrator correct it mid-flow. Values are free-form slugs — the allowed
+    set lives in the orchestrator manifest, not the engine.
+    """
+    value = clean_genre(genre)
+    if value is None:
+        raise NatureProgressError("Genre value is required")
+    workflow_dir = checked_workflow_dir(workflow, workflow_root, base=base)
+    record = load_record(workflow_dir)
+    record["genre"] = value
+    append_log(record, "genre", f"genre {value}")
+    save_record(workflow_dir, record)
+    return {"ok": True, "action": "genre", **summarize(record, workflow_dir)}
+
+
+def command_add_task(
+    workflow_root: str | None,
+    workflow: str | None,
+    text: str,
+    after: str | None = None,
+    *,
+    base: Path | None = None,
+) -> dict[str, Any]:
+    """Insert one task into an existing workflow (append, or after ``after``).
+
+    Adding a pending task to an all-completed workflow reopens it, since
+    ``update_workflow_status`` no longer sees every task as completed.
+    """
+    workflow_dir = checked_workflow_dir(workflow, workflow_root, base=base)
+    record = load_record(workflow_dir)
+    tasks = record.setdefault("tasks", [])
+    existing_ids = {task.get("id") for task in tasks}
+    task = build_task(text, existing_ids)
+    if after:
+        find_task(record, after)  # validates existence
+        index = next(i for i, item in enumerate(tasks) if item.get("id") == after) + 1
+        tasks.insert(index, task)
+    else:
+        tasks.append(task)
+    append_log(record, "add-task", task["title"], task["id"])
+    update_workflow_status(record)
+    save_record(workflow_dir, record)
+    return {"ok": True, "action": "add-task", **summarize(record, workflow_dir)}
+
+
+def command_remove_task(
+    workflow_root: str | None,
+    workflow: str | None,
+    task_id: str,
+    *,
+    base: Path | None = None,
+) -> dict[str, Any]:
+    """Drop a pending or blocked task from a workflow.
+
+    An ``active`` task is refused to protect the single-active invariant, and a
+    ``completed`` task to protect its recorded evidence history.
+    """
+    workflow_dir = checked_workflow_dir(workflow, workflow_root, base=base)
+    record = load_record(workflow_dir)
+    task = find_task(record, task_id)  # validates existence
+    if task.get("status") in ("active", "completed"):
+        raise NatureProgressError(f"Cannot remove {task.get('status')} task {task_id}")
+    # ponytail: allow removing the last task — an empty workflow is a harmless
+    # open/idle record; add a "keep at least one" guard only if a need appears.
+    record["tasks"] = [item for item in record.get("tasks", []) if item.get("id") != task_id]
+    append_log(record, "remove-task", "Task removed", task_id)
+    update_workflow_status(record)
+    save_record(workflow_dir, record)
+    return {"ok": True, "action": "remove-task", **summarize(record, workflow_dir)}
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Manage lightweight Nature workflow state.")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -546,6 +675,7 @@ def build_parser() -> argparse.ArgumentParser:
     new.add_argument("--slug", default="nature-workflow")
     new.add_argument("--title", default="")
     new.add_argument("--task", action="append", default=[])
+    new.add_argument("--genre", default="")
 
     discover = sub.add_parser("discover", help="List workflow directories.")
     discover.add_argument("--root", default=DEFAULT_ROOT)
@@ -588,12 +718,28 @@ def build_parser() -> argparse.ArgumentParser:
     spec.add_argument("--path", default="")
     spec.add_argument("--root", default=DEFAULT_ROOT)
     spec.add_argument("--workflow", default="")
+
+    genre = sub.add_parser("genre", help="Set the paper-type genre for a workflow.")
+    genre.add_argument("value")
+    genre.add_argument("--root", default=DEFAULT_ROOT)
+    genre.add_argument("--workflow", default="")
+
+    add_task = sub.add_parser("add-task", help="Insert a task into an existing workflow.")
+    add_task.add_argument("text", help='"id: title" (or plain title to auto-number).')
+    add_task.add_argument("--after", default="", help="Insert after this task id.")
+    add_task.add_argument("--root", default=DEFAULT_ROOT)
+    add_task.add_argument("--workflow", default="")
+
+    remove_task = sub.add_parser("remove-task", help="Remove a pending/blocked task.")
+    remove_task.add_argument("task_id")
+    remove_task.add_argument("--root", default=DEFAULT_ROOT)
+    remove_task.add_argument("--workflow", default="")
     return parser
 
 
 def dispatch(args: argparse.Namespace) -> dict[str, Any]:
     if args.command == "new":
-        return command_new_workflow(args.root, args.slug, args.title, args.task)
+        return command_new_workflow(args.root, args.slug, args.title, args.task, args.genre or None)
     if args.command == "discover":
         return command_discover(args.root)
     if args.command == "status":
@@ -616,6 +762,12 @@ def dispatch(args: argparse.Namespace) -> dict[str, Any]:
             args.source or None,
             args.path or None,
         )
+    if args.command == "genre":
+        return command_genre(args.root, args.workflow or None, args.value)
+    if args.command == "add-task":
+        return command_add_task(args.root, args.workflow or None, args.text, args.after or None)
+    if args.command == "remove-task":
+        return command_remove_task(args.root, args.workflow or None, args.task_id)
     raise NatureProgressError(f"Unknown command: {args.command}")
 
 

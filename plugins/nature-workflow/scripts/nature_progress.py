@@ -248,13 +248,15 @@ def summarize(record: dict[str, Any], workflow_dir: Path) -> dict[str, Any]:
     counts: dict[str, int] = {}
     for task in tasks:
         counts[task.get("status", "unknown")] = counts.get(task.get("status", "unknown"), 0) + 1
-    # Prefer the actionable step: the in-progress task if any, else the first
-    # pending one. A blocked task is parked (workflow.md §2.5) and only surfaces
-    # as next_task when nothing else is left to do.
-    next_task = next(
-        (task for task in tasks if task.get("status") in {"active", "pending"}),
-        None,
-    ) or next((task for task in tasks if task.get("status") == "blocked"), None)
+    # next_task is the actionable step, and follows active_task's priority so a
+    # read never contradicts itself: the in-progress task first (even when a
+    # lower-index task is still pending), then the first pending step, and only a
+    # blocked task when nothing else is left — it is parked (workflow.md §2.5).
+    next_task = (
+        next((task for task in tasks if task.get("status") == "active"), None)
+        or next((task for task in tasks if task.get("status") == "pending"), None)
+        or next((task for task in tasks if task.get("status") == "blocked"), None)
+    )
     return {
         "workflow_dir": str(workflow_dir),
         "title": record.get("title", ""),

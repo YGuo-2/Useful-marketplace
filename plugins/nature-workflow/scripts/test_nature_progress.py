@@ -102,6 +102,16 @@ class StateEngineTests(unittest.TestCase):
         status = np.command_status(None, wf, base=self.base)
         self.assertEqual(status["next_task"]["id"], "T1")
 
+    def test_next_task_prefers_active_over_earlier_pending(self) -> None:
+        wf = self.make(["T1: first", "T2: second"])
+        # start T2 out of order while the lower-index T1 is still pending
+        np.command_start(None, wf, "T2", base=self.base)
+        status = np.command_status(None, wf, base=self.base)
+        # next_task must agree with active_task (T2), not the earlier pending T1 —
+        # otherwise start(next_task) would hit the single-active guard and stall
+        self.assertEqual(status["active_task"], "T2")
+        self.assertEqual(status["next_task"]["id"], "T2")
+
     # --- completion ------------------------------------------------------
 
     def test_complete_all_marks_workflow_completed(self) -> None:

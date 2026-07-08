@@ -16,7 +16,7 @@
 
 ## 工作方式
 
-1. **定文体**：按 `../_shared/core/paper-type-taxonomy.md` 的 5 类判定 `paper_type`（当前提供 `review` 模板）。
+1. **定文体**：按 `../_shared/core/paper-type-taxonomy.md` 的 5 类判定 `paper_type`（当前提供 `research`、`review` 两个模板）。
 2. **读模板**：从 `static/fragments/paper_type/<genre>.md` 拿到有序任务序列（每步含 id/title、委托目标、evidence 期望、是否决策岔口）。
 3. **一次铺满**：调 `nature_new_workflow`（或 CLI `new --task ...`）把整串任务写进 `nature.yml`。
 4. **逐步推进**：`status` 找下一步 → `start` → 委托对应技能 → 拿到产物后 `complete --evidence <路径>`；卡住 `block --reason`。
@@ -36,6 +36,7 @@ nature-orchestrator/
     │   └── decision.md              # 轻量决策协议（关键岔口带推荐选项）
     └── fragments/
         └── paper_type/
+            ├── research.md          # 原始研究文体模板：15 步 IMRaD 序列
             └── review.md            # 综述文体模板：14 步任务序列
 ```
 
@@ -48,7 +49,7 @@ nature-orchestrator/
 | evidence 硬门 | 有真实产物才 `complete`，引擎强制 evidence；卡住 `block` 带原因 |
 | 不编造 | 不伪造文献/DOI/PMID/期刊指标/授权状态；不可核实标 `需要人工核查` |
 | 动态信息 | 期刊范围/IF/分区/APC/投稿规则由委托技能联网核验 |
-| 文体通用 | review 是第一个模板；其他文体新增 `paper_type` fragment，不改 core |
+| 文体通用 | review / research 已就绪；其他文体新增 `paper_type` fragment，不改 core |
 
 ## 委托映射（review 模板）
 

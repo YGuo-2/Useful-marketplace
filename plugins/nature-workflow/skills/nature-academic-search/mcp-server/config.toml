@@ -19,6 +19,13 @@ timeout = 20
 email = ""  # required for Unpaywall OA lookup. UNPAYWALL_EMAIL env overrides.
 timeout = 20
 
+[europepmc]
+timeout = 20  # free, no key; life-science + biomedical preprints
+
+[semanticscholar]
+api_key = ""  # optional; lifts the ~1 req/s anon limit. SEMANTIC_SCHOLAR_API_KEY env overrides.
+timeout = 20
+
 [general]
 default_rows = 5
 max_rows = 50

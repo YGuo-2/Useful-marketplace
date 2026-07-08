@@ -1014,3 +1014,227 @@ class TestUnpaywall:
         source = UnpaywallSource()
         with pytest.raises(DataSourceError, match="Invalid DOI"):
             source.get_oa("../../evil")
+
+
+# ===================================================================
+# 8. Europe PMC tests
+# ===================================================================
+
+
+def _make_europepmc_config():
+    """Return a mock Config object for Europe PMC."""
+    cfg = MagicMock()
+    cfg.europepmc_timeout = 10
+    return cfg
+
+
+class TestEuropePmcSearch:
+    """Test Europe PMC search returns the unified result format."""
+
+    @patch("sources.europepmc.get_config")
+    @patch("sources.europepmc.requests.get")
+    def test_search_returns_unified_format(self, mock_get, mock_config):
+        mock_config.return_value = _make_europepmc_config()
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.json.return_value = {
+            "hitCount": 42,
+            "resultList": {
+                "result": [
+                    {
+                        "title": "CRISPR gene editing",
+                        "authorList": {
+                            "author": [
+                                {"fullName": "Doudna J"},
+                                {"fullName": "Charpentier E"},
+                            ]
+                        },
+                        "pubYear": "2012",
+                        "doi": "https://doi.org/10.1126/science.1225829",
+                        "journalInfo": {"journal": {"title": "Science"}},
+                        "citedByCount": 9999,
+                    }
+                ]
+            },
+        }
+        mock_get.return_value = mock_resp
+
+        from sources.europepmc import EuropePmcSource
+
+        source = EuropePmcSource()
+        result = source.search("crispr", rows=5)
+
+        assert result["total"] == 42
+        assert len(result["results"]) == 1
+        item = result["results"][0]
+        assert item["title"] == "CRISPR gene editing"
+        assert item["authors"] == ["Doudna J", "Charpentier E"]
+        assert item["year"] == 2012
+        assert item["doi"] == "10.1126/science.1225829"  # DOI URL stripped
+        assert item["journal"] == "Science"
+        assert item["source"] == "europepmc"
+        assert item["citation_count"] == 9999
+
+    @patch("sources.europepmc.get_config")
+    @patch("sources.europepmc.requests.get")
+    def test_search_falls_back_to_author_string(self, mock_get, mock_config):
+        mock_config.return_value = _make_europepmc_config()
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.json.return_value = {
+            "hitCount": 1,
+            "resultList": {
+                "result": [
+                    {
+                        "title": "No authorList here",
+                        "authorString": "Smith J, Doe A.",
+                        "pubYear": "2020",
+                        "journalInfo": {"journal": {"title": "J Test"}},
+                    }
+                ]
+            },
+        }
+        mock_get.return_value = mock_resp
+
+        from sources.europepmc import EuropePmcSource
+
+        source = EuropePmcSource()
+        item = source.search("x")["results"][0]
+        assert item["authors"] == ["Smith J", "Doe A"]
+        assert item["doi"] is None  # absent → None
+
+    @patch("sources.europepmc.get_config")
+    def test_search_empty_query_raises(self, mock_config):
+        mock_config.return_value = _make_europepmc_config()
+
+        from sources.europepmc import EuropePmcSource
+        from utils.errors import DataSourceError
+
+        source = EuropePmcSource()
+        with pytest.raises(DataSourceError, match="Empty"):
+            source.search("")
+
+    @patch("sources.europepmc.get_config")
+    @patch("sources.europepmc.requests.get")
+    def test_search_http_error(self, mock_get, mock_config):
+        import requests as real_requests
+
+        mock_config.return_value = _make_europepmc_config()
+        mock_resp = MagicMock()
+        mock_resp.status_code = 500
+        mock_resp.raise_for_status.side_effect = real_requests.HTTPError(response=mock_resp)
+        mock_get.return_value = mock_resp
+
+        from sources.europepmc import EuropePmcSource
+        from utils.errors import DataSourceError
+
+        source = EuropePmcSource()
+        with pytest.raises(DataSourceError, match="europepmc"):
+            source.search("test")
+
+
+# ===================================================================
+# 9. Semantic Scholar tests
+# ===================================================================
+
+
+def _make_semanticscholar_config(api_key=""):
+    """Return a mock Config object for Semantic Scholar."""
+    cfg = MagicMock()
+    cfg.semanticscholar_api_key = api_key
+    cfg.semanticscholar_timeout = 10
+    return cfg
+
+
+class TestSemanticScholarSearch:
+    """Test Semantic Scholar search returns the unified result format."""
+
+    @patch("sources.semanticscholar.get_config")
+    @patch("sources.semanticscholar.requests.get")
+    def test_search_returns_unified_format(self, mock_get, mock_config):
+        mock_config.return_value = _make_semanticscholar_config()
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.json.return_value = {
+            "total": 500,
+            "data": [
+                {
+                    "title": "Attention Is All You Need",
+                    "authors": [{"name": "Ashish Vaswani"}, {"name": "Noam Shazeer"}],
+                    "year": 2017,
+                    "externalIds": {"DOI": "10.5555/attention.2017"},
+                    "venue": "NeurIPS",
+                    "citationCount": 100000,
+                }
+            ],
+        }
+        mock_get.return_value = mock_resp
+
+        from sources.semanticscholar import SemanticScholarSource
+
+        source = SemanticScholarSource()
+        result = source.search("transformers", rows=5)
+
+        assert result["total"] == 500
+        item = result["results"][0]
+        assert item["title"] == "Attention Is All You Need"
+        assert item["authors"] == ["Ashish Vaswani", "Noam Shazeer"]
+        assert item["year"] == 2017
+        assert item["doi"] == "10.5555/attention.2017"
+        assert item["journal"] == "NeurIPS"
+        assert item["source"] == "semanticscholar"
+        assert item["citation_count"] == 100000
+
+    @patch("sources.semanticscholar.get_config")
+    @patch("sources.semanticscholar.requests.get")
+    def test_api_key_sets_header(self, mock_get, mock_config):
+        mock_config.return_value = _make_semanticscholar_config(api_key="secret-key")
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.json.return_value = {"total": 0, "data": []}
+        mock_get.return_value = mock_resp
+
+        from sources.semanticscholar import SemanticScholarSource
+
+        source = SemanticScholarSource()
+        source.search("x")
+        # the x-api-key header is forwarded when a key is configured
+        _, kwargs = mock_get.call_args
+        assert kwargs["headers"].get("x-api-key") == "secret-key"
+
+    @patch("sources.semanticscholar.get_config")
+    def test_search_empty_query_raises(self, mock_config):
+        mock_config.return_value = _make_semanticscholar_config()
+
+        from sources.semanticscholar import SemanticScholarSource
+        from utils.errors import DataSourceError
+
+        source = SemanticScholarSource()
+        with pytest.raises(DataSourceError, match="Empty"):
+            source.search("")
+
+    @patch("sources.semanticscholar.get_config")
+    @patch("sources.semanticscholar.requests.get")
+    def test_search_http_error(self, mock_get, mock_config):
+        import requests as real_requests
+
+        mock_config.return_value = _make_semanticscholar_config()
+        mock_resp = MagicMock()
+        mock_resp.status_code = 429
+        mock_resp.raise_for_status.side_effect = real_requests.HTTPError(response=mock_resp)
+        mock_get.return_value = mock_resp
+
+        from sources.semanticscholar import SemanticScholarSource
+        from utils.errors import DataSourceError
+
+        source = SemanticScholarSource()
+        with pytest.raises(DataSourceError, match="semanticscholar"):
+            source.search("test")

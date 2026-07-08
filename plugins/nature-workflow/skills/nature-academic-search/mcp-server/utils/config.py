@@ -49,6 +49,20 @@ class Config:
         return self._config.get("unpaywall", {}).get("timeout", 20)
 
     @property
+    def europepmc_timeout(self) -> int:
+        return self._config.get("europepmc", {}).get("timeout", 20)
+
+    @property
+    def semanticscholar_api_key(self) -> str:
+        return os.environ.get("SEMANTIC_SCHOLAR_API_KEY") or self._config.get(
+            "semanticscholar", {}
+        ).get("api_key", "")
+
+    @property
+    def semanticscholar_timeout(self) -> int:
+        return self._config.get("semanticscholar", {}).get("timeout", 20)
+
+    @property
     def default_rows(self) -> int:
         return self._config.get("general", {}).get("default_rows", 5)
 

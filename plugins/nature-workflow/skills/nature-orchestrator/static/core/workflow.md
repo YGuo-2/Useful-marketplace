@@ -12,9 +12,11 @@ single `new` call — the template's `id: title` lines are the task list. The ge
 template gives the exact task strings; do not retype them from memory.
 
 ```bash
+# <genre> is the detected paper_type (e.g. review, research); tasks come verbatim
+# from that genre's template — the two below are only illustrative.
 python plugins/nature-workflow/scripts/nature_progress.py new \
-  --slug review-<short-topic> --title "<paper title or topic>" \
-  --genre review \
+  --slug <genre>-<short-topic> --title "<paper title or topic>" \
+  --genre <genre> \
   --task "search: 检索式生成与多源检索" \
   --task "topic: 选题与研究空白识别" \
   ...   # one --task per template row, in order

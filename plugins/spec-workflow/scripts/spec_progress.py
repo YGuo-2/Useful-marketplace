@@ -2102,16 +2102,33 @@ def command_discover(specs_root: str | Path = DEFAULT_SPECS_ROOT) -> dict[str, o
     }
 
 
-def command_new_workflow(specs_root: str | Path = DEFAULT_SPECS_ROOT, slug: str | None = None) -> dict[str, object]:
+def command_new_workflow(
+    specs_root: str | Path = DEFAULT_SPECS_ROOT,
+    slug: str | None = None,
+    run_id: str | None = None,
+) -> dict[str, object]:
     root = specs_path(specs_root)
     root.mkdir(parents=True, exist_ok=True)
-    base_name = f"{run_id_timestamp()}-{sanitize_slug(slug)}"
-    candidate = root / base_name
-    suffix = 2
-    while candidate.exists():
-        candidate = root / f"{base_name}-{suffix}"
-        suffix += 1
-    candidate.mkdir(parents=True)
+    if run_id:
+        # Caller pre-decided the run id (e.g. to name a spec/<run-id> worktree
+        # and branch before `new` runs). Use it verbatim; do not auto-suffix,
+        # because the branch already commits to this exact id.
+        base_name = sanitize_slug(run_id)
+        candidate = root / base_name
+        if candidate.exists():
+            raise SpecProgressError(
+                f"run id '{base_name}' already exists at {candidate.as_posix()}; "
+                "choose a different --run-id or resume the existing workflow"
+            )
+        candidate.mkdir(parents=True)
+    else:
+        base_name = f"{run_id_timestamp()}-{sanitize_slug(slug)}"
+        candidate = root / base_name
+        suffix = 2
+        while candidate.exists():
+            candidate = root / f"{base_name}-{suffix}"
+            suffix += 1
+        candidate.mkdir(parents=True)
     try:
         relative = candidate.relative_to(Path.cwd()).as_posix()
     except ValueError:
@@ -2139,6 +2156,13 @@ def build_parser() -> argparse.ArgumentParser:
     new = sub.add_parser("new")
     new.add_argument("specs_root", nargs="?", default=str(DEFAULT_SPECS_ROOT))
     new.add_argument("--slug", default="spec-workflow")
+    new.add_argument(
+        "--run-id",
+        default=None,
+        help="Use this exact run id as the workflow directory name instead of "
+        "generating <timestamp>-<slug>. Lets a spec/<run-id> worktree be created "
+        "before `new` runs.",
+    )
     guard_all = sub.add_parser("guard-all")
     guard_all.add_argument("specs_root", nargs="?", default=str(DEFAULT_SPECS_ROOT))
     for name in (
@@ -2212,7 +2236,7 @@ def main(argv: list[str] | None = None) -> int:
             print(format_json(command_discover(args.specs_root)))
             return 0
         if args.command == "new":
-            print(format_json(command_new_workflow(args.specs_root, args.slug)))
+            print(format_json(command_new_workflow(args.specs_root, args.slug, args.run_id)))
             return 0
         if args.command == "guard-all":
             result = command_guard_all(args.specs_root)

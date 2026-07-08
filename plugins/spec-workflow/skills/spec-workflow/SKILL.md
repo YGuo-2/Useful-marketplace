@@ -80,7 +80,7 @@ python <plugin-root>/scripts/spec_progress.py discover docs/specs/
 - If `open_workflows` is not empty, list each candidate's `specs_dir`, workflow, status, approval, and current task. Ask whether to continue one of them or create a new isolated workflow. Do not run resume or read old task progress until the human chooses a candidate.
 - If the human chooses a new workflow, create it with `new docs/specs/ --slug "<short-slug>"` and do not treat older `progress.md`/`tasks.md` files as the source of truth for this request.
 - Legacy root-level `docs/specs/tasks.md` is a valid candidate for resuming old runs, but new runs must write to `docs/specs/<run-id>/`.
-- When creating any new workflow inside a git repository, first create the isolated worktree and branch as described in `## Git Delivery Chain`, then run `new` from inside that worktree so spec artifacts land on the `spec/<run-id>` branch. In a non-git repository, skip the worktree step and run `new` in place.
+- When creating any new workflow inside a git repository, pick the `<run-id>` first, then create the isolated worktree and branch as described in `## Git Delivery Chain`, then run `new --run-id <run-id>` from inside that worktree so the spec directory matches the branch and artifacts land on `spec/<run-id>`. In a non-git repository, skip the worktree step and run `new` in place (no `--run-id`).
 
 ## Git Delivery Chain
 
@@ -94,13 +94,13 @@ Degradation ladder (evaluate before each step):
 
 Chain steps:
 
-1. **Create.** After the human chooses to start a new workflow, create the isolated worktree and branch from the current HEAD:
+1. **Create.** After the human chooses to start a new workflow, first pick the `<run-id>` yourself: `<timestamp>-<short-slug>`, e.g. `20260707-153000-add-auth`. This id names the worktree, the branch, and the spec directory, so decide it once up front. Then create the isolated worktree and branch from the current HEAD:
 
    ```bash
    git worktree add ../<repo-name>--spec-<run-id> -b spec/<run-id>
    ```
 
-   Run every later command (`new`, intake, artifact generation, `approve`, implementation, acceptance) from inside that worktree directory. Then run `spec_progress.py new` inside the worktree so spec artifacts are created on the branch.
+   Run every later command (`new`, intake, artifact generation, `approve`, implementation, acceptance) from inside that worktree directory. Then run `spec_progress.py new docs/specs/ --run-id <run-id>` inside the worktree so the spec directory matches the branch name exactly and artifacts are created on the branch. In a non-git repository you skip this step, so omit `--run-id` and let `new` generate the id itself.
 
 2. **On approval.** After `approve` freezes the baseline (see `## Approval Freeze`):
 

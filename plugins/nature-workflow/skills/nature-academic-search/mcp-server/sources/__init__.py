@@ -7,6 +7,8 @@ from .scopus import ScopusSource
 from .sciencedirect import ScienceDirectSource
 from .openalex import OpenAlexSource
 from .unpaywall import UnpaywallSource
+from .europepmc import EuropePmcSource
+from .semanticscholar import SemanticScholarSource
 
 __all__ = [
     "CrossRefSource",
@@ -16,4 +18,6 @@ __all__ = [
     "ScienceDirectSource",
     "OpenAlexSource",
     "UnpaywallSource",
+    "EuropePmcSource",
+    "SemanticScholarSource",
 ]

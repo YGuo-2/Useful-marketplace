@@ -8,7 +8,7 @@ Quick guide:
 
 | User need | Primary (T1) | Secondary (T2) | Last Resort (T3) |
 |-----------|-------------|-----------------|-------------------|
-| Medical / clinical | PubMed | Semantic Scholar | Google Scholar |
+| Medical / clinical | PubMed + Europe PMC | Semantic Scholar | Google Scholar |
 | Cross-disciplinary | CrossRef | Semantic Scholar | Scopus |
 | Preprints / CS / physics | arXiv | bioRxiv / medRxiv | — |
 | Exhaustive review | PubMed + CrossRef + arXiv | Semantic Scholar + bioRxiv/medRxiv | WoS / Scopus |
@@ -69,7 +69,7 @@ Use uv to start the MCP server in an isolated dependency environment:
 uv run --no-project --directory <mcp-server> --with "mcp>=1.0.0,<2.0.0" --with "requests>=2.28.0,<3.0.0" --with "toml>=0.10.2,<2.0.0" --with "lxml>=4.9.0,<6.0.0" --with "pybliometrics>=4.4.1,<5.0.0" python academic_search_server.py
 ```
 
-`search_papers` defaults to CrossRef, PubMed, arXiv, and OpenAlex (all free, no key). Scopus / ScienceDirect are opt-in providers: include `scopus` / `sciencedirect` in `sources`, or call their dedicated tools. These calls use the local pybliometrics config at `~/.config/pybliometrics.cfg` and may consume Elsevier API quota. For full text, `get_open_access` resolves a DOI to a legal open-access PDF / landing URL via Unpaywall.
+`search_papers` defaults to CrossRef, PubMed, arXiv, and OpenAlex (all free, no key). Europe PMC and Semantic Scholar are opt-in free providers — include `europepmc` / `semanticscholar` in `sources` (Semantic Scholar honors `SEMANTIC_SCHOLAR_API_KEY` if set). Scopus / ScienceDirect are opt-in providers: include `scopus` / `sciencedirect` in `sources`, or call their dedicated tools. These calls use the local pybliometrics config at `~/.config/pybliometrics.cfg` and may consume Elsevier API quota. For full text, `get_open_access` resolves a DOI to a legal open-access PDF / landing URL via Unpaywall.
 
 ## Error handling
 
@@ -79,6 +79,6 @@ uv run --no-project --directory <mcp-server> --with "mcp>=1.0.0,<2.0.0" --with "
 
 ## Limitations
 
-- Google Scholar and Semantic Scholar are scraped (not API-backed) — results may vary.
+- Google Scholar (paper-search MCP) is scraped (not API-backed) — results may vary. Semantic Scholar is API-backed here via the academic-search MCP `semanticscholar` source (opt-in); the paper-search MCP `search_semantic_scholar` tool remains scraped.
 - Chinese literature (CNKI / 万方) not indexed by CrossRef or PubMed.
 - Citation counts may be delayed (CrossRef updates monthly).

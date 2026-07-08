@@ -8,10 +8,11 @@ Multi-source literature search, citation verification, citation format conversio
 
 | Tool | Source | Best For |
 |------|--------|----------|
-| `search_papers` | academic-search MCP | Default concurrent search across CrossRef, PubMed, arXiv; accepts opt-in Scopus / ScienceDirect sources |
+| `search_papers` | academic-search MCP | Default concurrent search across CrossRef, PubMed, arXiv, OpenAlex; accepts opt-in Scopus / ScienceDirect sources |
 | `get_paper_by_id` | academic-search MCP | DOI / PMID / arXiv ID details |
 | `get_citation` | academic-search MCP | DOI-based formatted citation |
 | `lookup_mesh` | academic-search MCP | MeSH term exploration |
+| `get_open_access` | academic-search MCP | DOI → best legal open-access PDF / landing URL (Unpaywall) |
 
 ### Scopus / ScienceDirect tools
 

@@ -14,8 +14,8 @@ template gives the exact task strings; do not retype them from memory.
 ```bash
 python plugins/nature-workflow/scripts/nature_progress.py new \
   --slug review-<short-topic> --title "<paper title or topic>" \
-  --task "topic: 选题与研究空白识别" \
   --task "search: 检索式生成与多源检索" \
+  --task "topic: 选题与研究空白识别" \
   ...   # one --task per template row, in order
 ```
 
@@ -29,7 +29,9 @@ there is no "append a task later" command.
 ## 2. Drive cycle (repeat per step)
 
 1. **Find the next step** — `status` returns `active_task`, `next_task`, and
-   `task_counts`. The next step is the first non-completed task in order.
+   `task_counts`. `next_task` is the in-progress task if one is active, else the
+   first pending step; a blocked step is skipped so you can park it and move on
+   (§2.5), and only resurfaces once nothing else is left.
    ```bash
    python plugins/nature-workflow/scripts/nature_progress.py status --workflow <dir>
    ```

@@ -1,6 +1,6 @@
 # 统一学术搜索 MCP 服务器
 
-这是统一的学术搜索 MCP 服务器，整合 CrossRef、PubMed、arXiv、Scopus 和 ScienceDirect 数据源。
+这是统一的学术搜索 MCP 服务器，整合 CrossRef、PubMed、arXiv、OpenAlex、Scopus、ScienceDirect 检索源，以及 Unpaywall 开放获取查询。
 
 ## 工具
 
@@ -10,6 +10,7 @@
 | `get_paper_by_id` | 按 DOI、PMID 或 arXiv ID 获取详情 |
 | `get_citation` | 格式化引用，支持 APA、Nature、IEEE 等风格 |
 | `lookup_mesh` | MeSH 词表查询 |
+| `get_open_access` | 通过 Unpaywall 按 DOI 获取合法开放获取全文链接 |
 | `search_scopus` | Scopus 高级检索 |
 | `get_scopus_abstract` | Scopus 摘要与详情元数据 |
 | `get_scopus_citation_overview` | Scopus 引用概览 |
@@ -28,7 +29,7 @@
 - `NCBI_API_KEY`：可选，用于提升速率限制。
 - Elsevier / Scopus / ScienceDirect：复用 `pybliometrics` 配置文件，默认位置为 `~/.config/pybliometrics.cfg`。
 
-`search_papers` 默认检索 CrossRef、PubMed 和 arXiv。Scopus / ScienceDirect 是可选 provider：只有在 `sources` 显式传入 `scopus` / `sciencedirect`，或调用专用 Scopus / ScienceDirect 工具时，才会访问 Elsevier API。
+`search_papers` 默认检索 CrossRef、PubMed、arXiv 和 OpenAlex。Scopus / ScienceDirect 是可选 provider：只有在 `sources` 显式传入 `scopus` / `sciencedirect`，或调用专用 Scopus / ScienceDirect 工具时，才会访问 Elsevier API。
 
 这样可以避免默认搜索无意消耗 Elsevier API 配额；若本机缺少 `pybliometrics` 配置，会在返回 JSON 的 `errors` 字段中给出对应数据源错误。
 

@@ -37,11 +37,11 @@ def test_search_papers_mcp_dispatch_uses_default_sources(monkeypatch):
 
     payload = _call_tool_json("search_papers", {"query": "graphene", "rows": 100})
 
-    assert payload["sources_queried"] == ["crossref", "pubmed", "arxiv"]
+    assert payload["sources_queried"] == ["crossref", "pubmed", "arxiv", "openalex"]
     assert "error" not in payload
     assert captured == {
         "query": "graphene",
-        "sources": ["crossref", "pubmed", "arxiv"],
+        "sources": ["crossref", "pubmed", "arxiv", "openalex"],
         "rows": 50,
         "filter_type": None,
     }

@@ -1,7 +1,7 @@
 """Academic search MCP server.
 
 Unified entry point exposing multi-source search and source-specific tools for
-CrossRef, PubMed, arXiv, Scopus, and ScienceDirect.
+CrossRef, PubMed, arXiv, OpenAlex, Scopus, ScienceDirect, and Unpaywall.
 """
 
 from __future__ import annotations

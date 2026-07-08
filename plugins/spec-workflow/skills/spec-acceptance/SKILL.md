@@ -167,6 +167,13 @@ If `acceptance-finish` succeeds, output the final workflow completion result:
 - 最终结论：整个 Spec workflow 流程已完成。
 ```
 
+When the run is inside a git repository, close the delivery chain from `../spec-workflow/SKILL.md`'s `## Git Delivery Chain` after `acceptance-finish` succeeds:
+
+- Commit the acceptance artifacts (`acceptance_state.json`, `acceptance-fixes.md`, and any fix commits) and push the `spec/<run-id>` branch.
+- Mark the PR ready for review with `gh pr ready`, then post the completion summary as a single `gh pr comment`.
+- Print the suggested merge and cleanup commands for the human to run — for example `gh pr merge --squash --delete-branch` and `git worktree remove <path>` — and never merge or remove the worktree autonomously. For high-risk workflows, repeat the deep-review warning before any merge.
+- Follow the degradation ladder: with no PR (no remote or `gh`), only print the local branch merge suggestion; outside a git repository, skip this entirely.
+
 If issues remain:
 
 - Summarize only actionable issues with evidence and affected task IDs.

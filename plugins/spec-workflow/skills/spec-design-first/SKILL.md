@@ -87,6 +87,12 @@ If the selected granularity is `Low Level Design`, `design.md` must also include
 
 Before review, replace all template placeholders with concrete content. If a template section does not apply, state that explicitly with the reason instead of leaving placeholder text.
 
+Task plan quality bar:
+
+- Every task must fill the `接口` field: `消费` lists the exact signatures or contracts taken from upstream tasks, `产出` lists the exact functions, interfaces, or data structures downstream tasks rely on; write `无` explicitly when empty. Assume the task executor sees only its own task, so each task must be self-contained.
+- Placeholder text such as `TBD`, `待定`, `处理边界情况`, or `类似 T-xxx` inside a task is a plan failure, not an acceptable draft. Every task needs concrete file paths, real commands, and expected verification output.
+- Before requesting approval, self-review the plan in place: every requirement ID is covered by at least one task's `覆盖`, no placeholders remain, and interface signatures and naming are consistent across tasks and with `design.md`. Fix findings directly instead of reporting them.
+
 If `requirements.md` exposes a gap in `design.md`, update `design.md` first, then derive requirements and tasks again.
 
 The preferred approval phrase for implementation is:
@@ -115,6 +121,8 @@ This is a structural integrity check only. Passing validation does not approve i
 python <plugin-root>/scripts/spec_progress.py approve <specs_dir> --evidence "批准规范，启动执行"
 ```
 
+In a git repository, after `approve` freezes the baseline, commit the spec artifacts, push the `spec/<run-id>` branch, and open the draft PR as described in the router's `## Git Delivery Chain` in `../spec-workflow/SKILL.md`. Skip the PR steps when no remote or `gh` is available, and skip the whole git chain outside a git repository.
+
 ## State C: Controlled Implementation
 
 Only enter this state after explicit approval.
@@ -131,6 +139,7 @@ Implementation rules:
 - Add or update tests that prove both design constraints and derived requirements.
 - If implementation conflicts with `design.md`, `requirements.md`, or the task plan in `tasks.md`, stop code work. Run `sync-check --write` to mark `reapproval-required`, return to State B, update specs, and wait for an accepted approval phrase plus a fresh `approve` before continuing. Progress fields may still be updated through the tools.
 - Run verification and perform at most three self-healing loops.
+- After verification passes and before `complete`, run a two-phase task review of the task's diff: (1) 规格符合性 — the diff implements exactly the selected task, nothing missing, nothing extra, and covers its `覆盖` requirement IDs; (2) 代码质量 — minimal change, real assertions, no weakened tests, consistent with the approved design boundary. Prefer a fresh review subagent that receives only the task text, the relevant spec excerpts, and the diff — not the main-session history; if subagents are unavailable, run the same checklist as an explicit self-review. Critical or Important findings block `complete`: fix and re-review. Record minor findings and the review verdict in the completion evidence.
 - After passing verification, call `spec_complete_task` through MCP or run `python <plugin-root>/scripts/spec_progress.py complete <specs_dir> T-xxx --evidence "<verification evidence>"`. Do not manually mark `- [x]` without recorded evidence.
 - If blocked, call `spec_block_task` or `python <plugin-root>/scripts/spec_progress.py block <specs_dir> T-xxx --reason "<reason>"`.
 - If skipped, call `spec_skip_task` or `python <plugin-root>/scripts/spec_progress.py skip <specs_dir> T-xxx --approval "<human approval evidence>"`.
@@ -142,6 +151,8 @@ feat(scope): short description
 Implements task: [task description]
 Spec: <specs_dir>/tasks.md
 ```
+
+  In a git repository, after `complete`, commit the business code and the progress files together with this message (this satisfies the pre-commit progress guard), push the `spec/<run-id>` branch, and refresh the PR checklist from `tasks.md` per the router's `## Git Delivery Chain` in `../spec-workflow/SKILL.md`. When the git chain is not enabled, just surface the suggested message as before.
 
 If unchecked tasks remain, ask whether to continue only after the current task is complete.
 

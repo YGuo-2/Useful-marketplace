@@ -1,0 +1,36 @@
+name: nature-orchestrator
+version: 0.1.0
+description: >
+  Declarative manifest for the manuscript orchestrator. SKILL.md uses this to
+  load the core orchestration layer and the genre template for the detected
+  paper_type. The orchestrator delegates domain work to nature-* skills and
+  tracks the flow with the nature_progress state engine; it holds no domain
+  implementation of its own.
+
+always_load:
+  # Shared layer — genre vocabulary and ethics, reused across nature-* skills
+  - ../_shared/core/paper-type-taxonomy.md
+  - ../_shared/core/ethics.md
+  # Skill-local core
+  - static/core/stance.md
+  - static/core/workflow.md
+  - static/core/decision.md
+
+axes:
+  paper_type:
+    detect: |
+      Decide the manuscript genre from the user's framing, using the canonical
+      taxonomy in ../_shared/core/paper-type-taxonomy.md. Only genres with a
+      template file below are drivable today; if the user needs a genre without
+      a template, say so rather than forcing a mismatched flow.
+    values:
+      review: static/fragments/paper_type/review.md
+    default: review
+    multi: false
+
+references:
+  on_demand:
+    - condition: need the exact state-engine commands/fields (new/status/start/complete/block, task model, evidence gate)
+      path: ../../scripts/nature_progress.py
+    - condition: need the MCP tool surface that mirrors the CLI (nature_new_workflow, nature_status, nature_complete, ...)
+      path: ../../mcp/nature_progress_server.py

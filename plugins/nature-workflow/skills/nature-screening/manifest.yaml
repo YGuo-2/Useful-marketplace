@@ -1,0 +1,23 @@
+name: nature-screening
+version: 0.1.0
+description: >
+  Declarative manifest for the static/dynamic split. SKILL.md uses this to
+  decide which fragments to load for a literature-screening request.
+
+# Design note: nature-screening is a linear, parameterised workflow (inventory ->
+# normalize -> deduplicate -> set matching criteria -> rank -> retain top-N ->
+# classify -> assign -> prepare import -> log). Its variation — discipline,
+# review topic/framework, export formats — is handled at runtime by inline rules,
+# not by loading different large content bodies. There is therefore no content
+# axis; the split is core (always loaded) plus optional on-demand references. It
+# loads the shared ethics red-lines because screening decides what enters a
+# review library and must not fabricate or mis-attribute records.
+
+always_load:
+  - static/core/stance.md
+  - static/core/workflow.md
+  - static/core/output-contract.md
+  - ../_shared/core/ethics.md
+
+references:
+  on_demand: []

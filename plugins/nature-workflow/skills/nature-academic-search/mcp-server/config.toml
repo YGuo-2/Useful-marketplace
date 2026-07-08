@@ -11,6 +11,14 @@ timeout = 15
 [arxiv]
 timeout = 30
 
+[openalex]
+mailto = ""  # optional; opts into OpenAlex's faster polite pool. OPENALEX_MAILTO env overrides.
+timeout = 20
+
+[unpaywall]
+email = ""  # required for Unpaywall OA lookup. UNPAYWALL_EMAIL env overrides.
+timeout = 20
+
 [general]
 default_rows = 5
 max_rows = 50

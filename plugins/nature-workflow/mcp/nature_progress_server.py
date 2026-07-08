@@ -340,6 +340,14 @@ def handle(message: dict[str, Any]) -> dict[str, Any] | None:
 
 
 def main() -> int:
+    # MCP stdio is UTF-8 by spec, but Windows pipes/consoles default to a locale
+    # codec that mangles non-ASCII (e.g. Chinese) task titles — decode errors on
+    # the way in, encode errors on the way out. Force UTF-8 on both streams.
+    for stream in (sys.stdin, sys.stdout):
+        try:
+            stream.reconfigure(encoding="utf-8")
+        except (AttributeError, ValueError):
+            pass
     for line in sys.stdin:
         if not line.strip():
             continue

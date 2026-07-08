@@ -1,0 +1,26 @@
+name: nature-figure-permission
+version: 0.1.0
+description: >
+  Declarative manifest for the static/dynamic split. SKILL.md uses this to load
+  the core layer for a figure/table copyright-and-permission check. This skill is
+  an atomic step delegated by nature-orchestrator (review step
+  `permission: 图片版权核查`); it holds all its domain logic in static/core and
+  reports a `.docx` deliverable path as evidence.
+
+# Design note: nature-figure-permission is a linear, parameterised workflow
+# (inventory -> classify -> collect source facts -> judge permission -> set risk
+# -> prepare request materials -> assemble .docx deliverable). Its variation —
+# item type, license type, permission platform, target-journal policy — is
+# handled at runtime by the classification and judgment rules in
+# static/core/workflow.md, not by loading different large content bodies. There
+# is therefore no content axis; the split is core (always loaded) only. It reuses
+# the shared ethics red lines and adds its own figure-permission stance and
+# output contract.
+
+always_load:
+  # Shared layer — citation / AI / image ethics red lines, reused across nature-* skills
+  - ../_shared/core/ethics.md
+  # Skill-local core — all domain logic
+  - static/core/stance.md
+  - static/core/workflow.md
+  - static/core/output-contract.md

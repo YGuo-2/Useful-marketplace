@@ -19,6 +19,7 @@ Every academic data source is classified by reliability tier to guide automated 
 | PubMed | E-utilities (XML/JSON) | 3 req/s (10 with API key) | Biomedical + life sciences, MeSH indexing |
 | CrossRef | REST API (JSON) | 50 req/s (no key needed) | Cross-disciplinary, citation counts |
 | arXiv | OAI-PMH Atom XML | 1 req/3s | Preprints: physics, math, CS, biology |
+| OpenAlex | REST API (JSON) | ~10 req/s (polite pool with mailto) | Cross-disciplinary, ~250M works + citations/venues/institutions; free, no key; open Web of Science / Scopus substitute for discovery |
 
 ### T2 — API-backed, Limited
 
@@ -36,6 +37,12 @@ Every academic data source is classified by reliability tier to guide automated 
 | Web of Science | Institution proxy required | Access varies |
 | Scopus | Institution proxy required | Access varies |
 | CNKI / 万方 | No programmatic access | Chinese only, manual download |
+
+## Full-Text Retrieval (not a discovery source)
+
+| Source | API | Notes |
+|--------|-----|-------|
+| Unpaywall | REST API (JSON), email required | DOI → best *legal* open-access PDF / landing URL (publisher or repository green OA). Never paywalled or pirated. Use after discovery to fetch full text. |
 
 ## Fallback Routing Rules
 
@@ -57,6 +64,6 @@ For every literature search or citation verification:
 | Medical / clinical | PubMed | Semantic Scholar | Google Scholar |
 | Cross-disciplinary | CrossRef | Semantic Scholar | Scopus |
 | Preprints / CS / physics | arXiv | bioRxiv / medRxiv | Google Scholar |
-| Exhaustive review | PubMed + CrossRef + arXiv | Semantic Scholar + bioRxiv/medRxiv | WoS / Scopus |
+| Exhaustive review | PubMed + CrossRef + arXiv + OpenAlex | Semantic Scholar + bioRxiv/medRxiv | WoS / Scopus |
 | Citation verification | CrossRef (DOI) → PubMed (PMID) | Semantic Scholar | Google Scholar |
 | Chinese literature | — | — | CNKI / 万方 (manual) |

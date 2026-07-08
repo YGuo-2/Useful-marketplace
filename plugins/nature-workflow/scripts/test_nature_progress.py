@@ -85,6 +85,33 @@ class StateEngineTests(unittest.TestCase):
         self.assertEqual(disk["active_task"], "T2")
         self.assertEqual(disk["status"], "open")
 
+    # --- next_task: park a blocker and move on ---------------------------
+
+    def test_next_task_skips_blocked_so_user_can_move_on(self) -> None:
+        wf = self.make(["T1: first", "T2: second"])
+        np.command_block(None, wf, "T1", "waiting on data", base=self.base)
+        # blocked T1 is parked; next_task advances to the pending T2 so the
+        # orchestrator's drive cycle does not stall on the blocker
+        status = np.command_status(None, wf, base=self.base)
+        self.assertEqual(status["next_task"]["id"], "T2")
+
+    def test_next_task_falls_back_to_blocked_when_nothing_else(self) -> None:
+        wf = self.make(["T1: only"])
+        np.command_block(None, wf, "T1", "stuck", base=self.base)
+        # nothing pending to move on to → still surface the blocker
+        status = np.command_status(None, wf, base=self.base)
+        self.assertEqual(status["next_task"]["id"], "T1")
+
+    def test_next_task_prefers_active_over_earlier_pending(self) -> None:
+        wf = self.make(["T1: first", "T2: second"])
+        # start T2 out of order while the lower-index T1 is still pending
+        np.command_start(None, wf, "T2", base=self.base)
+        status = np.command_status(None, wf, base=self.base)
+        # next_task must agree with active_task (T2), not the earlier pending T1 —
+        # otherwise start(next_task) would hit the single-active guard and stall
+        self.assertEqual(status["active_task"], "T2")
+        self.assertEqual(status["next_task"]["id"], "T2")
+
     # --- completion ------------------------------------------------------
 
     def test_complete_all_marks_workflow_completed(self) -> None:

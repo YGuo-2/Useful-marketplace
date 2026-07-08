@@ -33,6 +33,22 @@ class Config:
         return self._config.get("arxiv", {}).get("timeout", 30)
 
     @property
+    def openalex_mailto(self) -> str:
+        return os.environ.get("OPENALEX_MAILTO") or self._config.get("openalex", {}).get("mailto", "")
+
+    @property
+    def openalex_timeout(self) -> int:
+        return self._config.get("openalex", {}).get("timeout", 20)
+
+    @property
+    def unpaywall_email(self) -> str:
+        return os.environ.get("UNPAYWALL_EMAIL") or self._config.get("unpaywall", {}).get("email", "")
+
+    @property
+    def unpaywall_timeout(self) -> int:
+        return self._config.get("unpaywall", {}).get("timeout", 20)
+
+    @property
     def default_rows(self) -> int:
         return self._config.get("general", {}).get("default_rows", 5)
 

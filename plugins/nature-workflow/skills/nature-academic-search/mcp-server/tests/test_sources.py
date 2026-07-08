@@ -788,3 +788,229 @@ class TestFormatConverter:
         assert ok is False
         assert "Invalid PMID" in result
         assert not list(tmp_path.iterdir())
+
+
+# ===================================================================
+# 5. OpenAlex tests
+# ===================================================================
+
+
+def _make_openalex_config():
+    """Return a mock Config object for OpenAlex."""
+    cfg = MagicMock()
+    cfg.openalex_mailto = "test@example.com"
+    cfg.openalex_timeout = 10
+    return cfg
+
+
+class TestOpenAlexSearch:
+    """Test OpenAlex search/detail returns the unified result format."""
+
+    @patch("sources.openalex.get_config")
+    @patch("sources.openalex.requests.get")
+    def test_search_returns_unified_format(self, mock_get, mock_config):
+        mock_config.return_value = _make_openalex_config()
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.json.return_value = {
+            "meta": {"count": 123},
+            "results": [
+                {
+                    "display_name": "Graphene Synthesis Advances",
+                    "authorships": [
+                        {"author": {"display_name": "Alice Smith"}},
+                        {"author": {"display_name": "Bob Jones"}},
+                    ],
+                    "publication_year": 2022,
+                    "doi": "https://doi.org/10.1234/openalex.2022",
+                    "primary_location": {"source": {"display_name": "Nature Materials"}},
+                    "cited_by_count": 88,
+                }
+            ],
+        }
+        mock_get.return_value = mock_resp
+
+        from sources.openalex import OpenAlexSource
+
+        source = OpenAlexSource()
+        result = source.search("graphene", rows=5)
+
+        assert result["total"] == 123
+        assert len(result["results"]) == 1
+        item = result["results"][0]
+        assert item["title"] == "Graphene Synthesis Advances"
+        assert item["authors"] == ["Alice Smith", "Bob Jones"]
+        assert item["year"] == 2022
+        assert item["doi"] == "10.1234/openalex.2022"  # DOI URL stripped
+        assert item["journal"] == "Nature Materials"
+        assert item["source"] == "openalex"
+        assert item["citation_count"] == 88
+
+    @patch("sources.openalex.get_config")
+    @patch("sources.openalex.requests.get")
+    def test_get_by_doi_rebuilds_abstract(self, mock_get, mock_config):
+        mock_config.return_value = _make_openalex_config()
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.json.return_value = {
+            "display_name": "A Paper",
+            "authorships": [{"author": {"display_name": "Jane Doe"}}],
+            "publication_year": 2024,
+            "doi": "https://doi.org/10.1038/nature12373",
+            "primary_location": {"source": {"display_name": "Nature"}},
+            "cited_by_count": 5,
+            "abstract_inverted_index": {"We": [0], "found": [1], "graphene": [2]},
+            "open_access": {"is_oa": True, "oa_url": "https://oa.example/pdf"},
+            "type": "article",
+            "id": "https://openalex.org/W123",
+        }
+        mock_get.return_value = mock_resp
+
+        from sources.openalex import OpenAlexSource
+
+        source = OpenAlexSource()
+        detail = source.get_by_doi("10.1038/nature12373")
+
+        assert detail["title"] == "A Paper"
+        assert detail["doi"] == "10.1038/nature12373"
+        assert detail["abstract"] == "We found graphene"
+        assert detail["is_oa"] is True
+        assert detail["oa_url"] == "https://oa.example/pdf"
+        assert detail["source"] == "openalex"
+
+    @patch("sources.openalex.get_config")
+    def test_search_empty_query_raises(self, mock_config):
+        mock_config.return_value = _make_openalex_config()
+
+        from sources.openalex import OpenAlexSource
+        from utils.errors import DataSourceError
+
+        source = OpenAlexSource()
+        with pytest.raises(DataSourceError, match="Empty"):
+            source.search("")
+
+    @patch("sources.openalex.get_config")
+    @patch("sources.openalex.requests.get")
+    def test_search_http_error(self, mock_get, mock_config):
+        import requests as real_requests
+
+        mock_config.return_value = _make_openalex_config()
+        mock_resp = MagicMock()
+        mock_resp.status_code = 500
+        mock_resp.raise_for_status.side_effect = real_requests.HTTPError(response=mock_resp)
+        mock_get.return_value = mock_resp
+
+        from sources.openalex import OpenAlexSource
+        from utils.errors import DataSourceError
+
+        source = OpenAlexSource()
+        with pytest.raises(DataSourceError, match="openalex"):
+            source.search("test")
+
+    def test_validate_doi_strips_url_and_rejects_traversal(self):
+        from sources.openalex import _validate_doi
+
+        assert _validate_doi("https://doi.org/10.1038/x") == "10.1038/x"
+        with pytest.raises(ValueError):
+            _validate_doi("../../evil")
+
+
+# ===================================================================
+# 6. Unpaywall tests
+# ===================================================================
+
+
+def _make_unpaywall_config():
+    """Return a mock Config object for Unpaywall."""
+    cfg = MagicMock()
+    cfg.unpaywall_email = "test@example.com"
+    cfg.unpaywall_timeout = 10
+    return cfg
+
+
+class TestUnpaywall:
+    """Test Unpaywall OA lookup normalization and guards."""
+
+    @patch("sources.unpaywall.get_config")
+    @patch("sources.unpaywall.requests.get")
+    def test_get_oa_returns_best_location(self, mock_get, mock_config):
+        mock_config.return_value = _make_unpaywall_config()
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.json.return_value = {
+            "doi": "10.1038/nature12373",
+            "is_oa": True,
+            "oa_status": "green",
+            "title": "A Paper",
+            "journal_name": "Nature",
+            "year": 2013,
+            "best_oa_location": {
+                "url": "https://repo.example/landing",
+                "url_for_pdf": "https://repo.example/paper.pdf",
+                "license": "cc-by",
+                "version": "publishedVersion",
+                "host_type": "repository",
+            },
+            "oa_locations": [{"url": "x"}, {"url": "y"}],
+        }
+        mock_get.return_value = mock_resp
+
+        from sources.unpaywall import UnpaywallSource
+
+        source = UnpaywallSource()
+        result = source.get_oa("10.1038/nature12373")
+
+        assert result["is_oa"] is True
+        assert result["oa_status"] == "green"
+        assert result["pdf_url"] == "https://repo.example/paper.pdf"
+        assert result["landing_url"] == "https://repo.example/landing"
+        assert result["license"] == "cc-by"
+        assert result["oa_location_count"] == 2
+        assert result["source"] == "unpaywall"
+
+    @patch("sources.unpaywall.get_config")
+    @patch("sources.unpaywall.requests.get")
+    def test_get_oa_404_returns_not_oa(self, mock_get, mock_config):
+        mock_config.return_value = _make_unpaywall_config()
+        mock_resp = MagicMock()
+        mock_resp.status_code = 404
+        mock_get.return_value = mock_resp
+
+        from sources.unpaywall import UnpaywallSource
+
+        source = UnpaywallSource()
+        result = source.get_oa("10.9999/missing")
+
+        assert result["is_oa"] is False
+        assert result["source"] == "unpaywall"
+
+    @patch("sources.unpaywall.get_config")
+    def test_missing_email_raises(self, mock_config):
+        cfg = MagicMock()
+        cfg.unpaywall_email = ""
+        cfg.unpaywall_timeout = 10
+        mock_config.return_value = cfg
+
+        from sources.unpaywall import UnpaywallSource
+        from utils.errors import DataSourceError
+
+        source = UnpaywallSource()
+        with pytest.raises(DataSourceError, match="email"):
+            source.get_oa("10.1038/nature12373")
+
+    @patch("sources.unpaywall.get_config")
+    def test_invalid_doi_raises(self, mock_config):
+        mock_config.return_value = _make_unpaywall_config()
+
+        from sources.unpaywall import UnpaywallSource
+        from utils.errors import DataSourceError
+
+        source = UnpaywallSource()
+        with pytest.raises(DataSourceError, match="Invalid DOI"):
+            source.get_oa("../../evil")

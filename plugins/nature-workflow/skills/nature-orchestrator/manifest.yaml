@@ -24,7 +24,10 @@ axes:
       template file below are drivable today; if the user needs a genre without
       a template, say so rather than forcing a mismatched flow.
     values:
+      research: static/fragments/paper_type/research.md
       review: static/fragments/paper_type/review.md
+    # ponytail: default stays review (no behavior change); the taxonomy calls
+    # research the "otherwise" default — flip to research only if desired.
     default: review
     multi: false
 

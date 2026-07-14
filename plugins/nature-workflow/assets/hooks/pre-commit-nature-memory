@@ -1,11 +1,12 @@
 #!/usr/bin/env sh
-# Nature workflow memory guard.
+# Nature workflow memory guard (advisory).
 #
 # Install by copying this file to .git/hooks/pre-commit and making it executable.
-# It blocks commits when any docs/nature-workflows/*/memory.md violates the
-# project-memory format rules.
+# It NEVER blocks a commit: it lints docs/nature-workflows/*/memory.md and prints
+# any warnings for visibility, then always exits 0. The memory lint is a soft
+# advisory, not a gate — a stale copy of this hook must not brick unrelated commits.
 
-set -eu
+set -u
 
 if [ ! -d "docs/nature-workflows" ]; then
   exit 0
@@ -14,9 +15,15 @@ fi
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 SCRIPT="${REPO_ROOT}/plugins/nature-workflow/scripts/nature_memory.py"
 if [ ! -f "$SCRIPT" ]; then
-  echo "Nature workflow memory hook skipped: $SCRIPT not found." >&2
   exit 0
 fi
 
 PYTHON="$(command -v python3 || command -v python)"
-"$PYTHON" "$SCRIPT" check --all docs/nature-workflows/
+if [ -z "$PYTHON" ]; then
+  exit 0
+fi
+
+# Advisory only: surface output, never fail the commit.
+"$PYTHON" "$SCRIPT" check --all docs/nature-workflows/ >&2 || \
+  echo "nature-memory: advisory lint reported issues (commit not blocked)." >&2
+exit 0

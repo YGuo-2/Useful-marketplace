@@ -7,6 +7,7 @@ import json
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 
@@ -15,6 +16,8 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 import nature_progress as np  # noqa: E402
+import nature_context as nc  # noqa: E402
+import nature_memory  # noqa: E402
 
 
 def read_state(workflow_dir: str) -> dict:
@@ -208,6 +211,66 @@ class StateEngineTests(unittest.TestCase):
         np.command_resume(None, wf, base=self.base)
         after = (Path(wf) / "nature.yml").read_text(encoding="utf-8")
         self.assertEqual(before, after)
+
+    def test_nature_progress_remains_independent_from_memory_module(self) -> None:
+        source = (SCRIPT_DIR / "nature_progress.py").read_text(encoding="utf-8")
+        self.assertNotIn("nature_memory", source)
+
+    def test_resume_with_memory_parses_canonical_file_once(self) -> None:
+        wf = self.make(["T1: collect evidence"])
+        nature_memory.command_memory_remember(
+            self.base,
+            wf,
+            "shared",
+            "collect evidence decision",
+            "use the source ledger",
+            {"kind": "decision"},
+        )
+        original = nature_memory.parse_memory_document
+        calls = 0
+
+        def counted(text: str, source_path=None):
+            nonlocal calls
+            calls += 1
+            return original(text, source_path)
+
+        with patch.object(nature_memory, "parse_memory_document", side_effect=counted):
+            result = nc.resume_with_memory(project_root=self.base, workflow_dir=wf)
+
+        self.assertTrue(result["ok"], result)
+        self.assertEqual(calls, 1)
+        self.assertIn(result["memory_context"]["status"], {"available", "partial"})
+
+    def test_resume_memory_failure_is_partial_without_changing_progress(self) -> None:
+        wf = self.make(["T1: collect evidence"])
+        with patch.object(nc, "_load_memory_context", side_effect=RuntimeError("unavailable")):
+            result = nc.resume_with_memory(project_root=self.base, workflow_dir=wf)
+
+        self.assertTrue(result["ok"], result)
+        self.assertEqual(result["progress"]["resume_state"], "ready")
+        self.assertEqual(result["memory_context"]["status"], "unavailable")
+
+    def test_complete_and_block_commit_progress_before_memory_review_failure(self) -> None:
+        complete_wf = self.make(["T1: complete"])
+        np.command_start(None, complete_wf, "T1", base=self.base)
+        with patch.object(nc, "_load_memory_context", side_effect=RuntimeError("review unavailable")):
+            completed = nc.complete_with_memory_review(
+                None, complete_wf, "T1", "progress evidence", project_root=self.base
+            )
+        self.assertTrue(completed["ok"], completed)
+        self.assertTrue(completed["progress_committed"])
+        self.assertEqual(completed["memory_review"]["status"], "unavailable")
+        self.assertEqual(read_state(complete_wf)["tasks"][0]["status"], "completed")
+
+        block_wf = self.make(["T1: block"])
+        with patch.object(nc, "_load_memory_context", side_effect=RuntimeError("review unavailable")):
+            blocked = nc.block_with_memory_review(
+                None, block_wf, "T1", "waiting for source", project_root=self.base
+            )
+        self.assertTrue(blocked["ok"], blocked)
+        self.assertTrue(blocked["progress_committed"])
+        self.assertEqual(blocked["memory_review"]["status"], "unavailable")
+        self.assertEqual(read_state(block_wf)["tasks"][0]["status"], "blocked")
 
 
 if __name__ == "__main__":

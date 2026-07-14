@@ -64,11 +64,25 @@ Surface where the user is by echoing the engine, not by narrating from memory:
 - Products land under the workflow directory the engine already manages
   (`docs/nature-workflows/<workflow>/`) or a path the user chose; record that path
   as the step's `evidence`.
-- Evidence is a locator (a file path, or `memory.md#M3 (L12)` style pointer), so a
+- Evidence is a locator (a file path, or `memory.md#<title>` style pointer), so a
   resumed session can trace every completed step to its product. This replaces the
   old `_交付结果/00-20` folder convention.
 
-## 5. Decisions and resume
+## 5. Memory context and review
+
+- Use `nature_resume_with_memory` when a resume needs prior paper decisions. It
+  returns progress first and attaches bounded, low-trust context from one
+  explicitly selected scope; memory failure is partial context, not a progress
+  failure.
+- After `complete` or `block`, use the corresponding memory-review facade. It
+  commits progress first and only suggests facts worth remembering. Never retry
+  a progress mutation because a memory review is unavailable, and never write
+  memory automatically from the review.
+- Shared memory is `memory.md`; local memory is `memory.local.md` and must be
+  explicitly requested. Use stable `nm_` locators for citations and verify
+  dynamic journal facts against current official sources before delivery.
+
+## 6. Decisions and resume
 
 - At decision steps flagged in the template, apply `core/decision.md` before
   advancing; record the choice as evidence or a `log` note.

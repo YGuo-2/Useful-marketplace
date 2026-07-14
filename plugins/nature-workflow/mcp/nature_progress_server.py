@@ -4,17 +4,20 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Any
 
 
 SCRIPT_DIR = Path(__file__).resolve().parents[1] / "scripts"
+SERVER_VERSION = os.environ.get("NATURE_WORKFLOW_VERSION", "0.2.0")
 sys.path.insert(0, str(SCRIPT_DIR))
 
 from nature_progress import (  # noqa: E402
     DEFAULT_ROOT,
     NatureProgressError,
+    base_dir,
     command_block,
     command_complete,
     command_discover,
@@ -25,10 +28,23 @@ from nature_progress import (  # noqa: E402
     command_start,
     command_status,
 )
+from nature_context import (  # noqa: E402
+    block_with_memory_review,
+    complete_with_memory_review,
+    resume_with_memory,
+)
 from nature_memory import (  # noqa: E402
+    command_memory_consolidate_apply,
+    command_memory_consolidate_plan,
     command_memory_check,
+    command_memory_forget,
     command_memory_index,
     command_memory_list,
+    command_memory_migrate,
+    command_memory_recall,
+    command_memory_remember,
+    command_memory_show,
+    command_memory_supersede,
     command_memory_touch,
 )
 
@@ -168,7 +184,7 @@ TOOLS = [
     },
     {
         "name": "nature_memory_check",
-        "description": "Validate a Nature workflow memory.md against project-memory rules.",
+        "description": "Lint a Nature workflow memory.md (advisory: warnings plus one hard entry-count cap).",
         "inputSchema": {
             "type": "object",
             "properties": WORKFLOW_INPUTS,
@@ -176,12 +192,12 @@ TOOLS = [
     },
     {
         "name": "nature_memory_touch",
-        "description": "Refresh one memory.md entry timestamp from the system clock.",
+        "description": "Compatibility shim: refresh a legacy memory.md timestamp comment by unique title or alias.",
         "inputSchema": {
             "type": "object",
             "properties": {
                 **WORKFLOW_INPUTS,
-                "entry_id": {"type": "string"},
+                "entry_id": {"type": "string", "description": "Unique title or legacy alias to stamp."},
             },
             "required": ["entry_id"],
         },
@@ -203,6 +219,199 @@ TOOLS = [
         },
     },
 ]
+
+
+# These tools are appended to preserve the old Nature memory contract for one
+# compatibility cycle while making mutation scope explicit for new callers.
+TOOLS.extend(
+    [
+        {
+            "name": "nature_memory_remember",
+            "description": "Create or CAS-update one shared or local schema-v1 memory entry.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "project_root": {"type": "string"},
+                    "workflow_dir": {"type": "string"},
+                    "scope": {"type": "string", "enum": ["shared", "local"]},
+                    "title": {"type": "string"},
+                    "body": {"type": "string"},
+                    "metadata": {"type": "object"},
+                    "entry_id": {"type": "string"},
+                    "expected_etag": {"type": "string"},
+                },
+                "required": ["project_root", "workflow_dir", "scope", "title", "body", "metadata"],
+            },
+        },
+        {
+            "name": "nature_memory_recall",
+            "description": "Recall bounded, deterministic low-trust memory context from one explicit scope.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "project_root": {"type": "string"},
+                    "workflow_dir": {"type": "string"},
+                    "scope": {"type": "string", "enum": ["shared", "local"]},
+                    "query": {"type": "string"},
+                    "top_k": {"type": "integer", "minimum": 1, "maximum": 5},
+                    "max_bytes": {"type": "integer", "minimum": 1, "maximum": 4096},
+                    "filters": {"type": "object"},
+                },
+                "required": ["project_root", "workflow_dir", "scope", "query"],
+            },
+        },
+        {
+            "name": "nature_memory_show",
+            "description": "Show one stable memory entry and its derived successor locators.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "project_root": {"type": "string"},
+                    "workflow_dir": {"type": "string"},
+                    "scope": {"type": "string", "enum": ["shared", "local"]},
+                    "entry_id": {"type": "string"},
+                },
+                "required": ["project_root", "workflow_dir", "scope", "entry_id"],
+            },
+        },
+        {
+            "name": "nature_memory_forget",
+            "description": "Archive one active memory entry with an ETag and reason.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "project_root": {"type": "string"},
+                    "workflow_dir": {"type": "string"},
+                    "scope": {"type": "string", "enum": ["shared", "local"]},
+                    "entry_id": {"type": "string"},
+                    "expected_etag": {"type": "string"},
+                    "reason": {"type": "string"},
+                },
+                "required": ["project_root", "workflow_dir", "scope", "entry_id", "expected_etag", "reason"],
+            },
+        },
+        {
+            "name": "nature_memory_supersede",
+            "description": "Replace one active entry with a successor in the same workflow and scope.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "project_root": {"type": "string"},
+                    "workflow_dir": {"type": "string"},
+                    "scope": {"type": "string", "enum": ["shared", "local"]},
+                    "old_id": {"type": "string"},
+                    "expected_etag": {"type": "string"},
+                    "new_title": {"type": "string"},
+                    "new_body": {"type": "string"},
+                    "new_metadata": {"type": "object"},
+                },
+                "required": ["project_root", "workflow_dir", "scope", "old_id", "expected_etag", "new_title", "new_body", "new_metadata"],
+            },
+        },
+        {
+            "name": "nature_memory_consolidate_plan",
+            "description": "Build a deterministic, non-persistent consolidation plan.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "project_root": {"type": "string"},
+                    "workflow_dir": {"type": "string"},
+                    "scope": {"type": "string", "enum": ["shared", "local"]},
+                    "source_ids": {"type": "array", "items": {"type": "string"}},
+                },
+                "required": ["project_root", "workflow_dir", "scope", "source_ids"],
+            },
+        },
+        {
+            "name": "nature_memory_consolidate_apply",
+            "description": "Apply a caller-provided consolidation body with full source CAS.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "project_root": {"type": "string"},
+                    "workflow_dir": {"type": "string"},
+                    "scope": {"type": "string", "enum": ["shared", "local"]},
+                    "plan_id": {"type": "string"},
+                    "source_ids": {"type": "array", "items": {"type": "string"}},
+                    "source_etags": {"type": ["object", "array"]},
+                    "new_title": {"type": "string"},
+                    "new_body": {"type": "string"},
+                    "new_metadata": {"type": "object"},
+                },
+                "required": ["project_root", "workflow_dir", "scope", "plan_id", "source_ids", "source_etags", "new_title", "new_body", "new_metadata"],
+            },
+        },
+        {
+            "name": "nature_memory_migrate",
+            "description": "Explicitly dry-run or migrate legacy memory entries, per workflow.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "project_root": {"type": "string"},
+                    "workflow_dir": {"type": "string"},
+                    "scope": {"type": "string", "enum": ["shared", "local"]},
+                    "dry_run": {"type": "boolean"},
+                    "all_workflows": {"type": "boolean"},
+                },
+                "required": ["project_root", "scope"],
+            },
+        },
+        {
+            "name": "nature_resume_with_memory",
+            "description": "Resume progress and attach bounded memory context without coupling progress to memory.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "project_root": {"type": "string"},
+                    "workflow_root": {"type": "string"},
+                    "workflow_dir": {"type": "string"},
+                    "scope": {"type": "string", "enum": ["shared", "local"]},
+                    "query": {"type": "string"},
+                    "top_k": {"type": "integer"},
+                    "max_bytes": {"type": "integer"},
+                },
+                "required": ["project_root", "scope"],
+            },
+        },
+        {
+            "name": "nature_complete_with_memory_review",
+            "description": "Commit progress completion first, then return a non-blocking memory review.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "project_root": {"type": "string"},
+                    "workflow_root": {"type": "string"},
+                    "workflow_dir": {"type": "string"},
+                    "scope": {"type": "string", "enum": ["shared", "local"]},
+                    "task_id": {"type": "string"},
+                    "evidence": {"type": "string"},
+                    "notes": {"type": "string"},
+                    "top_k": {"type": "integer"},
+                    "max_bytes": {"type": "integer"},
+                },
+                "required": ["project_root", "scope", "task_id", "evidence"],
+            },
+        },
+        {
+            "name": "nature_block_with_memory_review",
+            "description": "Commit a progress blocker first, then return a non-blocking memory review.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "project_root": {"type": "string"},
+                    "workflow_root": {"type": "string"},
+                    "workflow_dir": {"type": "string"},
+                    "scope": {"type": "string", "enum": ["shared", "local"]},
+                    "task_id": {"type": "string"},
+                    "reason": {"type": "string"},
+                    "top_k": {"type": "integer"},
+                    "max_bytes": {"type": "integer"},
+                },
+                "required": ["project_root", "scope", "task_id", "reason"],
+            },
+        },
+    ]
+)
 
 
 def response(request_id: Any, result: Any = None, error: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -262,6 +471,31 @@ def _required_string(args: dict[str, Any], name: str) -> str:
     return raw
 
 
+def _project_root_required(args: dict[str, Any]) -> Path:
+    return _base(args) or base_dir()
+
+
+def _required_scope(args: dict[str, Any]) -> str:
+    scope = _required_string(args, "scope")
+    if scope not in {"shared", "local"}:
+        raise NatureProgressError("scope must be shared or local")
+    return scope
+
+
+def _required_object(args: dict[str, Any], name: str) -> dict[str, Any]:
+    value = args.get(name)
+    if not isinstance(value, dict):
+        raise NatureProgressError(f"{name} must be an object")
+    return value
+
+
+def _required_string_list(args: dict[str, Any], name: str) -> list[str]:
+    value = args.get(name)
+    if not isinstance(value, list) or not all(isinstance(item, str) and item.strip() for item in value):
+        raise NatureProgressError(f"{name} must be an array of non-empty strings")
+    return value
+
+
 def call_tool(name: str, args: dict[str, Any]) -> Any:
     base = _base(args)
     if name == "nature_new_workflow":
@@ -310,6 +544,121 @@ def call_tool(name: str, args: dict[str, Any]) -> Any:
         return command_memory_index(_root(args), _workflow(args), base=base, all_workflows=_workflow(args) is None)
     if name == "nature_memory_list":
         return command_memory_list(_root(args), _workflow(args), base=base)
+    if name == "nature_memory_remember":
+        return command_memory_remember(
+            _project_root_required(args),
+            _required_string(args, "workflow_dir"),
+            _required_scope(args),
+            _required_string(args, "title"),
+            _required_string(args, "body"),
+            _required_object(args, "metadata"),
+            entry_id=args.get("entry_id") or None,
+            expected_etag=args.get("expected_etag") or None,
+        )
+    if name == "nature_memory_recall":
+        return command_memory_recall(
+            _project_root_required(args),
+            _required_string(args, "workflow_dir"),
+            _required_scope(args),
+            _required_string(args, "query"),
+            top_k=args.get("top_k", 3),
+            max_bytes=args.get("max_bytes", 4096),
+            filters=args.get("filters") if isinstance(args.get("filters"), dict) else None,
+        )
+    if name == "nature_memory_show":
+        return command_memory_show(
+            _project_root_required(args),
+            _required_string(args, "workflow_dir"),
+            _required_scope(args),
+            _required_string(args, "entry_id"),
+        )
+    if name == "nature_memory_forget":
+        return command_memory_forget(
+            _project_root_required(args),
+            _required_string(args, "workflow_dir"),
+            _required_scope(args),
+            _required_string(args, "entry_id"),
+            _required_string(args, "expected_etag"),
+            _required_string(args, "reason"),
+        )
+    if name == "nature_memory_supersede":
+        return command_memory_supersede(
+            _project_root_required(args),
+            _required_string(args, "workflow_dir"),
+            _required_scope(args),
+            _required_string(args, "old_id"),
+            _required_string(args, "expected_etag"),
+            _required_string(args, "new_title"),
+            _required_string(args, "new_body"),
+            _required_object(args, "new_metadata"),
+        )
+    if name == "nature_memory_consolidate_plan":
+        return command_memory_consolidate_plan(
+            _project_root_required(args),
+            _required_string(args, "workflow_dir"),
+            _required_scope(args),
+            _required_string_list(args, "source_ids"),
+        )
+    if name == "nature_memory_consolidate_apply":
+        source_etags = args.get("source_etags")
+        if not isinstance(source_etags, (dict, list)):
+            raise NatureProgressError("source_etags must be an object or array")
+        return command_memory_consolidate_apply(
+            _project_root_required(args),
+            _required_string(args, "workflow_dir"),
+            _required_scope(args),
+            _required_string(args, "plan_id"),
+            _required_string_list(args, "source_ids"),
+            source_etags,
+            _required_string(args, "new_title"),
+            _required_string(args, "new_body"),
+            _required_object(args, "new_metadata"),
+        )
+    if name == "nature_memory_migrate":
+        all_workflows = bool(args.get("all_workflows", False))
+        workflow_dir = _workflow(args)
+        if not all_workflows and not workflow_dir:
+            raise NatureProgressError("workflow_dir is required unless all_workflows is true")
+        return command_memory_migrate(
+            _project_root_required(args),
+            workflow_dir,
+            _required_scope(args),
+            dry_run=bool(args.get("dry_run", False)),
+            all_workflows=all_workflows,
+        )
+    if name == "nature_resume_with_memory":
+        return resume_with_memory(
+            _root(args),
+            _workflow(args),
+            project_root=_project_root_required(args),
+            scope=_required_scope(args),
+            query=args.get("query") if isinstance(args.get("query"), str) else None,
+            top_k=args.get("top_k", 3),
+            max_bytes=args.get("max_bytes", 4096),
+        )
+    if name == "nature_complete_with_memory_review":
+        return complete_with_memory_review(
+            _root(args),
+            _workflow(args),
+            _required_string(args, "task_id"),
+            _required_string(args, "evidence"),
+            args.get("notes", "") if isinstance(args.get("notes", ""), str) else "",
+            project_root=_project_root_required(args),
+            scope=_required_scope(args),
+            top_k=args.get("top_k", 3),
+            max_bytes=args.get("max_bytes", 4096),
+        )
+    if name == "nature_block_with_memory_review":
+        return block_with_memory_review(
+            _root(args),
+            _workflow(args),
+            _required_string(args, "task_id"),
+            _required_string(args, "reason"),
+            project_root=_project_root_required(args),
+            scope=_required_scope(args),
+            top_k=args.get("top_k", 3),
+            max_bytes=args.get("max_bytes", 4096),
+        )
     raise NatureProgressError(f"Unknown tool: {name}")
 
 
@@ -322,7 +671,7 @@ def handle(message: dict[str, Any]) -> dict[str, Any] | None:
             {
                 "protocolVersion": "2024-11-05",
                 "capabilities": {"tools": {}},
-                "serverInfo": {"name": "nature-workflow-progress", "version": "0.1.0"},
+                "serverInfo": {"name": "nature-workflow-progress", "version": SERVER_VERSION},
             },
         )
     if method == "notifications/initialized":

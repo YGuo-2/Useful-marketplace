@@ -1096,6 +1096,21 @@ class ValidatorRegressionTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("Circular", result.stderr)
 
+    def test_validator_accepts_completed_task_graph_without_pending_waves(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            specs_dir = Path(tmp)
+            tasks = valid_feature_tasks()
+            tasks = tasks.replace("- [ ] **T-001:**", "- [x] **T-001:**")
+            tasks = tasks.replace("- 状态: pending", "- 状态: done", 1)
+            tasks = tasks.replace("- 验证证据: pending", "- 验证证据: pytest passed", 1)
+            tasks = tasks.replace("> **进度：** 2 / 3 已完成", "> **进度：** 3 / 3 已完成")
+            make_requirements_first(specs_dir, tasks=tasks)
+            init_progress(specs_dir)
+            result = run_validator(specs_dir, "requirements-first")
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("所有任务已完成", result.stdout)
+
     def test_sync_check_flags_changed_artifact(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             specs_dir = Path(tmp)

@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "artifact_type": "reviewer_runtime_contract",
+  "scope": "offline_fixture_policy",
+  "checks": {
+    "runtime.write_recall": true,
+    "runtime.locator_valid": true,
+    "runtime.forbidden_content_absent": true,
+    "runtime.no_write_boundary": true,
+    "runtime.unexpected_skips": true,
+    "runtime.unauthorized_tool_calls": []
+  }
+}

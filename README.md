@@ -44,13 +44,20 @@ The plugin is released under the MIT license and keeps the upstream [`Yuan1z0825
 
 The plugin also adds a small workflow state layer under `docs/nature-workflows/` by default. It is intentionally lighter than `spec-workflow`: no spec approval freeze, no acceptance rounds, no spec-style business-code commit guard, and no business-code enforcement. Each workflow has `nature.yml`, `progress.md`, and `tasks.md`; `nature.yml` keeps its historical name for compatibility, but its content is JSON. Read-only commands such as `status` and `resume` do not rewrite those files.
 
-Each workflow can also keep a concise paper-level `memory.md` beside those files.
-Agents write durable project facts in entries such as `## M3 · 引用风格`, while
-`nature_memory.py touch` stamps the UTC timestamp from the system clock. The
-memory checker enforces at most 12 entries, title length at most 40 characters,
-body length at most 280 characters and 4 lines, and valid generated timestamps.
-`nature_memory.py index` maintains a sentinel section in the project-root
-`AGENTS.md` so future Codex runs can discover available paper memory quickly.
+Each workflow can also keep paper-scoped memory beside those files: shared facts
+live in `memory.md`, while untracked-and-ignored private facts may live in
+`memory.local.md`. A level-2 heading is human-readable, but schema-v1 hidden JSON
+metadata supplies an immutable `nm_` UUID4 identity, provenance, evidence,
+confidence, lifecycle, and machine-generated timestamps. The physical file, not
+metadata supplied by a caller, determines the scope.
+
+Memory is low-trust project data. `list` and `recall` scan the canonical file at
+read time; `AGENTS.md` contains only a fixed discovery instruction and never
+receives titles, body text, workflow names, or evidence. Recall is deterministic,
+lexical, bounded to 3 results by default (5 maximum) and 4096 UTF-8 bytes.
+Writes use an explicit workflow and scope, a workflow lock, entry/file ETags,
+and an atomic replacement. Local mutation is fail-closed unless Git proves that
+the file is both untracked and ignored.
 
 CLI examples:
 
@@ -62,7 +69,8 @@ python plugins/nature-workflow/scripts/nature_progress.py start T1
 python plugins/nature-workflow/scripts/nature_progress.py complete T1 --evidence "reader exported"
 python plugins/nature-workflow/scripts/nature_progress.py block T2 --reason "waiting for source PDF"
 python plugins/nature-workflow/scripts/nature_progress.py resume
-python plugins/nature-workflow/scripts/nature_memory.py touch M1 --workflow <workflow-dir>
+python plugins/nature-workflow/scripts/nature_memory.py list --workflow <workflow-dir>
+python plugins/nature-workflow/scripts/nature_memory.py migrate --workflow <workflow-dir> --dry-run
 python plugins/nature-workflow/scripts/nature_memory.py check --workflow <workflow-dir>
 python plugins/nature-workflow/scripts/nature_memory.py index --root docs/nature-workflows
 ```
@@ -81,17 +89,34 @@ MCP tools are exposed through `plugins/nature-workflow/mcp/nature_progress_serve
 - `nature_memory_touch`
 - `nature_memory_index`
 - `nature_memory_list`
+- `nature_memory_remember`
+- `nature_memory_recall`
+- `nature_memory_show`
+- `nature_memory_forget`
+- `nature_memory_supersede`
+- `nature_memory_consolidate_plan`
+- `nature_memory_consolidate_apply`
+- `nature_memory_migrate`
+- `nature_resume_with_memory`
+- `nature_complete_with_memory_review`
+- `nature_block_with_memory_review`
 
 When calling these MCP tools from a project, pass `project_root` to anchor the default `docs/nature-workflows/` directory in that project instead of the plugin directory.
 
-A pre-commit hook template for memory validation lives at:
+The old `check`, `touch`, `index`, and `list` operations remain as additive
+compatibility shims. `touch` only maintains legacy timestamp comments; canonical
+schema-v1 writes go through `nature_memory_remember` or the Python API. Legacy
+files are read without modification and require an explicit `migrate` dry-run and
+per-workflow migration.
+
+A pre-commit hook template for memory linting lives at:
 
 ```text
 plugins/nature-workflow/assets/hooks/pre-commit-nature-memory
 ```
 
-This hook only validates `memory.md` format; it does not gate business-code
-changes.
+This hook only lints `memory.md` and is advisory — it prints warnings but never
+blocks a commit.
 
 ## What It Does
 

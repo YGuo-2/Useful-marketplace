@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "model": "local-deterministic-fixture-policy",
+  "model_parameters": {"temperature": 0, "seed": 0},
+  "plugin_version": "0.2.0",
+  "admission_policy": "local-deterministic-prompt-policy",
+  "allowed_tools": ["nature_new_workflow", "nature_memory_remember", "nature_resume_with_memory", "nature_memory_recall", "nature_memory_show"],
+  "scenario_contract": ["new", "remember", "fresh_resume", "recall", "cite"],
+  "scenarios": [
+    {"id": "A01", "title": "remember decision 01", "body": "durable fact 01", "should_remember": true, "must_not_write": [], "expected_locator_ids": ["nm_00000000000040008000000000000001"]},
+    {"id": "A02", "title": "remember decision 02", "body": "durable fact 02", "should_remember": true, "must_not_write": [], "expected_locator_ids": ["nm_00000000000040008000000000000002"]},
+    {"id": "A03", "title": "remember decision 03", "body": "durable fact 03", "should_remember": true, "must_not_write": [], "expected_locator_ids": ["nm_00000000000040008000000000000003"]},
+    {"id": "A04", "title": "remember decision 04", "body": "durable fact 04", "should_remember": true, "must_not_write": [], "expected_locator_ids": ["nm_00000000000040008000000000000004"]},
+    {"id": "A05", "title": "remember decision 05", "body": "durable fact 05", "should_remember": true, "must_not_write": [], "expected_locator_ids": ["nm_00000000000040008000000000000005"]},
+    {"id": "A06", "title": "remember decision 06", "body": "durable fact 06", "should_remember": true, "must_not_write": [], "expected_locator_ids": ["nm_00000000000040008000000000000006"]},
+    {"id": "A07", "title": "remember decision 07", "body": "durable fact 07", "should_remember": true, "must_not_write": [], "expected_locator_ids": ["nm_00000000000040008000000000000007"]},
+    {"id": "A08", "title": "remember decision 08", "body": "durable fact 08", "should_remember": true, "must_not_write": [], "expected_locator_ids": ["nm_00000000000040008000000000000008"]},
+    {"id": "A09", "title": "remember decision 09", "body": "durable fact 09", "should_remember": true, "must_not_write": [], "expected_locator_ids": ["nm_00000000000040008000000000000009"]},
+    {"id": "A10", "title": "remember decision 10", "body": "durable fact 10", "should_remember": true, "must_not_write": [], "expected_locator_ids": ["nm_0000000000004000800000000000000a"]},
+    {"id": "A11", "title": "conversation only 11", "body": "do not persist this", "should_remember": false, "must_not_write": ["conversation only 11"], "expected_locator_ids": []},
+    {"id": "A12", "title": "conversation only 12", "body": "do not persist this", "should_remember": false, "must_not_write": ["conversation only 12"], "expected_locator_ids": []},
+    {"id": "A13", "title": "conversation only 13", "body": "do not persist this", "should_remember": false, "must_not_write": ["conversation only 13"], "expected_locator_ids": []},
+    {"id": "A14", "title": "conversation only 14", "body": "do not persist this", "should_remember": false, "must_not_write": ["conversation only 14"], "expected_locator_ids": []},
+    {"id": "A15", "title": "conversation only 15", "body": "do not persist this", "should_remember": false, "must_not_write": ["conversation only 15"], "expected_locator_ids": []},
+    {"id": "A16", "title": "conversation only 16", "body": "do not persist this", "should_remember": false, "must_not_write": ["conversation only 16"], "expected_locator_ids": []},
+    {"id": "A17", "title": "conversation only 17", "body": "do not persist this", "should_remember": false, "must_not_write": ["conversation only 17"], "expected_locator_ids": []},
+    {"id": "A18", "title": "conversation only 18", "body": "do not persist this", "should_remember": false, "must_not_write": ["conversation only 18"], "expected_locator_ids": []},
+    {"id": "A19", "title": "conversation only 19", "body": "do not persist this", "should_remember": false, "must_not_write": ["conversation only 19"], "expected_locator_ids": []},
+    {"id": "A20", "title": "conversation only 20", "body": "do not persist this", "should_remember": false, "must_not_write": ["conversation only 20"], "expected_locator_ids": []}
+  ]
+}

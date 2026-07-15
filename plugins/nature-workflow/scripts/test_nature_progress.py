@@ -4,9 +4,11 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 
@@ -15,6 +17,8 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 import nature_progress as np  # noqa: E402
+import nature_context as nc  # noqa: E402
+import nature_memory  # noqa: E402
 
 
 def read_state(workflow_dir: str) -> dict:
@@ -47,6 +51,61 @@ class StateEngineTests(unittest.TestCase):
         # progress.md mirrors disk
         progress = (Path(wf) / "progress.md").read_text(encoding="utf-8")
         self.assertIn("Active task: T1", progress)
+
+    def test_new_can_create_a_missing_workflow_root(self) -> None:
+        root = self.base / "docs" / "nature-workflows"
+        result = np.command_new_workflow(str(root), "wf", "WF", ["T1: first"], base=self.base)
+        self.assertTrue(root.is_dir())
+        self.assertEqual(Path(result["workflow_dir"]).parent, root)
+
+    def test_missing_workflow_root_fails_closed_with_structured_error(self) -> None:
+        missing = self.base / "docs" / "nature-workflows" / "missing"
+
+        for operation in (
+            lambda: np.command_discover(str(missing), base=self.base),
+            lambda: np.checked_workflow_dir(None, str(missing), base=self.base),
+        ):
+            with self.assertRaises(np.NatureProgressError) as raised:
+                operation()
+            error = raised.exception
+            self.assertEqual(error.code, "workflow_root_not_found")
+            self.assertEqual(error.context["workflow_root"], str(missing))
+            self.assertFalse(error.retryable)
+
+    def test_memory_compatibility_paths_fail_closed_on_missing_workflow_root(self) -> None:
+        missing = self.base / "docs" / "nature-workflows" / "missing"
+        operations = (
+            lambda: nature_memory.command_memory_check(str(missing), base=self.base, all_workflows=True),
+            lambda: nature_memory.command_memory_list(str(missing), base=self.base, all_workflows=True),
+            lambda: nature_memory.command_memory_recall_all(self.base, missing, "shared", "query"),
+            lambda: nature_memory.command_memory_touch(str(missing), None, "M1", base=self.base),
+        )
+
+        for operation in operations:
+            result = operation()
+            self.assertFalse(result["ok"], result)
+            self.assertEqual(result["error"]["code"], "workflow_root_not_found")
+            self.assertEqual(result["error"]["workflow_root"], str(missing))
+
+    def test_memory_migrate_all_fails_closed_on_missing_default_workflow_root(self) -> None:
+        result = nature_memory.command_memory_migrate(self.base, scope="shared", all_workflows=True)
+        self.assertFalse(result["ok"], result)
+        self.assertEqual(result["error"]["code"], "workflow_root_not_found")
+        self.assertEqual(
+            result["error"]["workflow_root"],
+            str(self.base / "docs" / "nature-workflows"),
+        )
+
+    def test_main_emits_structured_missing_root_error(self) -> None:
+        missing = self.base / "docs" / "nature-workflows" / "missing"
+        with patch.dict(os.environ, {"NATURE_WORKFLOW_BASE_DIR": str(self.base)}), patch("builtins.print") as printed:
+            exit_code = np.main(["discover", "--root", str(missing)])
+
+        self.assertEqual(exit_code, 2)
+        payload = json.loads(printed.call_args.args[0])
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["error"]["code"], "workflow_root_not_found")
+        self.assertEqual(payload["error"]["workflow_root"], str(missing))
 
     # --- regression: issue #1, status/disk must not disagree ------------
 
@@ -330,6 +389,188 @@ class StateEngineTests(unittest.TestCase):
         np.command_resume(None, wf, base=self.base)
         after = (Path(wf) / "nature.yml").read_text(encoding="utf-8")
         self.assertEqual(before, after)
+
+    def test_nature_progress_remains_independent_from_memory_module(self) -> None:
+        source = (SCRIPT_DIR / "nature_progress.py").read_text(encoding="utf-8")
+        self.assertNotIn("nature_memory", source)
+
+    def test_resume_with_memory_parses_canonical_file_once(self) -> None:
+        wf = self.make(["T1: collect evidence"])
+        nature_memory.command_memory_remember(
+            self.base,
+            wf,
+            "shared",
+            "collect evidence decision",
+            "use the source ledger",
+            {"kind": "decision"},
+        )
+        original = nature_memory.parse_memory_document
+        calls = 0
+
+        def counted(text: str, source_path=None):
+            nonlocal calls
+            calls += 1
+            return original(text, source_path)
+
+        with patch.object(nature_memory, "parse_memory_document", side_effect=counted):
+            result = nc.resume_with_memory(project_root=self.base, workflow_dir=wf)
+
+        self.assertTrue(result["ok"], result)
+        self.assertEqual(calls, 1)
+        self.assertIn(result["memory_context"]["status"], {"available", "partial"})
+
+    def test_resume_with_memory_preserves_partial_parse_errors(self) -> None:
+        wf = self.make(["T1: collect evidence"])
+        metadata = {
+            "schema": 1,
+            "id": "nm_f47ac10b58cc4372a5670e02b2c3d479",
+            "kind": "decision",
+            "lifecycle": "active",
+            "provenance": "user",
+            "created_at": "2026-07-14T07:00:00Z",
+            "updated_at": "2026-07-14T07:00:00Z",
+        }
+        text = nature_memory.serialize_entry("collect evidence", "first", metadata)
+        text += nature_memory.serialize_entry("duplicate evidence", "second", metadata)
+        (Path(wf) / "memory.md").write_text(text, encoding="utf-8")
+
+        result = nc.resume_with_memory(project_root=self.base, workflow_dir=wf, query="collect evidence")
+        context = result["memory_context"]
+        self.assertEqual(context["status"], "partial")
+        self.assertTrue(context["results"], context)
+        self.assertEqual(context["error"]["code"], "memory_parse_errors")
+        self.assertIn("duplicate_id", {item["code"] for item in context["diagnostics"]})
+        self.assertIn("duplicate_id", {item["code"] for item in context["error"]["diagnostics"]})
+
+    def test_resume_memory_failure_is_partial_without_changing_progress(self) -> None:
+        wf = self.make(["T1: collect evidence"])
+        with patch.object(nc, "_load_memory_context", side_effect=RuntimeError("unavailable")):
+            result = nc.resume_with_memory(project_root=self.base, workflow_dir=wf)
+
+        self.assertTrue(result["ok"], result)
+        self.assertEqual(result["progress"]["resume_state"], "ready")
+        self.assertEqual(result["memory_context"]["status"], "unavailable")
+
+    def test_partial_facade_context_respects_requested_byte_budget(self) -> None:
+        wf = self.make(["T1: collect evidence"])
+        metadata = {
+            "schema": 1,
+            "id": "nm_f47ac10b58cc4372a5670e02b2c3d479",
+            "kind": "decision",
+            "lifecycle": "active",
+            "provenance": "user",
+            "created_at": "2026-07-14T07:00:00Z",
+            "updated_at": "2026-07-14T07:00:00Z",
+        }
+        text = nature_memory.serialize_entry("collect evidence", "first", metadata)
+        text += "\n".join(f"## malformed-{index}\n<!-- nature-memory: {{}} -->\nbody\n" for index in range(20))
+        (Path(wf) / "memory.md").write_text(text, encoding="utf-8")
+        result = nc.resume_with_memory(project_root=self.base, workflow_dir=wf, query="collect evidence", max_bytes=256)
+        context = result["memory_context"]
+        self.assertLessEqual(len(json.dumps(context, ensure_ascii=False, separators=(",", ":")).encode("utf-8")), 256)
+        self.assertIn("error", context)
+
+    def test_unexpected_facade_exception_is_diagnosable_after_progress_commit(self) -> None:
+        wf = self.make(["T1: collect evidence"])
+        with patch.object(nc, "_load_memory_context", side_effect=KeyError("internal")):
+            result = nc.complete_with_memory_review(
+                None, wf, "T1", "complete evidence", project_root=self.base
+            )
+        self.assertTrue(result["ok"], result)
+        self.assertTrue(result["progress_committed"])
+        self.assertEqual(result["memory_review"]["error"]["code"], "memory_review_internal_error")
+
+    def test_resume_preserves_structured_memory_error_and_requires_project_root(self) -> None:
+        wf = self.make(["T1: collect evidence"])
+        with patch.object(
+            nature_memory,
+            "command_memory_recall",
+            return_value={"ok": False, "error": {"code": "invalid_utf8", "detail": "memory file must be valid UTF-8", "retryable": False}},
+        ):
+            result = nc.resume_with_memory(project_root=self.base, workflow_dir=wf)
+        self.assertEqual(result["memory_context"]["status"], "unavailable")
+        self.assertEqual(result["memory_context"]["error"]["code"], "invalid_utf8")
+        with self.assertRaises(np.NatureProgressError):
+            nc.resume_with_memory(workflow_dir=wf)
+
+    def test_complete_and_block_commit_progress_before_memory_review_failure(self) -> None:
+        complete_wf = self.make(["T1: complete"])
+        np.command_start(None, complete_wf, "T1", base=self.base)
+        with patch.object(nc, "_load_memory_context", side_effect=RuntimeError("review unavailable")):
+            completed = nc.complete_with_memory_review(
+                None, complete_wf, "T1", "progress evidence", project_root=self.base
+            )
+        self.assertTrue(completed["ok"], completed)
+        self.assertTrue(completed["progress_committed"])
+        self.assertEqual(completed["memory_review"]["status"], "unavailable")
+        self.assertEqual(read_state(complete_wf)["tasks"][0]["status"], "completed")
+
+        block_wf = self.make(["T1: block"])
+        with patch.object(nc, "_load_memory_context", side_effect=RuntimeError("review unavailable")):
+            blocked = nc.block_with_memory_review(
+                None, block_wf, "T1", "waiting for source", project_root=self.base
+            )
+        self.assertTrue(blocked["ok"], blocked)
+        self.assertTrue(blocked["progress_committed"])
+        self.assertEqual(blocked["memory_review"]["status"], "unavailable")
+        self.assertEqual(read_state(block_wf)["tasks"][0]["status"], "blocked")
+
+    def test_complete_review_preserves_structured_memory_error_context(self) -> None:
+        wf = self.make(["T1: complete"])
+        np.command_start(None, wf, "T1", base=self.base)
+        with patch.object(
+            nature_memory,
+            "command_memory_recall",
+            return_value={
+                "ok": False,
+                "error": {
+                    "code": "invalid_utf8",
+                    "detail": "memory file must be valid UTF-8",
+                    "retryable": True,
+                    "memory_path": "memory.md",
+                    "current_file_etag": "etag-current",
+                },
+            },
+        ):
+            result = nc.complete_with_memory_review(
+                None, wf, "T1", "progress evidence", project_root=self.base
+            )
+        self.assertTrue(result["progress_committed"], result)
+        self.assertEqual(result["memory_review"]["status"], "unavailable")
+        self.assertEqual(result["memory_review"]["error"]["code"], "invalid_utf8")
+        self.assertEqual(result["memory_review"]["error"]["current_file_etag"], "etag-current")
+
+    def test_facade_rejects_non_string_optional_arguments(self) -> None:
+        wf = self.make(["T1: collect evidence"])
+        with self.assertRaises(np.NatureProgressError) as query_error:
+            nc.resume_with_memory(project_root=self.base, workflow_dir=wf, query=123)  # type: ignore[arg-type]
+        self.assertEqual(query_error.exception.code, "invalid_query")
+
+        with self.assertRaises(np.NatureProgressError) as notes_error:
+            nc.complete_with_memory_review(
+                None,
+                wf,
+                "T1",
+                "evidence",
+                notes=123,  # type: ignore[arg-type]
+                project_root=self.base,
+            )
+        self.assertEqual(notes_error.exception.code, "invalid_notes")
+
+    def test_block_review_keeps_json_safe_response_after_unexpected_review_failure(self) -> None:
+        wf = self.make(["T1: block"])
+        with patch.object(nc, "_review_after_progress", side_effect=KeyError("review unavailable")):
+            result = nc.block_with_memory_review(
+                None,
+                wf,
+                "T1",
+                "waiting for source",
+                project_root=self.base,
+            )
+        self.assertTrue(result["ok"], result)
+        self.assertTrue(result["progress_committed"])
+        self.assertEqual(result["memory_review"]["error"]["code"], "memory_review_internal_error")
+        self.assertEqual(read_state(wf)["tasks"][0]["status"], "blocked")
 
 
 if __name__ == "__main__":

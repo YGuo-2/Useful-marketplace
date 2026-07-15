@@ -4,7 +4,10 @@
       "command": "python",
       "args": [
         "${CLAUDE_PLUGIN_ROOT}/mcp/nature_progress_server.py"
-      ]
+      ],
+      "env": {
+        "NATURE_WORKFLOW_VERSION": "0.2.0"
+      }
     }
   }
 }

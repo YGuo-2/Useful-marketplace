@@ -683,6 +683,8 @@ def check_task_graph(specs_dir: str, workflow: str) -> list[Result]:
     waves = execution_waves(tasks)
     if waves:
         results.append((True, f"tasks.md 可计算执行 waves: {waves}"))
+    elif tasks and all(task.state in {"done", "skipped"} for task in tasks):
+        results.append((True, "tasks.md 所有任务已完成，无待执行 waves"))
     else:
         results.append((False, "tasks.md 无法计算执行 waves"))
     return results

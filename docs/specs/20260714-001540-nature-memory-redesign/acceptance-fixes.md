@@ -1,7 +1,7 @@
 # Acceptance Fixes
 
 > **Source:** E:/CodeProject/Useful-marketplace/docs/specs/20260714-001540-nature-memory-redesign/acceptance_state.json
-> **Round:** 5
+> **Round:** 6
 > **Policy:** rounds 1-3 fix all actionable issues; round 4+ auto-fix P0-P2 only
 > **Original tasks:** 12 frozen tasks; do not append acceptance fixes to tasks.md
 
@@ -171,6 +171,19 @@
 | F-160 | I-165 | P2 | U-003 | done | CAS restore failures include current/expected ETag context and preserve auditable zero-write behavior; focused concurrency/safety tests pass. |
 | F-161 | I-166 | P1 | U-008 | done | all-workflows migration converts replacement OSError to structured per-workflow failure, cleans operation backup, preserves bytes, and permits retry; migration regressions pass. |
 | F-162 | I-167 | P1 | U-010 | done | Updated tasks.md through the Spec Progress script's allowed completion-log/top-summary fields with current checkpoint 6bb7d9a. T-011/T-012 now record independent reviewer_verdicts.json evidence, offline-only eval scope, 171 Windows script tests, 19 WSL safety/concurrency tests, 10 MCP tests, compile/JSON/spec/resume/diff checks; no design/requirements/task structure changed. |
+| F-163 | I-168 | P2 | U-001 | pending | pending |
+| F-164 | I-169 | P1 | U-002 | pending | pending |
+| F-165 | I-170 | P2 | U-002 | pending | pending |
+| F-166 | I-171 | P2 | U-002 | pending | pending |
+| F-167 | I-172 | P1 | U-003 | pending | pending |
+| F-168 | I-173 | P1 | U-003 | pending | pending |
+| F-169 | I-174 | P2 | U-003 | pending | pending |
+| F-170 | I-175 | P2 | U-006 | pending | pending |
+| F-171 | I-176 | P1 | U-008 | pending | pending |
+| F-172 | I-177 | P2 | U-009 | pending | pending |
+| F-173 | I-178 | P2 | U-009 | pending | pending |
+| F-174 | I-179 | P1 | U-010 | pending | pending |
+| F-175 | I-180 | P2 | U-010 | pending | pending |
 
 ## Deferred Issues
 

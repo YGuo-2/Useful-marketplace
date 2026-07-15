@@ -3,9 +3,7 @@
     "U-001",
     "U-002",
     "U-003",
-    "U-004",
     "U-006",
-    "U-007",
     "U-008",
     "U-009",
     "U-010"
@@ -1423,6 +1421,262 @@
       "role": "adversarial",
       "round": 5,
       "started_at": "2026-07-15 03:09:05",
+      "status": "completed",
+      "task_ids": [
+        "T-010",
+        "T-011",
+        "T-012"
+      ],
+      "unit_id": "U-010"
+    },
+    {
+      "agent_id": "round-6-R-U-001",
+      "completed_at": "2026-07-15 03:55:26",
+      "report": "## Review Unit\n- Unit: U-001 / T-001\n- Status: ACTIONABLE_ISSUES\n- Completion: incomplete; round 5 locator and ordinary nm_ title fixes pass, UUID-shaped nm_ title remains unresolved.\n- Spec Adherence: deviation.\n- Over-Fallback: present; stable-ID parsing wins over unique title resolution.\n- Verification: 103 memory tests pass, but no UUID-shaped title regression.\n- Issues: P2 T-001: unique title nm_f47ac10b58cc4372a5670e02b2c3d479 is treated as stable ID and show/touch return not_found.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "first_wave",
+      "round": 6,
+      "started_at": "2026-07-15 03:45:01",
+      "status": "completed",
+      "task_ids": [
+        "T-001"
+      ],
+      "unit_id": "U-001"
+    },
+    {
+      "agent_id": "round-6-A-U-001",
+      "completed_at": "2026-07-15 05:03:20",
+      "report": "Unit U-001/T-001; ACTIONABLE_ISSUES. I-168 confirmed: valid UUID-shaped nm_ unique title is not title-resolvable; no new issue.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "adversarial",
+      "round": 6,
+      "started_at": "2026-07-15 03:56:10",
+      "status": "completed",
+      "task_ids": [
+        "T-001"
+      ],
+      "unit_id": "U-001"
+    },
+    {
+      "agent_id": "round-6-R-U-002",
+      "completed_at": "2026-07-15 03:55:26",
+      "report": "## Review Unit\n- Unit: U-002 / T-002\n- Status: ACTIONABLE_ISSUES\n- Completion: incomplete; round 5 fixes do not hold under race/long-path probes.\n- Spec Adherence: deviation.\n- Over-Fallback: present.\n- Verification: 103 memory, 32 progress, 11 MCP tests pass, but three boundary probes fail.\n- Issues: P1 T-002 path check/read TOCTOU can expose external hardlink. P2 T-002 missing workflow root is not uniformly structured/fail closed. P2 T-002 max_bytes=256 long-path diagnostics can exceed budget and lose locator identity.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "first_wave",
+      "round": 6,
+      "started_at": "2026-07-15 03:45:01",
+      "status": "completed",
+      "task_ids": [
+        "T-002"
+      ],
+      "unit_id": "U-002"
+    },
+    {
+      "agent_id": "round-6-A-U-002",
+      "completed_at": "2026-07-15 05:03:20",
+      "report": "Unit U-002/T-002; ACTIONABLE_ISSUES. I-169 read hardlink TOCTOU, I-170 workflow-root inconsistency, and I-171 long-path budget overflow all reproduced; no new issue.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "adversarial",
+      "round": 6,
+      "started_at": "2026-07-15 03:56:10",
+      "status": "completed",
+      "task_ids": [
+        "T-002"
+      ],
+      "unit_id": "U-002"
+    },
+    {
+      "agent_id": "round-6-R-U-003",
+      "completed_at": "2026-07-15 03:55:27",
+      "report": "## Review Unit\n- Unit: U-003 / T-003\n- Status: ACTIONABLE_ISSUES\n- Completion: incomplete; POSIX restore and evidence paths remain unsafe/unproven.\n- Spec Adherence: deviation.\n- Over-Fallback: none for unsupported os.replace, but restore failure can lose content.\n- Verification: WSL CAS regression evidence is invalid; two tests use incomplete metadata and WSL memory suite has 2 failures/1 error.\n- Issues: P1 T-003 POSIX restore failure can leave candidate and discard external/original content. P1 T-003 POSIX evidence tests fail before exercising CAS. P2 T-003 CAS failures omit workflow/scope/entry/repair context.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "first_wave",
+      "round": 6,
+      "started_at": "2026-07-15 03:45:01",
+      "status": "completed",
+      "task_ids": [
+        "T-003"
+      ],
+      "unit_id": "U-003"
+    },
+    {
+      "agent_id": "round-6-A-U-003",
+      "completed_at": "2026-07-15 05:03:20",
+      "report": "Unit U-003/T-003; ACTIONABLE_ISSUES. I-172 POSIX restore loss, I-173 invalid/failing WSL CAS evidence, and I-174 incomplete CAS context confirmed; no new issue.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "adversarial",
+      "round": 6,
+      "started_at": "2026-07-15 03:56:10",
+      "status": "completed",
+      "task_ids": [
+        "T-003"
+      ],
+      "unit_id": "U-003"
+    },
+    {
+      "agent_id": "round-6-R-U-004",
+      "completed_at": "2026-07-15 03:55:26",
+      "report": "## Review Unit\n- Unit: U-004 / T-004\n- Status: ACTIONABLE_ISSUES\n- Completion: implementation complete; persistent regression gap remains.\n- Spec Adherence: strict behavior, incomplete evidence.\n- Over-Fallback: none.\n- Verification: core/progress/MCP tests pass; existing deferred I-118 remains.\n- Issues: existing deferred P3 I-118 only; no duplicate recorded.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "first_wave",
+      "round": 6,
+      "started_at": "2026-07-15 03:45:01",
+      "status": "completed",
+      "task_ids": [
+        "T-004"
+      ],
+      "unit_id": "U-004"
+    },
+    {
+      "agent_id": "round-6-A-U-004",
+      "completed_at": "2026-07-15 05:03:20",
+      "report": "Unit U-004/T-004; ACTIONABLE_ISSUES only for existing deferred P3 I-118; no P0-P2 and no duplicate.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "adversarial",
+      "round": 6,
+      "started_at": "2026-07-15 03:56:11",
+      "status": "completed",
+      "task_ids": [
+        "T-004"
+      ],
+      "unit_id": "U-004"
+    },
+    {
+      "agent_id": "round-6-R-U-006",
+      "completed_at": "2026-07-15 03:55:26",
+      "report": "## Review Unit\n- Unit: U-006 / T-006\n- Status: ACTIONABLE_ISSUES\n- Completion: incomplete; parent symlink passes but CRLF preservation fails under WSL.\n- Spec Adherence: deviation.\n- Over-Fallback: present in newline handling.\n- Verification: WSL regression test fails because command_memory_index read_text normalizes CRLF before repair.\n- Issues: P2 T-006/I-153 residual: AGENTS repair does not preserve CRLF/external bytes.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "first_wave",
+      "round": 6,
+      "started_at": "2026-07-15 03:45:01",
+      "status": "completed",
+      "task_ids": [
+        "T-006"
+      ],
+      "unit_id": "U-006"
+    },
+    {
+      "agent_id": "round-6-A-U-006",
+      "completed_at": "2026-07-15 05:03:20",
+      "report": "Unit U-006/T-006; ACTIONABLE_ISSUES. I-175 WSL CRLF/external layout loss confirmed; no new issue.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "adversarial",
+      "round": 6,
+      "started_at": "2026-07-15 03:56:11",
+      "status": "completed",
+      "task_ids": [
+        "T-006"
+      ],
+      "unit_id": "U-006"
+    },
+    {
+      "agent_id": "round-6-R-U-007",
+      "completed_at": "2026-07-15 03:55:26",
+      "report": "## Review Unit\n- Unit: U-007 / T-007\n- Status: PASS\n- Completion: complete; ordered budget and all-workflows locator dispatch pass boundary probes.\n- Spec Adherence: strict.\n- Over-Fallback: none.\n- Verification: memory/recall/progress/MCP/eval and max_bytes probes pass.\n- Issues: n/a",
+      "result": "PASS",
+      "role": "first_wave",
+      "round": 6,
+      "started_at": "2026-07-15 03:45:01",
+      "status": "completed",
+      "task_ids": [
+        "T-007"
+      ],
+      "unit_id": "U-007"
+    },
+    {
+      "agent_id": "round-6-A-U-007",
+      "completed_at": "2026-07-15 05:03:20",
+      "report": "Unit U-007/T-007; PASS. Ordered budget and all-workflows locator dispatch boundary evidence pass; no issue.",
+      "result": "PASS",
+      "role": "adversarial",
+      "round": 6,
+      "started_at": "2026-07-15 03:56:11",
+      "status": "completed",
+      "task_ids": [
+        "T-007"
+      ],
+      "unit_id": "U-007"
+    },
+    {
+      "agent_id": "round-6-R-U-008",
+      "completed_at": "2026-07-15 03:55:26",
+      "report": "## Review Unit\n- Unit: U-008 / T-008\n- Status: ACTIONABLE_ISSUES\n- Completion: incomplete; replacement OSError path is fixed but cleanup OSError escapes.\n- Spec Adherence: deviation.\n- Over-Fallback: none observed.\n- Verification: missing backup unlink OSError regression; probe leaves backup and blocks retry.\n- Issues: P1 T-008 backup cleanup OSError escapes all-workflows batch and leaves local_backup_exists on retry.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "first_wave",
+      "round": 6,
+      "started_at": "2026-07-15 03:45:01",
+      "status": "completed",
+      "task_ids": [
+        "T-008"
+      ],
+      "unit_id": "U-008"
+    },
+    {
+      "agent_id": "round-6-A-U-008",
+      "completed_at": "2026-07-15 05:03:20",
+      "report": "Unit U-008/T-008; ACTIONABLE_ISSUES. I-176 backup cleanup OSError leaves backup and blocks retry; no new issue.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "adversarial",
+      "round": 6,
+      "started_at": "2026-07-15 03:56:11",
+      "status": "completed",
+      "task_ids": [
+        "T-008"
+      ],
+      "unit_id": "U-008"
+    },
+    {
+      "agent_id": "round-6-R-U-009",
+      "completed_at": "2026-07-15 03:55:27",
+      "report": "## Review Unit\n- Unit: U-009 / T-009\n- Status: ACTIONABLE_ISSUES\n- Completion: incomplete for strict acceptance.\n- Spec Adherence: deviation.\n- Over-Fallback: present for invalid optional parameters.\n- Verification: bounds/complete failure tests pass; block failure and invalid optional parameter RPC regressions missing.\n- Issues: P2 T-009 non-string query/notes silently default; P2 T-009 no real JSON-RPC block post-commit failure/response-loss regression.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "first_wave",
+      "round": 6,
+      "started_at": "2026-07-15 03:45:01",
+      "status": "completed",
+      "task_ids": [
+        "T-009"
+      ],
+      "unit_id": "U-009"
+    },
+    {
+      "agent_id": "round-6-A-U-009",
+      "completed_at": "2026-07-15 05:03:20",
+      "report": "Unit U-009/T-009; ACTIONABLE_ISSUES. I-177 optional parameter coercion and I-178 missing real block failure/response-loss regression confirmed; no new issue.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "adversarial",
+      "round": 6,
+      "started_at": "2026-07-15 03:56:11",
+      "status": "completed",
+      "task_ids": [
+        "T-009"
+      ],
+      "unit_id": "U-009"
+    },
+    {
+      "agent_id": "round-6-R-U-010",
+      "completed_at": "2026-07-15 03:55:26",
+      "report": "## Review Unit\n- Unit: U-010 / T-010/T-011/T-012\n- Status: ACTIONABLE_ISSUES\n- Completion: incomplete for strict release evidence.\n- Spec Adherence: deviation in evidence auditability, not approved production design.\n- Over-Fallback: reviewer independence is self-declared and not auditable.\n- Verification: evals and core tests pass, but tasks/progress evidence still contradictory and independent artifact refs are not verified.\n- Issues: P1 I-167 residual: connected Agent eval wording/stale progress evidence remains. P2 I-159 residual: reviewer_verdicts self-declares independence and generic refs are not checked against real evidence.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "first_wave",
+      "round": 6,
+      "started_at": "2026-07-15 03:45:02",
+      "status": "completed",
+      "task_ids": [
+        "T-010",
+        "T-011",
+        "T-012"
+      ],
+      "unit_id": "U-010"
+    },
+    {
+      "agent_id": "round-6-A-U-010",
+      "completed_at": "2026-07-15 05:03:20",
+      "report": "Unit U-010/T-010/T-011/T-012; ACTIONABLE_ISSUES. I-179 stale contradictory release evidence and I-180 unauditable reviewer refs confirmed; no new issue.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "adversarial",
+      "round": 6,
+      "started_at": "2026-07-15 03:56:11",
       "status": "completed",
       "task_ids": [
         "T-010",
@@ -4772,6 +5026,255 @@
       "unit_ids": [
         "U-010"
       ]
+    },
+    {
+      "completed_at": null,
+      "created_at": "2026-07-15 05:03:21",
+      "evidence": "pending",
+      "fix_id": "F-163",
+      "issue_ids": [
+        "I-168"
+      ],
+      "round": 6,
+      "severity": "P2",
+      "status": "pending",
+      "task_ids": [
+        "T-001"
+      ],
+      "title": "UUID-shaped nm_ title is not title-resolvable",
+      "unit_ids": [
+        "U-001"
+      ]
+    },
+    {
+      "completed_at": null,
+      "created_at": "2026-07-15 05:03:21",
+      "evidence": "pending",
+      "fix_id": "F-164",
+      "issue_ids": [
+        "I-169"
+      ],
+      "round": 6,
+      "severity": "P1",
+      "status": "pending",
+      "task_ids": [
+        "T-002"
+      ],
+      "title": "Read path still has hardlink TOCTOU",
+      "unit_ids": [
+        "U-002"
+      ]
+    },
+    {
+      "completed_at": null,
+      "created_at": "2026-07-15 05:03:21",
+      "evidence": "pending",
+      "fix_id": "F-165",
+      "issue_ids": [
+        "I-170"
+      ],
+      "round": 6,
+      "severity": "P2",
+      "status": "pending",
+      "task_ids": [
+        "T-002"
+      ],
+      "title": "Workflow-root missing errors remain inconsistent",
+      "unit_ids": [
+        "U-002"
+      ]
+    },
+    {
+      "completed_at": null,
+      "created_at": "2026-07-15 05:03:21",
+      "evidence": "pending",
+      "fix_id": "F-166",
+      "issue_ids": [
+        "I-171"
+      ],
+      "round": 6,
+      "severity": "P2",
+      "status": "pending",
+      "task_ids": [
+        "T-002"
+      ],
+      "title": "Long-path minimal diagnostics exceed max_bytes",
+      "unit_ids": [
+        "U-002"
+      ]
+    },
+    {
+      "completed_at": null,
+      "created_at": "2026-07-15 05:03:21",
+      "evidence": "pending",
+      "fix_id": "F-167",
+      "issue_ids": [
+        "I-172"
+      ],
+      "round": 6,
+      "severity": "P1",
+      "status": "pending",
+      "task_ids": [
+        "T-003"
+      ],
+      "title": "POSIX restore failure can discard content",
+      "unit_ids": [
+        "U-003"
+      ]
+    },
+    {
+      "completed_at": null,
+      "created_at": "2026-07-15 05:03:21",
+      "evidence": "pending",
+      "fix_id": "F-168",
+      "issue_ids": [
+        "I-173"
+      ],
+      "round": 6,
+      "severity": "P1",
+      "status": "pending",
+      "task_ids": [
+        "T-003"
+      ],
+      "title": "POSIX CAS regression tests fail before exercising CAS",
+      "unit_ids": [
+        "U-003"
+      ]
+    },
+    {
+      "completed_at": null,
+      "created_at": "2026-07-15 05:03:21",
+      "evidence": "pending",
+      "fix_id": "F-169",
+      "issue_ids": [
+        "I-174"
+      ],
+      "round": 6,
+      "severity": "P2",
+      "status": "pending",
+      "task_ids": [
+        "T-003"
+      ],
+      "title": "CAS failure context is incomplete",
+      "unit_ids": [
+        "U-003"
+      ]
+    },
+    {
+      "completed_at": null,
+      "created_at": "2026-07-15 05:03:21",
+      "evidence": "pending",
+      "fix_id": "F-170",
+      "issue_ids": [
+        "I-175"
+      ],
+      "round": 6,
+      "severity": "P2",
+      "status": "pending",
+      "task_ids": [
+        "T-006"
+      ],
+      "title": "AGENTS CRLF preservation still fails on WSL",
+      "unit_ids": [
+        "U-006"
+      ]
+    },
+    {
+      "completed_at": null,
+      "created_at": "2026-07-15 05:03:21",
+      "evidence": "pending",
+      "fix_id": "F-171",
+      "issue_ids": [
+        "I-176"
+      ],
+      "round": 6,
+      "severity": "P1",
+      "status": "pending",
+      "task_ids": [
+        "T-008"
+      ],
+      "title": "Backup cleanup OSError blocks all-workflows retry",
+      "unit_ids": [
+        "U-008"
+      ]
+    },
+    {
+      "completed_at": null,
+      "created_at": "2026-07-15 05:03:21",
+      "evidence": "pending",
+      "fix_id": "F-172",
+      "issue_ids": [
+        "I-177"
+      ],
+      "round": 6,
+      "severity": "P2",
+      "status": "pending",
+      "task_ids": [
+        "T-009"
+      ],
+      "title": "Facade optional parameters silently coerce invalid types",
+      "unit_ids": [
+        "U-009"
+      ]
+    },
+    {
+      "completed_at": null,
+      "created_at": "2026-07-15 05:03:21",
+      "evidence": "pending",
+      "fix_id": "F-173",
+      "issue_ids": [
+        "I-178"
+      ],
+      "round": 6,
+      "severity": "P2",
+      "status": "pending",
+      "task_ids": [
+        "T-009"
+      ],
+      "title": "Block post-commit failure lacks real JSON-RPC regression",
+      "unit_ids": [
+        "U-009"
+      ]
+    },
+    {
+      "completed_at": null,
+      "created_at": "2026-07-15 05:03:21",
+      "evidence": "pending",
+      "fix_id": "F-174",
+      "issue_ids": [
+        "I-179"
+      ],
+      "round": 6,
+      "severity": "P1",
+      "status": "pending",
+      "task_ids": [
+        "T-011",
+        "T-012"
+      ],
+      "title": "Release evidence contradiction remains after F-162",
+      "unit_ids": [
+        "U-010"
+      ]
+    },
+    {
+      "completed_at": null,
+      "created_at": "2026-07-15 05:03:21",
+      "evidence": "pending",
+      "fix_id": "F-175",
+      "issue_ids": [
+        "I-180"
+      ],
+      "round": 6,
+      "severity": "P2",
+      "status": "pending",
+      "task_ids": [
+        "T-011",
+        "T-012"
+      ],
+      "title": "Reviewer evidence references are not independently auditable",
+      "unit_ids": [
+        "U-010"
+      ]
     }
   ],
   "full_fix_rounds": 3,
@@ -7296,10 +7799,209 @@
       ],
       "title": "Release evidence is stale and contradictory at current checkpoint",
       "unit_id": "U-010"
+    },
+    {
+      "agent_id": "round-6-R-U-001",
+      "created_at": "2026-07-15 03:55:55",
+      "evidence": "A unique title equal to valid stable-ID syntax nm_f47ac10b58cc4372a5670e02b2c3d479 is parsed only as ID; show/touch return not_found.",
+      "fix_id": "F-163",
+      "issue_id": "I-168",
+      "round": 6,
+      "severity": "P2",
+      "status": "planned",
+      "task_ids": [
+        "T-001"
+      ],
+      "title": "UUID-shaped nm_ title is not title-resolvable",
+      "unit_id": "U-001"
+    },
+    {
+      "agent_id": "round-6-R-U-002",
+      "created_at": "2026-07-15 03:55:55",
+      "evidence": "resolve/check completes before Path.read_text/read_bytes; controlled replacement with external hardlink returns outside content.",
+      "fix_id": "F-164",
+      "issue_id": "I-169",
+      "round": 6,
+      "severity": "P1",
+      "status": "planned",
+      "task_ids": [
+        "T-002"
+      ],
+      "title": "Read path still has hardlink TOCTOU",
+      "unit_id": "U-002"
+    },
+    {
+      "agent_id": "round-6-R-U-002",
+      "created_at": "2026-07-15 03:55:56",
+      "evidence": "check/list/recall-all/migrate-all/index/touch do not uniformly catch checked_root workflow_root_not_found; probes raise or empty-success.",
+      "fix_id": "F-165",
+      "issue_id": "I-170",
+      "round": 6,
+      "severity": "P2",
+      "status": "planned",
+      "task_ids": [
+        "T-002"
+      ],
+      "title": "Workflow-root missing errors remain inconsistent",
+      "unit_id": "U-002"
+    },
+    {
+      "agent_id": "round-6-R-U-002",
+      "created_at": "2026-07-15 03:55:56",
+      "evidence": "max_bytes=256 response-budget fallback can append workflow_dir and return 381 bytes, losing bounded contract.",
+      "fix_id": "F-166",
+      "issue_id": "I-171",
+      "round": 6,
+      "severity": "P2",
+      "status": "planned",
+      "task_ids": [
+        "T-002"
+      ],
+      "title": "Long-path minimal diagnostics exceed max_bytes",
+      "unit_id": "U-002"
+    },
+    {
+      "agent_id": "round-6-R-U-003",
+      "created_at": "2026-07-15 03:55:56",
+      "evidence": "Injected restore failure leaves candidate at memory.md and cleanup removes saved original; path_after is candidate content despite cas_restore_failed.",
+      "fix_id": "F-167",
+      "issue_id": "I-172",
+      "round": 6,
+      "severity": "P1",
+      "status": "planned",
+      "task_ids": [
+        "T-003"
+      ],
+      "title": "POSIX restore failure can discard content",
+      "unit_id": "U-003"
+    },
+    {
+      "agent_id": "round-6-R-U-003",
+      "created_at": "2026-07-15 03:55:56",
+      "evidence": "WSL tests use invalid fact metadata without evidence, producing missing_evidence/KeyError; WSL memory suite has 2 failures and 1 error.",
+      "fix_id": "F-168",
+      "issue_id": "I-173",
+      "round": 6,
+      "severity": "P1",
+      "status": "planned",
+      "task_ids": [
+        "T-003"
+      ],
+      "title": "POSIX CAS regression tests fail before exercising CAS",
+      "unit_id": "U-003"
+    },
+    {
+      "agent_id": "round-6-R-U-003",
+      "created_at": "2026-07-15 03:55:56",
+      "evidence": "Structured CAS failures omit workflow, scope, entry ID and repair guidance; only path/ETag subset is returned.",
+      "fix_id": "F-169",
+      "issue_id": "I-174",
+      "round": 6,
+      "severity": "P2",
+      "status": "planned",
+      "task_ids": [
+        "T-003"
+      ],
+      "title": "CAS failure context is incomplete",
+      "unit_id": "U-003"
+    },
+    {
+      "agent_id": "round-6-R-U-006",
+      "created_at": "2026-07-15 03:55:56",
+      "evidence": "command_memory_index reads text in newline-translating mode before repair, so CRLF/external bytes become LF.",
+      "fix_id": "F-170",
+      "issue_id": "I-175",
+      "round": 6,
+      "severity": "P2",
+      "status": "planned",
+      "task_ids": [
+        "T-006"
+      ],
+      "title": "AGENTS CRLF preservation still fails on WSL",
+      "unit_id": "U-006"
+    },
+    {
+      "agent_id": "round-6-R-U-008",
+      "created_at": "2026-07-15 03:55:56",
+      "evidence": "cleanup PermissionError escapes, leaves operation backup, skips later workflow and retry returns local_backup_exists.",
+      "fix_id": "F-171",
+      "issue_id": "I-176",
+      "round": 6,
+      "severity": "P1",
+      "status": "planned",
+      "task_ids": [
+        "T-008"
+      ],
+      "title": "Backup cleanup OSError blocks all-workflows retry",
+      "unit_id": "U-008"
+    },
+    {
+      "agent_id": "round-6-R-U-009",
+      "created_at": "2026-07-15 03:55:56",
+      "evidence": "Non-string query/notes are converted to None/empty string despite schema string contract, allowing invalid requests.",
+      "fix_id": "F-172",
+      "issue_id": "I-177",
+      "round": 6,
+      "severity": "P2",
+      "status": "planned",
+      "task_ids": [
+        "T-009"
+      ],
+      "title": "Facade optional parameters silently coerce invalid types",
+      "unit_id": "U-009"
+    },
+    {
+      "agent_id": "round-6-R-U-009",
+      "created_at": "2026-07-15 03:55:56",
+      "evidence": "Only complete has real post-commit failure coverage; block failure/response-loss and resume/status recovery are unverified.",
+      "fix_id": "F-173",
+      "issue_id": "I-178",
+      "round": 6,
+      "severity": "P2",
+      "status": "planned",
+      "task_ids": [
+        "T-009"
+      ],
+      "title": "Block post-commit failure lacks real JSON-RPC regression",
+      "unit_id": "U-009"
+    },
+    {
+      "agent_id": "round-6-R-U-010",
+      "created_at": "2026-07-15 03:55:56",
+      "evidence": "tasks/progress still contain connected Agent wording and stale evidence alongside offline-only claims; current strict release evidence is contradictory.",
+      "fix_id": "F-174",
+      "issue_id": "I-179",
+      "round": 6,
+      "severity": "P1",
+      "status": "planned",
+      "task_ids": [
+        "T-011",
+        "T-012"
+      ],
+      "title": "Release evidence contradiction remains after F-162",
+      "unit_id": "U-010"
+    },
+    {
+      "agent_id": "round-6-R-U-010",
+      "created_at": "2026-07-15 03:55:57",
+      "evidence": "reviewer_verdicts self-declares independence and generic evidence_refs are not verified to exist or come from independent sources.",
+      "fix_id": "F-175",
+      "issue_id": "I-180",
+      "round": 6,
+      "severity": "P2",
+      "status": "planned",
+      "task_ids": [
+        "T-011",
+        "T-012"
+      ],
+      "title": "Reviewer evidence references are not independently auditable",
+      "unit_id": "U-010"
     }
   ],
   "max_rounds": 6,
-  "notes": [],
+  "notes": [
+    "Reached max acceptance rounds (6) with blocking P0-P2 issues"
+  ],
   "original_task_digest": "bb3f289c587d",
   "original_task_ids": [
     "T-001",
@@ -7322,7 +8024,7 @@
       "last_result": "ACTIONABLE_ISSUES",
       "phase": "阶段 1：Canonical 数据与事务边界",
       "review_status": "issues",
-      "round_started": 5,
+      "round_started": 6,
       "status": "issues",
       "task_ids": [
         "T-001"
@@ -7333,8 +8035,8 @@
       "adversarial_status": "issues",
       "last_result": "ACTIONABLE_ISSUES",
       "phase": "阶段 1：Canonical 数据与事务边界",
-      "review_status": "pass",
-      "round_started": 5,
+      "review_status": "issues",
+      "round_started": 6,
       "status": "issues",
       "task_ids": [
         "T-002"
@@ -7346,7 +8048,7 @@
       "last_result": "ACTIONABLE_ISSUES",
       "phase": "阶段 1：Canonical 数据与事务边界",
       "review_status": "issues",
-      "round_started": 5,
+      "round_started": 6,
       "status": "issues",
       "task_ids": [
         "T-003"
@@ -7358,7 +8060,7 @@
       "last_result": "ACTIONABLE_ISSUES",
       "phase": "阶段 1：Canonical 数据与事务边界",
       "review_status": "issues",
-      "round_started": 5,
+      "round_started": 6,
       "status": "issues",
       "task_ids": [
         "T-004"
@@ -7382,7 +8084,7 @@
       "last_result": "ACTIONABLE_ISSUES",
       "phase": "阶段 2：发现、召回、迁移与工作流接入",
       "review_status": "issues",
-      "round_started": 5,
+      "round_started": 6,
       "status": "issues",
       "task_ids": [
         "T-006"
@@ -7390,12 +8092,12 @@
       "unit_id": "U-006"
     },
     {
-      "adversarial_status": "issues",
-      "last_result": "ACTIONABLE_ISSUES",
+      "adversarial_status": "pass",
+      "last_result": "PASS",
       "phase": "阶段 2：发现、召回、迁移与工作流接入",
-      "review_status": "issues",
-      "round_started": 5,
-      "status": "issues",
+      "review_status": "pass",
+      "round_started": 6,
+      "status": "pass",
       "task_ids": [
         "T-007"
       ],
@@ -7406,7 +8108,7 @@
       "last_result": "ACTIONABLE_ISSUES",
       "phase": "阶段 2：发现、召回、迁移与工作流接入",
       "review_status": "issues",
-      "round_started": 5,
+      "round_started": 6,
       "status": "issues",
       "task_ids": [
         "T-008"
@@ -7418,7 +8120,7 @@
       "last_result": "ACTIONABLE_ISSUES",
       "phase": "阶段 2：发现、召回、迁移与工作流接入",
       "review_status": "issues",
-      "round_started": 5,
+      "round_started": 6,
       "status": "issues",
       "task_ids": [
         "T-009"
@@ -7430,7 +8132,7 @@
       "last_result": "ACTIONABLE_ISSUES",
       "phase": "阶段 3：对抗验证、Agent Eval 与发布收尾",
       "review_status": "issues",
-      "round_started": 5,
+      "round_started": 6,
       "status": "issues",
       "task_ids": [
         "T-010",
@@ -7440,10 +8142,10 @@
       "unit_id": "U-010"
     }
   ],
-  "round": 5,
+  "round": 6,
   "schema_version": 1,
-  "status": "fixes-complete",
+  "status": "blocked",
   "task_count": 12,
-  "updated_at": "2026-07-15 03:44:03",
+  "updated_at": "2026-07-15 05:03:21",
   "workflow": "design-first"
 }

@@ -25,6 +25,38 @@ def _rpc(obj: dict) -> str:
     return json.dumps(obj, ensure_ascii=False)
 
 
+def _run_rpc(requests: list[dict]) -> dict[int, dict]:
+    proc = subprocess.run(
+        [sys.executable, str(SERVER)],
+        input="\n".join(_rpc(request) for request in requests) + "\n",
+        text=True,
+        capture_output=True,
+        timeout=30,
+    )
+    if proc.returncode != 0:
+        raise AssertionError(f"MCP server failed: {proc.stderr}")
+    return {
+        reply["id"]: reply
+        for line in proc.stdout.splitlines()
+        if line.strip()
+        for reply in [json.loads(line)]
+        if reply.get("id") is not None
+    }
+
+
+def _tool_call(request_id: int, name: str, arguments: dict) -> dict:
+    return {
+        "jsonrpc": "2.0",
+        "id": request_id,
+        "method": "tools/call",
+        "params": {"name": name, "arguments": arguments},
+    }
+
+
+def _legacy_memory(alias: int, title: str, body: str = "legacy body") -> str:
+    return f"## M{alias} · {title}\n<!-- updated: 2026-06-20T12:00:00Z -->\n{body}\n"
+
+
 class ServerEncodingSmokeTest(unittest.TestCase):
     def test_chinese_task_survives_narrow_child_codec(self) -> None:
         requests = "\n".join(
@@ -117,6 +149,159 @@ class ServerEncodingSmokeTest(unittest.TestCase):
             self.assertNotIn("error", migrate)
             migrate_payload = json.loads(migrate["result"]["content"][0]["text"])
             self.assertEqual(migrate_payload["error"]["code"], "invalid_workflow_dir")
+
+    def test_legacy_migration_round_trips_over_json_rpc_and_isolates_batch_failures(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workflow_root = root / "docs" / "nature-workflows"
+
+            def make_workflow(slug: str) -> Path:
+                workflow = workflow_root / slug
+                workflow.mkdir(parents=True)
+                (workflow / "nature.yml").write_text('{"schema_version":1}\n', encoding="utf-8")
+                return workflow
+
+            single = make_workflow("single")
+            single_path = single / "memory.md"
+            single_path.write_text(_legacy_memory(3, "single legacy"), encoding="utf-8")
+            single_before = single_path.read_bytes()
+
+            dry_reply = _run_rpc(
+                [
+                    {"jsonrpc": "2.0", "id": 1, "method": "initialize"},
+                    _tool_call(
+                        2,
+                        "nature_memory_migrate",
+                        {"project_root": tmp, "workflow_dir": str(single), "scope": "shared", "dry_run": True},
+                    ),
+                ]
+            )[2]
+            dry = json.loads(dry_reply["result"]["content"][0]["text"])
+            self.assertTrue(dry["ok"], dry)
+            self.assertEqual(dry["operation"], "dry_run")
+            self.assertTrue(dry["can_apply"])
+            self.assertEqual(dry["entries"][0]["legacy_aliases"], ["M3"])
+            self.assertNotEqual(dry["estimated_diff"]["bytes_before"], dry["estimated_diff"]["bytes_after"])
+            self.assertEqual(single_path.read_bytes(), single_before)
+
+            apply_reply = _run_rpc(
+                [
+                    {"jsonrpc": "2.0", "id": 3, "method": "initialize"},
+                    _tool_call(
+                        4,
+                        "nature_memory_migrate",
+                        {"project_root": tmp, "workflow_dir": str(single), "scope": "shared"},
+                    ),
+                ]
+            )[4]
+            applied = json.loads(apply_reply["result"]["content"][0]["text"])
+            self.assertTrue(applied["ok"], applied)
+            self.assertEqual(applied["operation"], "migrated")
+            self.assertEqual(Path(applied["backup_path"]).read_bytes(), single_before)
+            self.assertIn('"legacy_aliases":["M3"]', single_path.read_text(encoding="utf-8"))
+
+            collision = make_workflow("collision")
+            collision_path = collision / "memory.md"
+            collision_path.write_text(_legacy_memory(4, "first") + "\n" + _legacy_memory(4, "second"), encoding="utf-8")
+            collision_before = collision_path.read_bytes()
+            collision_replies = _run_rpc(
+                [
+                    {"jsonrpc": "2.0", "id": 5, "method": "initialize"},
+                    _tool_call(
+                        6,
+                        "nature_memory_migrate",
+                        {"project_root": tmp, "workflow_dir": str(collision), "scope": "shared", "dry_run": True},
+                    ),
+                    _tool_call(
+                        7,
+                        "nature_memory_migrate",
+                        {"project_root": tmp, "workflow_dir": str(collision), "scope": "shared"},
+                    ),
+                ]
+            )
+            collision_dry = json.loads(collision_replies[6]["result"]["content"][0]["text"])
+            collision_apply = json.loads(collision_replies[7]["result"]["content"][0]["text"])
+            self.assertTrue(collision_dry["ok"], collision_dry)
+            self.assertFalse(collision_dry["can_apply"])
+            self.assertEqual(collision_dry["collisions"][0]["alias"], "M4")
+            self.assertFalse(collision_apply["ok"], collision_apply)
+            self.assertEqual(collision_apply["error"]["code"], "ambiguous_legacy_ref")
+            self.assertEqual(collision_path.read_bytes(), collision_before)
+
+            batch_good = make_workflow("batch-good")
+            batch_good_path = batch_good / "memory.md"
+            batch_good_path.write_text(_legacy_memory(5, "batch good"), encoding="utf-8")
+            batch_collision = make_workflow("batch-collision")
+            batch_collision_path = batch_collision / "memory.md"
+            batch_collision_path.write_text(
+                _legacy_memory(6, "batch first") + "\n" + _legacy_memory(6, "batch second"),
+                encoding="utf-8",
+            )
+            batch_collision_before = batch_collision_path.read_bytes()
+            batch_reply = _run_rpc(
+                [
+                    {"jsonrpc": "2.0", "id": 8, "method": "initialize"},
+                    _tool_call(
+                        9,
+                        "nature_memory_migrate",
+                        {"project_root": tmp, "scope": "shared", "all_workflows": True},
+                    ),
+                ]
+            )[9]
+            batch = json.loads(batch_reply["result"]["content"][0]["text"])
+            self.assertFalse(batch["ok"], batch)
+            self.assertEqual(batch["operation"], "partial")
+            results = {
+                Path(item.get("workflow_dir") or item.get("error", {}).get("workflow_dir")).name: item
+                for item in batch["results"]
+            }
+            self.assertEqual(results["batch-good"]["operation"], "migrated")
+            self.assertFalse(results["batch-collision"]["ok"])
+            self.assertEqual(results["batch-collision"]["error"]["code"], "ambiguous_legacy_ref")
+            self.assertNotEqual(batch_good_path.read_bytes(), _legacy_memory(5, "batch good").encode("utf-8"))
+            self.assertTrue((batch_good_path.with_name("memory.md.nature-memory.bak")).exists())
+            self.assertEqual(batch_collision_path.read_bytes(), batch_collision_before)
+
+    def test_facade_missing_project_root_returns_structured_project_root_not_found(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            cases = [
+                {"workflow_dir": "docs/nature-workflows/missing", "scope": "shared"},
+                {"project_root": str(Path(tmp) / "does-not-exist"), "workflow_dir": "docs/nature-workflows/missing", "scope": "shared"},
+            ]
+            for request_id, arguments in enumerate(cases, start=1):
+                reply = _run_rpc([_tool_call(request_id, "nature_resume_with_memory", arguments)])[request_id]
+                self.assertEqual(reply["error"]["code"], -32000, reply)
+                self.assertEqual(reply["error"]["data"]["code"], "project_root_not_found", reply)
+                self.assertEqual(reply["error"]["data"]["detail"], "project_root must exist", reply)
+                self.assertFalse(reply["error"]["data"]["retryable"], reply)
+
+    def test_facade_schema_and_dispatch_enforce_context_bounds(self) -> None:
+        listed = _run_rpc([{"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}}])[1]
+        tools = {tool["name"]: tool for tool in listed["result"]["tools"]}
+        for name in ("nature_resume_with_memory", "nature_complete_with_memory_review", "nature_block_with_memory_review"):
+            properties = tools[name]["inputSchema"]["properties"]
+            self.assertEqual(properties["top_k"]["minimum"], 1)
+            self.assertEqual(properties["top_k"]["maximum"], 5)
+            self.assertEqual(properties["max_bytes"]["minimum"], 256)
+            self.assertEqual(properties["max_bytes"]["maximum"], 4096)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            base = {"project_root": tmp, "workflow_dir": "docs/nature-workflows/missing", "scope": "shared"}
+            cases = [
+                ("nature_resume_with_memory", {**base, "top_k": 0}, "invalid_top_k"),
+                ("nature_resume_with_memory", {**base, "max_bytes": 4097}, "invalid_max_bytes"),
+                ("nature_complete_with_memory_review", {**base, "task_id": "T1", "evidence": "evidence", "top_k": True}, "invalid_top_k"),
+                ("nature_complete_with_memory_review", {**base, "task_id": "T1", "evidence": "evidence", "max_bytes": 255}, "invalid_max_bytes"),
+                ("nature_block_with_memory_review", {**base, "task_id": "T1", "reason": "reason", "top_k": 6}, "invalid_top_k"),
+                ("nature_block_with_memory_review", {**base, "task_id": "T1", "reason": "reason", "max_bytes": 0}, "invalid_max_bytes"),
+            ]
+            requests = [_tool_call(index, name, arguments) for index, (name, arguments, _) in enumerate(cases, start=2)]
+            replies = _run_rpc(requests)
+            for request_id, (_, _, expected_code) in enumerate(cases, start=2):
+                reply = replies[request_id]
+                self.assertEqual(reply["error"]["code"], -32602, reply)
+                self.assertEqual(reply["error"]["data"]["code"], expected_code, reply)
+                self.assertFalse(reply["error"]["data"]["retryable"], reply)
 
     def test_new_memory_tools_round_trip_real_json_rpc_calls(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

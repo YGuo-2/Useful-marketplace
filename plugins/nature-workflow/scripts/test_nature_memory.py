@@ -1636,6 +1636,191 @@ class NatureMemoryTests(unittest.TestCase):
             self.assertTrue(any(item.get("operation") == "migrated" for item in result["results"]), result)
             self.assertTrue(any(item.get("error", {}).get("code") == "memory_path_not_regular_file" for item in result["results"]), result)
 
+    def test_path_shaped_title_is_not_treated_as_locator(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            workflow = make_workflow(repo)
+            (workflow / "memory.md").write_text("## foo/bar#baz\nbody\n", encoding="utf-8")
+
+            shown = nature_memory.command_memory_show(repo, workflow, "shared", "foo/bar#baz")
+            touched = nature_memory.command_memory_touch(None, None, "foo/bar#baz", base=repo)
+
+            self.assertTrue(shown["ok"], shown)
+            self.assertTrue(touched["ok"], touched)
+
+    def test_canonical_touch_preserves_crlf_whitespace_and_trailing_layout(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            workflow = make_workflow(repo)
+            canonical = nature_memory.serialize_entry(
+                "canonical",
+                "body  \n\ntrailing  ",
+                schema_v1_metadata(),
+            ).replace("\n", "\r\n")
+            path = workflow / "memory.md"
+            path.write_bytes((canonical + "\r\n").encode("utf-8"))
+            before = path.read_bytes()
+
+            result = nature_memory.command_memory_touch(None, None, STABLE_ID, base=repo)
+            after = path.read_bytes()
+            before_lines = before.splitlines(keepends=True)
+            after_lines = after.splitlines(keepends=True)
+
+            self.assertTrue(result["ok"], result)
+            self.assertEqual(before_lines[0:1] + before_lines[2:], after_lines[0:1] + after_lines[2:])
+            self.assertEqual(after_lines[-1], b"\r\n")
+            self.assertNotEqual(before_lines[1], after_lines[1])
+
+    def test_hard_budget_error_includes_file_and_source_context(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            workflow = make_workflow(repo)
+            created = nature_memory.command_memory_remember(
+                repo, workflow, "shared", "budget", "body", {"kind": "decision"}
+            )
+            result = nature_memory.command_memory_remember(
+                repo,
+                workflow,
+                "shared",
+                "budget updated",
+                "x" * nature_memory.HARD_FILE_BYTES,
+                {"kind": "decision"},
+                entry_id=created["entry_id"],
+                expected_etag=created["etag"],
+            )
+
+            self.assertFalse(result["ok"], result)
+            self.assertEqual(result["error"]["code"], "hard_file_budget")
+            self.assertEqual(result["error"]["workflow_dir"], str(workflow))
+            self.assertEqual(result["error"]["scope"], "shared")
+            self.assertEqual(result["error"]["file_etag"], created["file_etag"])
+            self.assertEqual(result["error"]["source_etags"][created["entry_id"]], created["etag"])
+
+    def test_minimum_recall_budget_keeps_unsafe_diagnostic(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            workflow = make_workflow(repo)
+            (workflow / "memory.md").mkdir()
+
+            result = nature_memory.command_memory_recall_all(
+                repo,
+                repo / "docs" / "nature-workflows",
+                "shared",
+                "query",
+                max_bytes=nature_memory.RECALL_MIN_BYTES,
+            )
+            encoded = json.dumps(result, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+
+            self.assertFalse(result["ok"], result)
+            self.assertEqual(result["error"]["code"], "response_budget")
+            self.assertTrue(result["error"]["diagnostics"], result)
+            self.assertEqual(result["error"]["diagnostics"][0]["code"], "memory_path_not_regular_file")
+            self.assertLessEqual(len(encoded), nature_memory.RECALL_MIN_BYTES)
+
+    def test_recall_scope_low_trust_and_sentinel_regressions_are_structured(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            workflow = make_workflow(repo)
+            nature_memory.command_memory_remember(repo, workflow, "shared", "query", "body", {"kind": "decision"})
+
+            invalid_scope = nature_memory.command_memory_recall(repo, workflow, "invalid", "query")
+            control = nature_memory.command_memory_recall(repo, workflow, "shared", "bad\x01query")
+            sentinel = nature_memory.command_memory_recall(repo, workflow, "shared", nature_memory.SENTINEL_START)
+
+            self.assertEqual(invalid_scope["error"]["code"], "invalid_scope")
+            self.assertEqual(control["error"]["code"], "control_character")
+            self.assertEqual(sentinel["error"]["code"], "sentinel_injection")
+
+    def test_compatibility_apis_report_missing_project_root(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            missing = Path(tmp) / "missing"
+
+            results = [
+                nature_memory.command_memory_check(base=missing),
+                nature_memory.command_memory_list(base=missing),
+                nature_memory.command_memory_touch(None, None, "M1", base=missing),
+                nature_memory.command_memory_index(base=missing),
+            ]
+
+            self.assertEqual([item["error"]["code"] for item in results], ["project_root_not_found"] * 4)
+
+    @unittest.skipUnless(os.name != "nt", "POSIX CAS fallback boundary")
+    def test_posix_without_renameat2_fails_closed_without_overwriting(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            workflow = make_workflow(repo)
+            created = nature_memory.command_memory_remember(repo, workflow, "shared", "cas", "body", {"kind": "decision"})
+            before = (workflow / "memory.md").read_bytes()
+            with patch.object(nature_memory, "_conditional_replace_posix", return_value=False):
+                result = nature_memory.command_memory_remember(
+                    repo,
+                    workflow,
+                    "shared",
+                    "cas updated",
+                    "body",
+                    {"kind": "decision"},
+                    entry_id=created["entry_id"],
+                    expected_etag=created["etag"],
+                )
+
+            self.assertFalse(result["ok"], result)
+            self.assertEqual(result["error"]["code"], "cas_unavailable")
+            self.assertEqual((workflow / "memory.md").read_bytes(), before)
+
+    def test_agents_backup_partial_failure_is_clean_and_retryable(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            make_workflow(repo)
+            agents = repo / "AGENTS.md"
+            agents.write_text("outer\n", encoding="utf-8")
+            with patch.object(nature_memory.shutil, "copyfileobj", side_effect=OSError("forced")):
+                failed = nature_memory.command_memory_index(base=repo)
+
+            self.assertFalse(failed["ok"], failed)
+            self.assertEqual(failed["error"]["code"], "agents_backup_failed")
+            self.assertFalse((repo / "AGENTS.md.nature-memory.bak").exists())
+            retried = nature_memory.command_memory_index(base=repo)
+            self.assertTrue(retried["ok"], retried)
+
+    def test_invalid_utf8_agents_is_structured(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            make_workflow(repo)
+            agents = repo / "AGENTS.md"
+            agents.write_bytes(b"\xff\xfe")
+
+            result = nature_memory.command_memory_index(base=repo)
+
+            self.assertFalse(result["ok"], result)
+            self.assertEqual(result["error"]["code"], "invalid_utf8")
+            self.assertIsNone(result["backup_path"])
+            self.assertEqual(agents.read_bytes(), b"\xff\xfe")
+
+    def test_all_workflow_migration_backup_oserror_is_structured_and_isolated(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            first = make_workflow(repo, "first")
+            second = make_workflow(repo, "second")
+            (first / "memory.md").write_text(legacy_entry(1, "first"), encoding="utf-8")
+            (second / "memory.md").write_text(legacy_entry(2, "second"), encoding="utf-8")
+            real_copy = nature_memory._copy_file_exclusive
+
+            def fail_first(source: Path, destination: Path) -> None:
+                if destination.parent.name == "first":
+                    raise PermissionError("forced")
+                real_copy(source, destination)
+
+            with patch.object(nature_memory, "_copy_file_exclusive", side_effect=fail_first):
+                result = nature_memory.command_memory_migrate(repo, scope="shared", all_workflows=True)
+
+            self.assertFalse(result["ok"], result)
+            by_workflow = {
+                Path(item.get("workflow_dir") or item["error"]["workflow_dir"]).name: item
+                for item in result["results"]
+            }
+            self.assertEqual(by_workflow["first"]["error"]["code"], "migration_backup_failed")
+            self.assertEqual(by_workflow["second"]["operation"], "migrated")
+
 
 if __name__ == "__main__":
     unittest.main()

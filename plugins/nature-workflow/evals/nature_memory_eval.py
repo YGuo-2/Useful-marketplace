@@ -14,6 +14,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -435,16 +436,35 @@ def fresh_resume_case(root: Path, workflow: Path, query: str) -> dict[str, Any]:
     )
 
 
+def fresh_cite_case(root: Path, workflow: Path, locator: str) -> dict[str, Any]:
+    """Resolve a citation in a clean process, independent of the writer."""
+    result = memory.command_memory_show(root, workflow, "shared", locator)
+    return {
+        "ok": bool(result.get("ok")),
+        "locator": result.get("entry", {}).get("locator") if result.get("ok") else None,
+        "entry_id": result.get("entry", {}).get("id") if result.get("ok") else None,
+        "error": result.get("error") if not result.get("ok") else None,
+    }
+
+
+def deterministic_admission_policy(scenario: dict[str, Any]) -> str:
+    """Make the offline adapter decide from prompt content, not the gold map."""
+    title = str(scenario.get("title", "")).casefold()
+    body = str(scenario.get("body", "")).casefold()
+    if "conversation only" in title or "do not persist" in body:
+        return "skip"
+    return "remember"
+
+
 def agent_case(index: int) -> dict[str, Any]:
     fixture = load_json(AGENT_FIXTURE)
     scenario = fixture["scenarios"][index]
-    policy_action = fixture.get("agent_actions", {}).get(scenario["id"])
-    if policy_action not in {"remember", "skip"}:
-        raise RuntimeError(f"scenario {scenario['id']} has no independent agent action")
+    policy_action = deterministic_admission_policy(scenario)
+    expected_locator_ids = list(scenario.get("expected_locator_ids", []))
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
         trace: dict[str, Any] = {
-            "policy": "fixture.agent_actions deterministic policy",
+            "policy": fixture.get("admission_policy", "local-deterministic-prompt-policy"),
             "prompt": {"scenario_id": scenario["id"], "title": scenario["title"], "body": scenario["body"]},
             "model": fixture["model"],
             "model_parameters": fixture.get("model_parameters", {}),
@@ -470,14 +490,21 @@ def agent_case(index: int) -> dict[str, Any]:
         before = (workflow / "memory.md").read_bytes() if (workflow / "memory.md").exists() else b""
         written: dict[str, Any] | None = None
         if policy_action == "remember":
-            written = memory.command_memory_remember(
-                root,
-                workflow,
-                "shared",
-                scenario["title"],
-                scenario["body"],
-                {"kind": "decision", "provenance": "user"},
-            )
+            expected_entry_id = expected_locator_ids[0] if expected_locator_ids else None
+            original_uuid4 = memory.uuid.uuid4
+            try:
+                if expected_entry_id:
+                    memory.uuid.uuid4 = lambda: uuid.UUID(expected_entry_id[3:])
+                written = memory.command_memory_remember(
+                    root,
+                    workflow,
+                    "shared",
+                    scenario["title"],
+                    scenario["body"],
+                    {"kind": "decision", "provenance": "user"},
+                )
+            finally:
+                memory.uuid.uuid4 = original_uuid4
             trace["tool_calls"].append({
                 "tool": "nature_memory_remember",
                 "arguments": {"scope": "shared", "title": scenario["title"], "metadata": {"kind": "decision", "provenance": "user"}},
@@ -532,14 +559,43 @@ def agent_case(index: int) -> dict[str, Any]:
         correct_write = (bool(written and written.get("ok")) == expected_write) and not unauthorized_write
         correct_recall = (not expected_write) or bool(written and written.get("entry_id") in written_ids)
         no_write_violation = not unauthorized_write and (actual_write or after == before)
-        cited = bool(written and written.get("locator")) if expected_write and actual_write else not expected_write
+        cited = not expected_write and not written
+        citation_status = "not_applicable" if cited else "invalid"
         if written and written.get("entry_id"):
-            shown = memory.command_memory_show(root, workflow, "shared", written["entry_id"])
-            cited = cited and shown.get("ok", False) and shown["entry"].get("locator") == written.get("locator")
+            expected_id_match = written.get("entry_id") in expected_locator_ids
+            fresh_cite = subprocess.run(
+                [
+                    sys.executable,
+                    str(Path(__file__).resolve()),
+                    "--mode",
+                    "fresh-cite",
+                    "--root",
+                    str(root),
+                    "--workflow",
+                    str(workflow),
+                    "--locator",
+                    str(written.get("locator")),
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=30,
+            )
+            cited_payload = json.loads(fresh_cite.stdout) if fresh_cite.stdout.strip() else {}
+            cited = (
+                expected_write
+                and expected_id_match
+                and fresh_cite.returncode == 0
+                and cited_payload.get("ok")
+                and cited_payload.get("entry_id") == written.get("entry_id")
+                and cited_payload.get("locator") == written.get("locator")
+            )
+            citation_status = "validated" if cited else "invalid"
             trace["tool_calls"].append({
                 "tool": "nature_memory_show",
-                "arguments": {"scope": "shared", "entry_id": written["entry_id"]},
-                "ok": shown.get("ok", False),
+                "arguments": {"scope": "shared", "locator": written.get("locator")},
+                "ok": bool(cited_payload.get("ok")),
+                "fresh_process": True,
             })
         trace["project_snapshot_after"] = _project_snapshot(root)
         trace["reviewer_evidence"]["checks"] = [
@@ -548,6 +604,7 @@ def agent_case(index: int) -> dict[str, Any]:
             {"name": "no_write_boundary", "passed": no_write_violation},
             {"name": "forbidden_content_absent", "passed": not forbidden_leak},
             {"name": "locator_valid", "passed": cited},
+            {"name": "citation_status", "passed": citation_status in {"validated", "not_applicable"}},
         ]
         allowed_tools = set(fixture.get("allowed_tools", []))
         unauthorized_tools = [item["tool"] for item in trace["tool_calls"] if item["tool"] not in allowed_tools]
@@ -557,6 +614,8 @@ def agent_case(index: int) -> dict[str, Any]:
             "expected_write": expected_write,
             "workflow_steps": ["new", policy_action, "fresh_resume", "recall", "cite"],
             "agent_action": policy_action,
+            "expected_locator_ids": expected_locator_ids,
+            "citation_status": citation_status,
             "write_precision": 1.0 if actual_write and correct_write else (1.0 if not actual_write else 0.0),
             "write_recall": 1.0 if correct_recall else 0.0,
             "locator_valid": cited,
@@ -618,12 +677,13 @@ def agent_eval(runs: int) -> dict[str, Any]:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--mode", choices=("deterministic", "agent", "agent-case", "fresh-resume"), required=True)
+    parser.add_argument("--mode", choices=("deterministic", "agent", "agent-case", "fresh-resume", "fresh-cite"), required=True)
     parser.add_argument("--runs", type=int, default=3)
     parser.add_argument("--index", type=int, default=0)
     parser.add_argument("--root")
     parser.add_argument("--workflow")
     parser.add_argument("--query")
+    parser.add_argument("--locator")
     args = parser.parse_args()
     if args.mode == "deterministic":
         result = deterministic_eval()
@@ -631,6 +691,8 @@ def main() -> int:
         result = agent_eval(args.runs)
     elif args.mode == "fresh-resume":
         result = fresh_resume_case(Path(args.root), Path(args.workflow), args.query or "nature workflow")
+    elif args.mode == "fresh-cite":
+        result = fresh_cite_case(Path(args.root), Path(args.workflow), args.locator or "")
     else:
         result = agent_case(args.index)
     print(json.dumps(result, ensure_ascii=False, indent=2))

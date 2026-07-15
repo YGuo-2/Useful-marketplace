@@ -13,8 +13,20 @@ import nature_progress as progress
 
 def _project_root(project_root: str | Path | None) -> Path:
     if project_root is None or not str(project_root).strip():
-        raise progress.NatureProgressError("project_root is required")
-    return Path(project_root).expanduser().resolve(strict=True)
+        raise memory.MemoryBoundaryError("project_root_not_found", "project_root must exist")
+    try:
+        root = Path(project_root).expanduser().resolve(strict=True)
+    except FileNotFoundError as exc:
+        raise memory.MemoryBoundaryError("project_root_not_found", "project_root must exist") from exc
+    except OSError as exc:
+        raise memory.MemoryBoundaryError(
+            "project_root_unreadable",
+            "project_root could not be resolved",
+            retryable=True,
+        ) from exc
+    if not root.is_dir():
+        raise memory.MemoryBoundaryError("invalid_project_root", "project_root must be a directory")
+    return root
 
 
 def _query_from_progress(summary: dict[str, Any], fallback: str = "nature workflow") -> str:
@@ -89,7 +101,13 @@ def _bounded_payload(payload: dict[str, Any], max_bytes: int) -> dict[str, Any]:
         "detail": "memory context could not fit the requested byte budget",
         "retryable": False,
     }
-    minimal = {"status": bounded.get("status", "unavailable"), "error": error}
+    # At the minimum public budget, keep the stable error identity while
+    # dropping verbose detail and nested diagnostics.
+    minimal_error = {
+        "code": str(error.get("code", "memory_context_budget")),
+        "retryable": bool(error.get("retryable", False)),
+    }
+    minimal = {"status": bounded.get("status", "unavailable"), "error": minimal_error}
     if size(minimal) <= max_bytes:
         return minimal
     return {"status": "unavailable", "error": {"code": "memory_context_budget", "retryable": False}}
@@ -118,7 +136,7 @@ def _load_memory_context(
         file_etag=file_etag,
     )
     if not recall.get("ok"):
-        return _memory_failure(recall.get("error"))
+        return _bounded_payload(_memory_failure(recall.get("error")), max_bytes)
     diagnostics = list(document.diagnostics)
     for item in recall.get("diagnostics", []):
         if item not in diagnostics:

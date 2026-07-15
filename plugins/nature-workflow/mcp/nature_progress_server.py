@@ -34,6 +34,7 @@ from nature_context import (  # noqa: E402
     resume_with_memory,
 )
 from nature_memory import (  # noqa: E402
+    MemoryBoundaryError,
     RECALL_DEFAULT_TOP_K,
     RECALL_MAX_BYTES,
     RECALL_MAX_TOP_K,
@@ -392,8 +393,8 @@ TOOLS.extend(
                     "workflow_dir": {"type": "string"},
                     "scope": {"type": "string", "enum": ["shared", "local"]},
                     "query": {"type": "string"},
-                    "top_k": {"type": "integer"},
-                    "max_bytes": {"type": "integer"},
+                    "top_k": {"type": "integer", "minimum": 1, "maximum": 5},
+                    "max_bytes": {"type": "integer", "minimum": 256, "maximum": 4096},
                 },
                 "required": ["project_root", "scope"],
             },
@@ -411,8 +412,8 @@ TOOLS.extend(
                     "task_id": {"type": "string"},
                     "evidence": {"type": "string"},
                     "notes": {"type": "string"},
-                    "top_k": {"type": "integer"},
-                    "max_bytes": {"type": "integer"},
+                    "top_k": {"type": "integer", "minimum": 1, "maximum": 5},
+                    "max_bytes": {"type": "integer", "minimum": 256, "maximum": 4096},
                 },
                 "required": ["project_root", "workflow_dir", "scope", "task_id", "evidence"],
             },
@@ -429,8 +430,8 @@ TOOLS.extend(
                     "scope": {"type": "string", "enum": ["shared", "local"]},
                     "task_id": {"type": "string"},
                     "reason": {"type": "string"},
-                    "top_k": {"type": "integer"},
-                    "max_bytes": {"type": "integer"},
+                    "top_k": {"type": "integer", "minimum": 1, "maximum": 5},
+                    "max_bytes": {"type": "integer", "minimum": 256, "maximum": 4096},
                 },
                 "required": ["project_root", "workflow_dir", "scope", "task_id", "reason"],
             },
@@ -516,17 +517,29 @@ def _workflow_selection(args: dict[str, Any]) -> tuple[str | None, bool]:
 def _recall_parameters(args: dict[str, Any]) -> tuple[int, int]:
     top_k = args.get("top_k", RECALL_DEFAULT_TOP_K)
     if isinstance(top_k, bool) or not isinstance(top_k, int) or not 1 <= top_k <= RECALL_MAX_TOP_K:
-        raise NatureProgressError(f"top_k must be between 1 and {RECALL_MAX_TOP_K}")
+        error = NatureProgressError(f"top_k must be between 1 and {RECALL_MAX_TOP_K}")
+        error.code = "invalid_top_k"
+        error.detail = str(error)
+        error.retryable = False
+        error.context = {}
+        error.rpc_code = -32602
+        raise error
     max_bytes = args.get("max_bytes", RECALL_MAX_BYTES)
     if isinstance(max_bytes, bool) or not isinstance(max_bytes, int) or not RECALL_MIN_BYTES <= max_bytes <= RECALL_MAX_BYTES:
-        raise NatureProgressError(f"max_bytes must be between {RECALL_MIN_BYTES} and {RECALL_MAX_BYTES}")
+        error = NatureProgressError(f"max_bytes must be between {RECALL_MIN_BYTES} and {RECALL_MAX_BYTES}")
+        error.code = "invalid_max_bytes"
+        error.detail = str(error)
+        error.retryable = False
+        error.context = {}
+        error.rpc_code = -32602
+        raise error
     return top_k, max_bytes
 
 
 def _project_root_required(args: dict[str, Any]) -> Path:
     raw = args.get("project_root")
     if not isinstance(raw, str) or not raw.strip():
-        raise NatureProgressError("project_root is required")
+        raise MemoryBoundaryError("project_root_not_found", "project_root must exist")
     return Path(raw).expanduser().resolve(strict=False)
 
 
@@ -708,16 +721,18 @@ def call_tool(name: str, args: dict[str, Any]) -> Any:
             all_workflows=all_workflows,
         )
     if name == "nature_resume_with_memory":
+        top_k, max_bytes = _recall_parameters(args)
         return resume_with_memory(
             _root(args),
             _workflow(args),
             project_root=_project_root_required(args),
             scope=_required_scope(args),
             query=args.get("query") if isinstance(args.get("query"), str) else None,
-            top_k=args.get("top_k", 3),
-            max_bytes=args.get("max_bytes", 4096),
+            top_k=top_k,
+            max_bytes=max_bytes,
         )
     if name == "nature_complete_with_memory_review":
+        top_k, max_bytes = _recall_parameters(args)
         return complete_with_memory_review(
             _root(args),
             _required_string(args, "workflow_dir"),
@@ -726,10 +741,11 @@ def call_tool(name: str, args: dict[str, Any]) -> Any:
             args.get("notes", "") if isinstance(args.get("notes", ""), str) else "",
             project_root=_project_root_required(args),
             scope=_required_scope(args),
-            top_k=args.get("top_k", 3),
-            max_bytes=args.get("max_bytes", 4096),
+            top_k=top_k,
+            max_bytes=max_bytes,
         )
     if name == "nature_block_with_memory_review":
+        top_k, max_bytes = _recall_parameters(args)
         return block_with_memory_review(
             _root(args),
             _required_string(args, "workflow_dir"),
@@ -737,8 +753,8 @@ def call_tool(name: str, args: dict[str, Any]) -> Any:
             _required_string(args, "reason"),
             project_root=_project_root_required(args),
             scope=_required_scope(args),
-            top_k=args.get("top_k", 3),
-            max_bytes=args.get("max_bytes", 4096),
+            top_k=top_k,
+            max_bytes=max_bytes,
         )
     raise NatureProgressError(f"Unknown tool: {name}")
 
@@ -765,7 +781,18 @@ def handle(message: dict[str, Any]) -> dict[str, Any] | None:
             result = call_tool(params.get("name", ""), params.get("arguments", {}) or {})
             return response(request_id, text_result(result))
         except NatureProgressError as exc:
-            return response(request_id, error={"code": -32000, "message": str(exc)})
+            error: dict[str, Any] = {
+                "code": getattr(exc, "rpc_code", -32000),
+                "message": getattr(exc, "detail", str(exc)),
+            }
+            if getattr(exc, "code", None):
+                error["data"] = {
+                    "code": exc.code,
+                    "detail": getattr(exc, "detail", str(exc)),
+                    "retryable": bool(getattr(exc, "retryable", False)),
+                    **dict(getattr(exc, "context", {}) or {}),
+                }
+            return response(request_id, error=error)
     return response(request_id, error={"code": -32601, "message": f"Unknown method: {method}"})
 
 

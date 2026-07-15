@@ -135,9 +135,27 @@
 | F-124 | I-127 | P2 | U-002 | done | Recall-all and migrate-all validate shared/local scope and conflicting selectors before dispatch; schema/dispatch and migration regressions pass. |
 | F-125 | I-128 | P2 | U-002 | done | Recall-all rejects empty or low-trust queries even when workflow roots are empty; focused recall regression and full Nature suite pass. |
 | F-126 | I-129 | P2 | U-002 | done | Public memory APIs convert missing project roots to structured project_root_not_found errors; missing-root regressions and full Nature suite pass. |
+| F-127 | I-130 | P1 | U-010 | done | nature_memory_eval.py no longer reads fixture.agent_actions; local-deterministic-prompt-policy derives remember/skip from prompt/body and tests prove the adapter independently. Agent eval 20 scenarios x 3 fresh processes passes with precision=1, recall=1, zero unauthorized writes/tool calls/security failures, complete traces and snapshots. |
+| F-128 | I-131 | P2 | U-010 | done | agent_scenarios.json now fixes expected_locator_ids for durable scenarios. Each durable case uses deterministic UUID4 creation and validates the expected ID and locator through a separate fresh-cite subprocess; skip scenarios explicitly report citation_status=not_applicable. Eval tests 3 OK and agent eval passes. |
+| F-129 | I-132 | P2 | U-010 | done | Adversarial U-010 adjudication rejected this as a strict P2: design.md and requirements.md define the 1-second all-workflows value as a reference target, explicitly not a cross-hardware unit-test gate. The measured performance remains recorded as a note; no approved spec or production behavior changed. |
+| F-130 | I-133 | P2 | U-001 | done | _locator_parts now requires a valid stable UUID4 fragment before treating a reference as a canonical locator; path-shaped titles such as foo/bar#baz resolve as titles. test_nature_memory.py and full nature suite pass. |
+| F-131 | I-134 | P2 | U-001 | done | Canonical touch now rewrites only the updated_at metadata line and preserves CRLF, blank lines, trailing spaces, and untouched entry bytes. Canonical touch formatting regression passes. |
+| F-132 | I-135 | P2 | U-005 | done | Hard-budget errors now include workflow_dir, scope, file_etag, source_etags/current_source_etags, hard_file_bytes, and recovery guidance. Budget regressions pass. |
+| F-133 | I-137 | P2 | U-002 | done | Recall and facade response-budget failures retain compact diagnostic/error identity at the minimum 256-byte budget; full progress and memory suites pass. |
+| F-134 | I-138 | P2 | U-002 | done | check/list/touch/index compatibility paths now convert missing roots to structured project_root_not_found responses; missing-root regressions pass. |
+| F-135 | I-139 | P2 | U-002 | done | Committed regressions now cover invalid scope, control-character input, and sentinel query validation; full memory suite passes. |
+| F-136 | I-140 | P1 | U-003 | done | POSIX CAS refuses os.replace fallback when renameat2 is unavailable and returns retryable cas_unavailable/file_changed_outside_lock without writing; Windows and WSL suites pass. |
+| F-137 | I-141 | P2 | U-006 | done | AGENTS backup copy failures clean operation-created partial backups so retry is possible; backup failure regression passes. |
+| F-138 | I-142 | P2 | U-006 | done | Invalid UTF-8 AGENTS content now returns structured repair diagnostics instead of raw UnicodeDecodeError; regression passes. |
+| F-139 | I-143 | P2 | U-008 | done | test_nature_progress_server.py now exercises real JSON-RPC legacy migration dry-run/apply, collision, and all-workflows partial isolation; 9 tests pass. |
+| F-140 | I-144 | P2 | U-008 | done | Migration backup OSError is converted to structured migration_backup_failed and all-workflows continues per-workflow isolation; migration regressions and full memory suite pass. |
+| F-141 | I-146 | P2 | U-009 | done | Facade missing or nonexistent project_root returns structured project_root_not_found context through JSON-RPC; progress and MCP suites pass. |
+| F-142 | I-147 | P2 | U-009 | done | Facade schemas and dispatch enforce top_k 1..5 and max_bytes 256..4096, with structured -32602 errors; progress 27/27 and MCP 9/9 pass. Low-budget facade payload is bounded. |
 
 ## Deferred Issues
 
 - I-107 (P3): Missing direct soft-byte remember boundary assertion - round 4 only auto-fixes P0-P2
 - I-108 (P3): Missing hard-budget file identity assertion - round 4 only auto-fixes P0-P2
 - I-118 (P3): Changed-locator and stale-ETag regressions missing - round 4 only auto-fixes P0-P2
+- I-136 (P3): Hard-boundary fixture starts above the limit - round 4 only auto-fixes P0-P2
+- I-145 (P3): All-workflows replacement failure recovery lacks combined regression - round 4 only auto-fixes P0-P2

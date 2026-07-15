@@ -1072,8 +1072,16 @@ def _atomic_replace_text(path: Path, text: str, *, expected_etag: str | None = N
                         context={"memory_path": str(path)},
                     ) from exc
                 temporary_name = None
-        elif expected_etag is not None and _conditional_replace_posix(temporary_name, path, expected_etag):
-            temporary_name = None
+        elif expected_etag is not None and os.name != "nt":
+            if _conditional_replace_posix(temporary_name, path, expected_etag):
+                temporary_name = None
+            else:
+                raise MemoryBoundaryError(
+                    "cas_unavailable",
+                    "POSIX compare-and-swap could not be completed safely; no write was performed",
+                    retryable=True,
+                    context={"memory_path": str(path)},
+                )
         else:
             try:
                 os.replace(temporary_name, path)
@@ -1105,26 +1113,62 @@ def _copy_file_exclusive(source: Path, destination: Path) -> None:
     if hasattr(os, "O_BINARY"):
         flags |= os.O_BINARY
     fd = os.open(destination, flags, 0o600)
+    completed = False
     try:
         with source.open("rb") as source_handle, os.fdopen(fd, "wb") as destination_handle:
             fd = -1
             shutil.copyfileobj(source_handle, destination_handle)
             destination_handle.flush()
             os.fsync(destination_handle.fileno())
+            completed = True
     finally:
         if fd != -1:
             os.close(fd)
+        if not completed:
+            try:
+                destination.unlink()
+            except FileNotFoundError:
+                pass
 
 
 def _conditional_replace_posix(temporary_name: str, path: Path, expected_etag: str) -> bool:
-    """Use Linux rename-exchange to preserve a rewrite that wins the final race."""
-    if os.name == "nt" or not path.exists():
+    """Use a no-replace create or Linux rename-exchange for POSIX CAS."""
+    if os.name == "nt":
         return False
+    if not path.exists():
+        try:
+            os.link(temporary_name, path)
+        except FileExistsError as exc:
+            _, current_etag = _read_snapshot(path)
+            raise MemoryBoundaryError(
+                "file_changed_outside_lock",
+                "memory file appeared before atomic create; no write was performed",
+                retryable=True,
+                context={
+                    "memory_path": str(path),
+                    "current_file_etag": current_etag,
+                    "expected_file_etag": expected_etag,
+                },
+            ) from exc
+        except OSError as exc:
+            raise MemoryBoundaryError(
+                "cas_unavailable",
+                "POSIX compare-and-swap create could not be completed safely; no write was performed",
+                retryable=True,
+                context={"memory_path": str(path)},
+            ) from exc
+        os.unlink(temporary_name)
+        return True
     try:
         libc = ctypes.CDLL(None, use_errno=True)
         renameat2 = libc.renameat2
     except (AttributeError, OSError):
-        return False
+        raise MemoryBoundaryError(
+            "cas_unavailable",
+            "renameat2 is unavailable; refusing an unsafe POSIX os.replace fallback",
+            retryable=True,
+            context={"memory_path": str(path)},
+        )
     renameat2.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint]
     renameat2.restype = ctypes.c_int
     exchange = 2  # RENAME_EXCHANGE
@@ -1137,8 +1181,20 @@ def _conditional_replace_posix(temporary_name: str, path: Path, expected_etag: s
     )
     if result != 0:
         error_number = ctypes.get_errno()
-        if error_number in {errno.ENOSYS, errno.EINVAL, errno.ENOENT, errno.EXDEV}:
-            return False
+        if error_number in {errno.ENOSYS, errno.EINVAL, errno.EXDEV}:
+            raise MemoryBoundaryError(
+                "cas_unavailable",
+                "renameat2 compare-and-swap is unavailable; refusing an unsafe POSIX os.replace fallback",
+                retryable=True,
+                context={"memory_path": str(path), "errno": error_number},
+            )
+        if error_number == errno.ENOENT:
+            raise MemoryBoundaryError(
+                "file_changed_outside_lock",
+                "memory file changed before atomic replace; no write was performed",
+                retryable=True,
+                context={"memory_path": str(path)},
+            )
         raise OSError(error_number, os.strerror(error_number))
     _, previous_etag = _read_snapshot(Path(temporary_name))
     if previous_etag != expected_etag:
@@ -1258,6 +1314,26 @@ def _append_entry(text: str, rendered: str) -> str:
     return text.rstrip("\r\n") + "\n\n" + rendered
 
 
+def _replace_canonical_timestamp(text: str, entry: Entry, path: Path, stamped: str) -> str:
+    """Update only the canonical metadata line and preserve the raw block layout."""
+    _, _, raw_lines = _entry_bounds(text, entry)
+    metadata_index = entry.line  # entry.line is one-based; metadata follows the heading.
+    if metadata_index >= len(raw_lines):
+        raise MemoryBoundaryError("metadata_not_found", "canonical entry metadata is no longer present")
+    original_line = raw_lines[metadata_index]
+    ending = ""
+    if original_line.endswith("\r\n"):
+        ending = "\r\n"
+    elif original_line.endswith("\n"):
+        ending = "\n"
+    elif original_line.endswith("\r"):
+        ending = "\r"
+    metadata = dict(entry.metadata)
+    metadata["updated_at"] = stamped
+    raw_lines[metadata_index] = serialize_metadata(metadata) + ending
+    return "".join(raw_lines)
+
+
 def _mutation_error(action: str, error: MemoryBoundaryError) -> dict[str, Any]:
     error_payload = {
         "code": error.code,
@@ -1341,6 +1417,11 @@ def _locator_parts(reference: str) -> tuple[str, str] | None:
         return None
     raw_path, fragment = reference.rsplit("#", 1)
     if not raw_path or not fragment:
+        return None
+    # Canonical locators always point at a stable UUID4 entry.  Requiring that
+    # fragment keeps ordinary path-shaped titles such as ``foo/bar#baz`` on
+    # the title/alias resolution path.
+    if not _is_valid_stable_id(fragment):
         return None
     path_text = raw_path.replace("\\", "/")
     if Path(raw_path).name in {MEMORY_FILE, LOCAL_MEMORY_FILE} or path_text.endswith(".md") or "/" in path_text:
@@ -1528,15 +1609,32 @@ def _budget_summary(text: str, document: ParsedMemory) -> dict[str, Any]:
     }
 
 
-def _assert_file_budget(text: str) -> None:
+def _assert_file_budget(
+    text: str,
+    *,
+    workflow_dir: str | Path | None = None,
+    scope: str | None = None,
+    file_etag: str | None = None,
+    source_etags: dict[str, str] | None = None,
+) -> None:
     if len(text.encode("utf-8")) > HARD_FILE_BYTES:
+        context: dict[str, Any] = {
+            "hard_file_bytes": HARD_FILE_BYTES,
+            "recovery": "manual backup plus Git-reviewed maintenance is required; consolidation/archive is not guaranteed to reduce file size",
+        }
+        if workflow_dir is not None:
+            context["workflow_dir"] = str(workflow_dir)
+        if scope is not None:
+            context["scope"] = scope
+        if file_etag is not None:
+            context["file_etag"] = file_etag
+        if source_etags is not None:
+            context["source_etags"] = dict(source_etags)
+            context["current_source_etags"] = dict(source_etags)
         raise MemoryBoundaryError(
             "hard_file_budget",
             f"canonical memory file would exceed {HARD_FILE_BYTES} bytes; no write was performed; create a manual backup and perform Git-reviewed maintenance before retrying",
-            context={
-                "hard_file_bytes": HARD_FILE_BYTES,
-                "recovery": "manual backup plus Git-reviewed maintenance is required; consolidation/archive is not guaranteed to reduce file size",
-            },
+            context=context,
         )
 
 
@@ -1604,6 +1702,7 @@ def command_memory_remember(
             document = parse_memory_document(text, path)
             _reject_invalid_document(document)
             now = now_utc()
+            budget_source_etags: dict[str, str] = {}
             if entry_id is None:
                 template = _canonical_metadata_input(metadata)
                 signature = _create_signature(title, body, template)
@@ -1629,6 +1728,11 @@ def command_memory_remember(
                     for item in document.entries
                     if item.entry_id in final_metadata.get("supersedes", [])
                 ]
+                budget_source_etags = {
+                    item.entry_id: _entry_etag(item)
+                    for item in superseded_sources
+                    if item.entry_id
+                }
                 if any(item.metadata.get("lifecycle") != "active" for item in superseded_sources):
                     raise MemoryBoundaryError("invalid_lifecycle_transition", "only active entries can be superseded")
                 new_text = text
@@ -1680,6 +1784,11 @@ def command_memory_remember(
                     if item.entry_id in final_metadata.get("supersedes", [])
                     and item.entry_id != existing.entry_id
                 ]
+                budget_source_etags = {
+                    item.entry_id: _entry_etag(item)
+                    for item in [existing, *superseded_sources]
+                    if item.entry_id
+                }
                 if any(item.metadata.get("lifecycle") != "active" for item in superseded_sources):
                     raise MemoryBoundaryError("invalid_lifecycle_transition", "only active entries can be superseded")
                 new_text = _replace_entry_block(text, existing, rendered)
@@ -1696,7 +1805,13 @@ def command_memory_remember(
                     )
                 operation = "superseded" if superseded_sources else "updated"
                 target_id = existing.entry_id
-            _assert_file_budget(new_text)
+            _assert_file_budget(
+                new_text,
+                workflow_dir=path.parent,
+                scope=scope,
+                file_etag=snapshot_etag,
+                source_etags=budget_source_etags,
+            )
             _replace_if_snapshot_matches(path, new_text, snapshot_etag)
             written_text, file_etag = _read_snapshot(path)
             written_document = parse_memory_document(written_text, path)
@@ -1871,7 +1986,17 @@ def _migrate_one(
                 "can_apply": True,
                 "file_etag": snapshot_etag,
             }
-        _assert_file_budget(migrated_text)
+        _assert_file_budget(
+            migrated_text,
+            workflow_dir=path.parent,
+            scope=scope,
+            file_etag=snapshot_etag,
+            source_etags={
+                entry.entry_id: _entry_etag(entry)
+                for entry in document.entries
+                if entry.entry_id
+            },
+        )
         backup = _migration_backup_path(path)
         if backup.exists() or backup.is_symlink():
             raise MemoryBoundaryError(
@@ -1895,6 +2020,13 @@ def _migrate_one(
                 raise MemoryBoundaryError(
                     "local_backup_exists",
                     "refusing to overwrite an existing migration backup; review or remove it manually before retrying",
+                    context={"backup_path": str(backup)},
+                ) from exc
+            except OSError as exc:
+                raise MemoryBoundaryError(
+                    "migration_backup_failed",
+                    "migration backup could not be created",
+                    retryable=True,
                     context={"backup_path": str(backup)},
                 ) from exc
         try:
@@ -1997,8 +2129,17 @@ def _commit_entry_mutation(
     target_id: str,
     new_text: str,
     snapshot_etag: str,
+    *,
+    scope: str,
+    source_etags: dict[str, str] | None = None,
 ) -> dict[str, Any]:
-    _assert_file_budget(new_text)
+    _assert_file_budget(
+        new_text,
+        workflow_dir=path.parent,
+        scope=scope,
+        file_etag=snapshot_etag,
+        source_etags=source_etags,
+    )
     _replace_if_snapshot_matches(path, new_text, snapshot_etag)
     written_text, file_etag = _read_snapshot(path)
     written_document = parse_memory_document(written_text, path)
@@ -2073,7 +2214,17 @@ def command_memory_forget(
                 metadata["archive_reason"] = reason
             rendered = serialize_entry(entry.title, entry.body, metadata)
             new_text = _replace_entry_block(text, entry, rendered)
-            return _commit_entry_mutation(root, path, action, "archived", entry_id, new_text, snapshot_etag)
+            return _commit_entry_mutation(
+                root,
+                path,
+                action,
+                "archived",
+                entry_id,
+                new_text,
+                snapshot_etag,
+                scope=scope,
+                source_etags={entry.entry_id: _entry_etag(entry)},
+            )
     except MemoryBoundaryError as exc:
         return _mutation_error(action, exc)
 
@@ -2137,7 +2288,17 @@ def command_memory_supersede(
             successor = serialize_entry(new_title, new_body, successor_metadata)
             new_text = _replace_entry_block(text, source, updated_source)
             new_text = _append_entry(new_text, successor)
-            result = _commit_entry_mutation(root, path, action, "superseded", new_id, new_text, snapshot_etag)
+            result = _commit_entry_mutation(
+                root,
+                path,
+                action,
+                "superseded",
+                new_id,
+                new_text,
+                snapshot_etag,
+                scope=scope,
+                source_etags={old_id: _entry_etag(source)},
+            )
             result["source_id"] = old_id
             result["source_locator"] = _entry_locator(root, path, old_id)
             return result
@@ -2252,6 +2413,8 @@ def command_memory_consolidate_apply(
                 new_id,
                 new_text,
                 snapshot_etag,
+                scope=scope,
+                source_etags={entry.entry_id: _entry_etag(entry) for entry in ordered},
             )
             result["source_ids"] = [entry.entry_id for entry in ordered]
             result["plan_id"] = plan_id
@@ -2375,6 +2538,37 @@ def _compact_diagnostics(diagnostics: list[dict[str, Any]]) -> list[dict[str, An
     ]
 
 
+def _response_budget_error(
+    action: str,
+    max_bytes: int,
+    diagnostics: list[dict[str, Any]],
+    *,
+    all_workflows: bool = False,
+) -> dict[str, Any]:
+    """Keep diagnostic identity even when the caller gives the minimum budget."""
+    error: dict[str, Any] = {
+        "code": "response_budget",
+        "diagnostics": [],
+    }
+    response: dict[str, Any] = {"ok": False, "action": action, "error": error}
+    if all_workflows:
+        response["all_workflows"] = True
+
+    for diagnostic in diagnostics:
+        code = diagnostic.get("code") or diagnostic.get("rule") or "diagnostic"
+        compact = {"code": str(code)}
+        candidate = {**response, "error": {**error, "diagnostics": [*error["diagnostics"], compact]}}
+        if len(json.dumps(candidate, ensure_ascii=False, separators=(",", ":")).encode("utf-8")) > max_bytes:
+            break
+        error["diagnostics"].append(compact)
+
+    # RECALL_MIN_BYTES leaves room for at least one compact code. Keep the
+    # structural field for defensive callers that bypass the public limit.
+    if diagnostics and not error["diagnostics"]:
+        error["diagnostics"].append({"code": str(diagnostics[0].get("code") or diagnostics[0].get("rule") or "diagnostic")})
+    return response
+
+
 def command_memory_recall(
     project_root: str | Path,
     workflow_dir: str | Path,
@@ -2481,6 +2675,8 @@ def command_memory_recall(
             len(json.dumps(response, ensure_ascii=False, separators=(",", ":")).encode("utf-8")) > max_bytes
             or len(result_records) < len(candidates)
         ):
+            if diagnostics:
+                return _response_budget_error(action, max_bytes, diagnostics)
             # Drop optional context before dropping complete records. The final
             # response is still valid JSON and is bounded by max_bytes whenever
             # a valid response can fit the caller's budget.
@@ -2555,18 +2751,7 @@ def command_memory_recall_all(
             response["results"].pop()
         if len(json.dumps(response, ensure_ascii=False, separators=(",", ":")).encode("utf-8")) > max_bytes:
             if diagnostics:
-                error_payload: dict[str, Any] = {
-                    "code": "response_budget",
-                    "detail": "recall diagnostics could not fit the requested response budget",
-                    "retryable": False,
-                    "diagnostics": _compact_diagnostics(diagnostics),
-                }
-                compact_error = {"ok": False, "action": action, "all_workflows": True, "error": error_payload}
-                while len(json.dumps(compact_error, ensure_ascii=False, separators=(",", ":")).encode("utf-8")) > max_bytes and error_payload["diagnostics"]:
-                    error_payload["diagnostics"].pop()
-                if len(json.dumps(compact_error, ensure_ascii=False, separators=(",", ":")).encode("utf-8")) > max_bytes:
-                    error_payload.pop("diagnostics", None)
-                return compact_error
+                return _response_budget_error(action, max_bytes, diagnostics, all_workflows=True)
             return {"ok": True, "action": action, "all_workflows": True, "results": []}
         return response
     except MemoryBoundaryError as exc:
@@ -2935,7 +3120,7 @@ def command_memory_check(
 ) -> dict[str, Any]:
     action = "memory_check"
     try:
-        project_root = (base or base_dir()).resolve()
+        project_root = _checked_project_root(base or base_dir())
         scan_diagnostics: list[dict[str, Any]] = []
         if scope not in {"shared", "local"}:
             raise MemoryBoundaryError("invalid_scope", "scope must be shared or local")
@@ -2993,7 +3178,10 @@ def command_memory_touch(
     *,
     base: Path | None = None,
 ) -> dict[str, Any]:
-    project_root = (base or base_dir()).resolve(strict=True)
+    try:
+        project_root = _checked_project_root(base or base_dir())
+    except MemoryBoundaryError as exc:
+        return _mutation_error("memory_touch", exc)
     workflow_dir = checked_workflow_dir(workflow, workflow_root, base=project_root)
     path = resolve_memory_path(project_root, workflow_dir, "shared")
     if not path.exists():
@@ -3010,9 +3198,7 @@ def command_memory_touch(
         rewritten_lines = list(raw_lines)
         stamped = now_utc()
         if entry.entry_id is not None:
-            metadata = dict(entry.metadata)
-            metadata["updated_at"] = stamped
-            new_text = _replace_entry_block(text, entry, serialize_entry(entry.title, entry.body, metadata))
+            new_text = _replace_canonical_timestamp(text, entry, path, stamped)
         else:
             updated_line = f"<!-- updated: {stamped} -->"
             if entry.timestamp_line is not None:
@@ -3144,7 +3330,10 @@ def command_memory_index(
     all_workflows: bool = True,
     agents_path: str | None = None,
 ) -> dict[str, Any]:
-    project_root = (base or base_dir()).resolve()
+    try:
+        project_root = _checked_project_root(base or base_dir())
+    except MemoryBoundaryError as exc:
+        return _mutation_error("memory_index", exc)
     root = checked_root(workflow_root, base=project_root)
     # `--workflow` remains accepted for old callers, but repair is always global
     # so one paper cannot overwrite the project's discovery section.
@@ -3197,7 +3386,14 @@ def command_memory_index(
     with project_memory_lock(project_root):
         backup: Path | None = None
         try:
-            existing = agents.read_text(encoding="utf-8") if agents.exists() else ""
+            try:
+                existing = agents.read_text(encoding="utf-8") if agents.exists() else ""
+            except UnicodeDecodeError as exc:
+                raise MemoryBoundaryError(
+                    "invalid_utf8",
+                    "AGENTS.md must be valid UTF-8",
+                    context={"agents_path": str(agents)},
+                ) from exc
             backup = _backup_agents(agents)
             repaired = _replace_sentinel(existing)
         except MemoryBoundaryError as exc:
@@ -3257,7 +3453,7 @@ def command_memory_list(
     try:
         if scope not in {"shared", "local"}:
             raise MemoryBoundaryError("invalid_scope", "scope must be shared or local")
-        project_root = (base or base_dir()).resolve()
+        project_root = _checked_project_root(base or base_dir())
         scan_diagnostics: list[dict[str, Any]] = []
         if all_workflows:
             root = checked_root(workflow_root, base=project_root)

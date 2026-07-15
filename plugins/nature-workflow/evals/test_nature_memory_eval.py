@@ -31,12 +31,19 @@ class NatureMemoryEvalTests(unittest.TestCase):
         result = evaluation.agent_case(0)
         self.assertTrue(result["ok"], result)
         trace = result["trace"]
-        self.assertEqual(trace["policy"], "fixture.agent_actions deterministic policy")
+        self.assertEqual(trace["policy"], "local-deterministic-prompt-policy")
         self.assertTrue(trace["tool_calls"])
         self.assertIn("project_snapshot_before", trace)
         self.assertIn("project_snapshot_after", trace)
         self.assertTrue(all(item["passed"] for item in trace["reviewer_evidence"]["checks"]), trace)
         self.assertEqual(result["unauthorized_tool_calls"], [])
+        self.assertEqual(result["citation_status"], "validated")
+
+    def test_admission_policy_does_not_read_fixture_action_map(self) -> None:
+        scenario = {"title": "remember decision", "body": "durable fact"}
+        self.assertEqual(evaluation.deterministic_admission_policy(scenario), "remember")
+        scenario["title"] = "conversation only"
+        self.assertEqual(evaluation.deterministic_admission_policy(scenario), "skip")
 
 
 if __name__ == "__main__":

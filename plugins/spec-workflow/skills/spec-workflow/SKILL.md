@@ -80,6 +80,45 @@ python <plugin-root>/scripts/spec_progress.py discover docs/specs/
 - If `open_workflows` is not empty, list each candidate's `specs_dir`, workflow, status, approval, and current task. Ask whether to continue one of them or create a new isolated workflow. Do not run resume or read old task progress until the human chooses a candidate.
 - If the human chooses a new workflow, create it with `new docs/specs/ --slug "<short-slug>"` and do not treat older `progress.md`/`tasks.md` files as the source of truth for this request.
 - Legacy root-level `docs/specs/tasks.md` is a valid candidate for resuming old runs, but new runs must write to `docs/specs/<run-id>/`.
+- When creating any new workflow inside a git repository, pick the `<run-id>` first, then create the isolated worktree and branch as described in `## Git Delivery Chain`, then run `new --run-id <run-id>` from inside that worktree so the spec directory matches the branch and artifacts land on `spec/<run-id>`. In a non-git repository, skip the worktree step and run `new` in place (no `--run-id`).
+
+## Git Delivery Chain
+
+When the run happens inside a git repository, wrap the whole workflow in a branch-and-PR delivery chain so the main working tree stays clean and each task lands as a reviewable commit. This chain is anchored at the workflow level, not per task: one branch, one draft PR, one final human merge. Check the degradation ladder before every git action and never block the workflow when a rung is unavailable.
+
+Degradation ladder (evaluate before each step):
+
+- Not a git repository → skip the entire git chain; behavior is identical to running without it.
+- Git repository but `git worktree add` is unavailable or fails → degrade to `git switch -c spec/<run-id>` in the current working tree and continue with commits and PR steps.
+- No remote, or `gh` missing / `gh auth status` fails → keep the local worktree and branch, skip every PR step, and note in the output that PR steps were skipped.
+
+Chain steps:
+
+1. **Create.** After the human chooses to start a new workflow, first pick the `<run-id>` yourself: `<timestamp>-<short-slug>`, e.g. `20260707-153000-add-auth`. This id names the worktree, the branch, and the spec directory, so decide it once up front. Then create the isolated worktree and branch from the current HEAD:
+
+   ```bash
+   git worktree add ../<repo-name>--spec-<run-id> -b spec/<run-id>
+   ```
+
+   Run every later command (`new`, intake, artifact generation, `approve`, implementation, acceptance) from inside that worktree directory. Then run `spec_progress.py new docs/specs/ --run-id <run-id>` inside the worktree so the spec directory matches the branch name exactly and artifacts are created on the branch. In a non-git repository you skip this step, so omit `--run-id` and let `new` generate the id itself.
+
+2. **On approval.** After `approve` freezes the baseline (see `## Approval Freeze`):
+
+   ```bash
+   git add docs/specs/<run-id> && git commit -m "docs(spec): add <run-id> spec artifacts"
+   git push -u origin spec/<run-id>
+   gh pr create --draft
+   ```
+
+   Generate the draft PR body from `tasks.md`: a one-line goal, a `- [ ]` checklist mirroring the tasks, a link to the spec directory, the high-risk warning when applicable, and `Closes #N` only when a tracking issue already exists.
+
+3. **Per task.** After `complete` records evidence, commit the business code and the progress files together using the branch skill's commit message suggestion (this satisfies the pre-commit progress guard), push, then regenerate the PR body checklist from `tasks.md` with `gh pr edit --body-file`. The PR body is a one-way projection of `tasks.md`; `tasks.md` stays the single source of truth.
+
+4. **PR rediscovery.** Locate the PR at any time from the branch name with `gh pr list --head spec/<run-id>`. Do not persist the PR URL; progress files are re-rendered by the scripts and hand-added fields are overwritten.
+
+5. **Issue (on demand).** Only when the human explicitly asks, create a tracking issue with `gh issue create` (body from the spec summary) and add `Closes #N` to the PR body. Do not create issues by default.
+
+6. **Merge and cleanup.** After final acceptance passes and the PR is marked ready (see `../spec-acceptance/SKILL.md`), print suggested commands for the human to run — for example `gh pr merge --squash --delete-branch` and `git worktree remove <path>`. Never merge or remove the worktree autonomously.
 
 ## Resume Existing Workflow
 
@@ -90,6 +129,8 @@ After a human chooses an existing `<specs_dir>`:
 3. If resume reports `interrupted`, inspect the diff and verification evidence before continuing. Do not mark any task complete until evidence is recorded.
 4. If approval is `reapproval-required` or resume reports frozen-baseline drift, stop implementation and ask for human reapproval after syncing specs.
 5. If resume is clean, continue from the current task instead of restarting intake.
+
+When the run is inside a git repository and `progress.md` records a `spec/<run-id>` branch, continue inside that branch's worktree: if it still appears in `git worktree list`, switch into that directory before resuming; if the worktree is gone but the branch exists, recreate it with `git worktree add ../<repo-name>--spec-<run-id> spec/<run-id>`. Follow the `## Git Delivery Chain` degradation ladder when git or the worktree is unavailable.
 
 Print a short resume summary before continuing.
 
@@ -113,7 +154,8 @@ After artifacts are generated and structurally validated, the human may approve 
 
 1. Run `python <plugin-root>/scripts/spec_progress.py approve <specs_dir> --evidence "<approval phrase/context>"` or MCP `spec_approve`.
 2. Confirm `spec.yml` shows `approval: approved`, `artifact_hashes`, and `task_plan_hash`.
-3. Start implementation only through `spec_start_task` or `python <plugin-root>/scripts/spec_progress.py start <specs_dir> <task-id>`.
+3. In a git repository, commit the frozen spec artifacts, push the `spec/<run-id>` branch, and open the draft PR as described in `## Git Delivery Chain`. Follow the degradation ladder when the worktree, remote, or `gh` is unavailable.
+4. Start implementation only through `spec_start_task` or `python <plugin-root>/scripts/spec_progress.py start <specs_dir> <task-id>`.
 
 `artifact_hashes` freeze primary branch artifacts. `task_plan_hash` freezes task IDs, task titles, files, verify criteria, dependencies, risk, coverage, and parallelization. Progress updates are allowed; spec/task-plan edits require `sync-check --write` and reapproval.
 

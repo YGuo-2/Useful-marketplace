@@ -56,6 +56,18 @@ Clarify all bug-critical gaps:
 
 If clarification is needed, continue the multi-round intake loop focused on reproduction, evidence, scope, unchanged behavior, and regression constraints. Unknowns may be recorded as assumptions or risks only if the user explicitly accepts that.
 
+## Root-Cause Investigation Discipline
+
+No fix proposal before the root cause is understood. Follow this order before writing `design.md`:
+
+1. 根因调查: read the full error and stack trace, reproduce the failure stably, check recent changes (`git diff`, dependencies, config), and trace the data flow from the failure point back to its source. In multi-component paths, add boundary diagnostics to locate the failing layer first. Fix at the source, not at the symptom.
+2. 模式分析: find similar working code in the same codebase, read it completely, and list every difference between the working and failing paths without dismissing any as irrelevant.
+3. 单一假设: write down one specific hypothesis and design the smallest change that tests it — one variable at a time. If it fails, form a new hypothesis; do not stack a new fix on top of a failed one.
+
+The root-cause analysis in `design.md` must cite investigation evidence: the data-flow trace, the reference implementation compared against, and the hypothesis that was tested. A speculative root cause without evidence is not ready for approval.
+
+Time pressure does not waive this discipline. If investigation confirms the problem is genuinely environmental or timing-based, record the investigation, design reasonable handling (retry, timeout, monitoring), and say so in `design.md`.
+
 ## State B: Bugfix Spec Artifact Generation
 
 If this is an acceptance repair:
@@ -88,6 +100,12 @@ Bugfix defaults to `strict`. Do not use Quick Plan for P0/P1, production inciden
 
 Before review, replace all template placeholders with concrete content. If a template section does not apply, state that explicitly with the reason instead of leaving placeholder text.
 
+Task plan quality bar:
+
+- Every task must fill the `接口` field: `消费` lists the exact signatures, contracts, or failure-proof entry points taken from upstream tasks, `产出` lists what downstream tasks rely on; write `无` explicitly when empty.
+- Placeholder text such as `TBD`, `待定`, `处理边界情况`, or `类似 B-xxx` inside a task is a plan failure, not an acceptable draft. Every task needs concrete file paths, real commands, and expected verification output.
+- Before requesting approval, self-review the plan in place: every BUG/FIX/SAFE ID is covered by at least one task's `覆盖`, no placeholders remain, and interface references are consistent across tasks. Fix findings directly instead of reporting them.
+
 If automated reproduction cannot be created, record why in `bugfix.md`, describe substitute evidence strength and limits, and use the strongest available verification substitute.
 
 The preferred approval phrase for implementation is:
@@ -116,6 +134,8 @@ This is a structural integrity check only. It does not prove root-cause quality,
 python <plugin-root>/scripts/spec_progress.py approve <specs_dir> --evidence "批准规范，启动执行"
 ```
 
+In a git repository, after `approve` freezes the baseline, commit the spec artifacts, push the `spec/<run-id>` branch, and open the draft PR as described in the router's `## Git Delivery Chain` in `../spec-workflow/SKILL.md`. Skip the PR steps when no remote or `gh` is available, and skip the whole git chain outside a git repository.
+
 ## State C: Controlled Implementation
 
 Only enter this state after explicit approval.
@@ -131,7 +151,8 @@ Implementation rules:
 - Implement only that task and keep the change tied to the recorded root cause.
 - Prefer proof order: reproduce the bug, prove the fix, prove unchanged behavior.
 - If implementation reveals that the recorded root cause is wrong, the fix scope must change, or `bugfix.md`, `design.md`, or the task plan in `tasks.md` must change, stop code work. Run `sync-check --write` to mark `reapproval-required`, return to State B, update specs, and wait for an accepted approval phrase plus a fresh `approve` before continuing. Progress fields may still be updated through the tools.
-- Run verification and perform at most three self-healing loops.
+- Run verification and perform at most three self-healing loops. Each loop is one hypothesis attempt under the Root-Cause Investigation Discipline: one written hypothesis, one minimal change, one variable at a time. After the third failed loop, do not try a fourth — block the task, question whether the recorded root cause or design is wrong, run `sync-check --write` if specs must change, and discuss with the human.
+- After verification passes and before `complete`, run a two-phase task review of the task's diff: (1) 规格符合性 — the diff implements exactly the selected task, nothing missing, nothing extra, and covers its `覆盖` IDs; (2) 代码质量 — minimal change tied to the recorded root cause, real assertions, no weakened tests or deleted failing tests. Prefer a fresh review subagent that receives only the task text, the relevant spec excerpts, and the diff — not the main-session history; if subagents are unavailable, run the same checklist as an explicit self-review. Critical or Important findings block `complete`: fix and re-review. Record minor findings and the review verdict in the completion evidence.
 - After passing the selected task's verification criteria, call `spec_complete_task` through MCP or run `python <plugin-root>/scripts/spec_progress.py complete <specs_dir> B-xxx --evidence "<verification evidence>"`. For a reproduction task, passing means the failure proof behaves as expected on unfixed code or the substitute evidence is recorded and strong enough to constrain the fix.
 - If blocked, call `spec_block_task` or `python <plugin-root>/scripts/spec_progress.py block <specs_dir> B-xxx --reason "<reason>"`.
 - If skipped, call `spec_skip_task` or `python <plugin-root>/scripts/spec_progress.py skip <specs_dir> B-xxx --approval "<human approval evidence>"`.
@@ -143,6 +164,8 @@ fix(scope): short description
 Implements task: [task description]
 Spec: <specs_dir>/tasks.md
 ```
+
+  In a git repository, after `complete`, commit the business code and the progress files together with this message (this satisfies the pre-commit progress guard), push the `spec/<run-id>` branch, and refresh the PR checklist from `tasks.md` per the router's `## Git Delivery Chain` in `../spec-workflow/SKILL.md`. When the git chain is not enabled, just surface the suggested message as before.
 
 If unchecked tasks remain, ask whether to continue only after the current task is complete.
 

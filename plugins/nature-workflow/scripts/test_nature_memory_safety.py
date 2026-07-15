@@ -230,6 +230,34 @@ class MemorySafetyTests(unittest.TestCase):
                     pass
             self.assertEqual(error.exception.code, "path_hardlink_escape")
 
+    def test_agents_symlink_is_rejected_before_target_resolution(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "repo"
+            root.mkdir()
+            wf = workflow(root)
+            target = root / "other.md"
+            target.write_text("must remain", encoding="utf-8")
+            try:
+                os.symlink(target, root / "AGENTS.md")
+            except (OSError, NotImplementedError) as exc:
+                self.skipTest(f"symlink unavailable: {exc}")
+            result = memory.command_memory_index(base=root)
+            self.assertFalse(result["ok"], result)
+            self.assertEqual(result["error"]["code"], "path_symlink_escape")
+            self.assertEqual(target.read_text(encoding="utf-8"), "must remain")
+
+    def test_agents_atomic_write_failure_is_structured(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "repo"
+            root.mkdir()
+            wf = workflow(root)
+            (wf / "memory.md").write_text("## entry\nbody\n", encoding="utf-8")
+            (root / "AGENTS.md").write_text("original", encoding="utf-8")
+            with patch.object(memory, "_atomic_write_text", side_effect=PermissionError("forced")):
+                result = memory.command_memory_index(base=root)
+            self.assertFalse(result["ok"], result)
+            self.assertEqual(result["error"]["code"], "agents_write_failed")
+
 
 if __name__ == "__main__":
     unittest.main()

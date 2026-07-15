@@ -165,16 +165,25 @@ def save_record(workflow_dir: Path, record: dict[str, Any]) -> None:
 
 def _atomic_write_text(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.NamedTemporaryFile(
-        "w",
-        encoding="utf-8",
-        dir=str(path.parent),
-        delete=False,
-        newline="",
-    ) as tmp:
-        tmp.write(text)
-        tmp_name = tmp.name
-    os.replace(tmp_name, path)
+    tmp_name: str | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            "w",
+            encoding="utf-8",
+            dir=str(path.parent),
+            delete=False,
+            newline="",
+        ) as tmp:
+            tmp.write(text)
+            tmp_name = tmp.name
+        os.replace(tmp_name, path)
+        tmp_name = None
+    finally:
+        if tmp_name:
+            try:
+                os.unlink(tmp_name)
+            except FileNotFoundError:
+                pass
 
 
 def find_task(record: dict[str, Any], task_id: str) -> dict[str, Any]:

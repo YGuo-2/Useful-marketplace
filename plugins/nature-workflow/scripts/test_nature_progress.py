@@ -273,6 +273,35 @@ class StateEngineTests(unittest.TestCase):
         self.assertEqual(result["progress"]["resume_state"], "ready")
         self.assertEqual(result["memory_context"]["status"], "unavailable")
 
+    def test_partial_facade_context_respects_requested_byte_budget(self) -> None:
+        wf = self.make(["T1: collect evidence"])
+        metadata = {
+            "schema": 1,
+            "id": "nm_f47ac10b58cc4372a5670e02b2c3d479",
+            "kind": "decision",
+            "lifecycle": "active",
+            "provenance": "user",
+            "created_at": "2026-07-14T07:00:00Z",
+            "updated_at": "2026-07-14T07:00:00Z",
+        }
+        text = nature_memory.serialize_entry("collect evidence", "first", metadata)
+        text += "\n".join(f"## malformed-{index}\n<!-- nature-memory: {{}} -->\nbody\n" for index in range(20))
+        (Path(wf) / "memory.md").write_text(text, encoding="utf-8")
+        result = nc.resume_with_memory(project_root=self.base, workflow_dir=wf, query="collect evidence", max_bytes=256)
+        context = result["memory_context"]
+        self.assertLessEqual(len(json.dumps(context, ensure_ascii=False, separators=(",", ":")).encode("utf-8")), 256)
+        self.assertIn("error", context)
+
+    def test_unexpected_facade_exception_is_diagnosable_after_progress_commit(self) -> None:
+        wf = self.make(["T1: collect evidence"])
+        with patch.object(nc, "_load_memory_context", side_effect=KeyError("internal")):
+            result = nc.complete_with_memory_review(
+                None, wf, "T1", "complete evidence", project_root=self.base
+            )
+        self.assertTrue(result["ok"], result)
+        self.assertTrue(result["progress_committed"])
+        self.assertEqual(result["memory_review"]["error"]["code"], "memory_review_internal_error")
+
     def test_resume_preserves_structured_memory_error_and_requires_project_root(self) -> None:
         wf = self.make(["T1: collect evidence"])
         with patch.object(

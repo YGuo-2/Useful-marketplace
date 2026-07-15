@@ -43,10 +43,12 @@ def _memory_failure(error: dict[str, Any] | None = None) -> dict[str, Any]:
 
 
 def _exception_error(exc: Exception) -> dict[str, Any]:
+    code = getattr(exc, "code", None) or "memory_review_internal_error"
     return {
-        "code": getattr(exc, "code", "memory_review_unavailable"),
+        "code": code,
         "detail": getattr(exc, "detail", str(exc)),
         "retryable": bool(getattr(exc, "retryable", False)),
+        "exception_type": type(exc).__name__,
         **dict(getattr(exc, "context", {}) or {}),
     }
 
@@ -58,6 +60,39 @@ def _partial_parse_error(diagnostics: list[dict[str, Any]]) -> dict[str, Any]:
         "retryable": False,
         "diagnostics": diagnostics,
     }
+
+
+def _bounded_payload(payload: dict[str, Any], max_bytes: int) -> dict[str, Any]:
+    def size(value: dict[str, Any]) -> int:
+        return len(json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
+
+    if size(payload) <= max_bytes:
+        return payload
+    bounded = dict(payload)
+    bounded["diagnostics"] = list(payload.get("diagnostics", []))
+    if isinstance(bounded.get("error"), dict):
+        bounded["error"] = dict(bounded["error"])
+        bounded["error"].pop("diagnostics", None)
+    while size(bounded) > max_bytes and bounded["diagnostics"]:
+        bounded["diagnostics"].pop()
+    for key in ("results", "candidates"):
+        while size(bounded) > max_bytes and bounded.get(key):
+            bounded[key].pop()
+    for key in ("file_etag", "query", "scope"):
+        if size(bounded) <= max_bytes:
+            break
+        bounded.pop(key, None)
+    if size(bounded) <= max_bytes:
+        return bounded
+    error = bounded.get("error") if isinstance(bounded.get("error"), dict) else {
+        "code": "memory_context_budget",
+        "detail": "memory context could not fit the requested byte budget",
+        "retryable": False,
+    }
+    minimal = {"status": bounded.get("status", "unavailable"), "error": error}
+    if size(minimal) <= max_bytes:
+        return minimal
+    return {"status": "unavailable", "error": {"code": "memory_context_budget", "retryable": False}}
 
 
 def _load_memory_context(
@@ -90,7 +125,7 @@ def _load_memory_context(
             diagnostics.append(item)
     parse_errors = [item for item in diagnostics if item.get("severity") == memory.SEVERITY_ERROR]
     status = "partial" if parse_errors else "available"
-    return {
+    return _bounded_payload({
         "status": status,
         "query": query,
         "scope": scope,
@@ -98,7 +133,7 @@ def _load_memory_context(
         "results": recall.get("results", []),
         "diagnostics": diagnostics,
         "error": _partial_parse_error(parse_errors) if parse_errors else None,
-    }
+    }, max_bytes)
 
 
 def resume_with_memory(
@@ -125,8 +160,8 @@ def resume_with_memory(
         )
     except progress.NatureProgressError as exc:
         context = _memory_failure(_exception_error(exc))
-    except Exception:
-        context = _memory_failure()
+    except Exception as exc:
+        context = _memory_failure(_exception_error(exc))
     return {
         "ok": True,
         "action": "resume_with_memory",
@@ -153,17 +188,17 @@ def _review_after_progress(
             top_k=top_k,
             max_bytes=max_bytes,
         )
-        return {
+        return _bounded_payload({
             "status": context.get("status", "available"),
             "query": query,
             "candidates": context.get("results", []),
             "diagnostics": context.get("diagnostics", []),
             "error": context.get("error"),
-        }
+        }, max_bytes)
     except progress.NatureProgressError as exc:
         return _memory_failure(_exception_error(exc))
-    except Exception:
-        return _memory_failure()
+    except Exception as exc:
+        return _memory_failure(_exception_error(exc))
 
 
 def complete_with_memory_review(

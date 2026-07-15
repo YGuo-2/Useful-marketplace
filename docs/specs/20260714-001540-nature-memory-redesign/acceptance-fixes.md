@@ -1,7 +1,7 @@
 # Acceptance Fixes
 
 > **Source:** E:/CodeProject/Useful-marketplace/docs/specs/20260714-001540-nature-memory-redesign/acceptance_state.json
-> **Round:** 3
+> **Round:** 4
 > **Policy:** rounds 1-3 fix all actionable issues; round 4+ auto-fix P0-P2 only
 > **Original tasks:** 12 frozen tasks; do not append acceptance fixes to tasks.md
 
@@ -115,7 +115,29 @@
 | F-104 | I-104 | P2 | U-007 | done | bounded recall fallback reconsiders candidates with complete compact records under legal 4096-byte budget |
 | F-105 | I-105 | P3 | U-007 | done | MCP recall validates top_k/max_bytes before empty all-workflow roots; server regression test rejects top_k=6. |
 | F-106 | I-106 | P1 | U-008 | done | migrate conditional schema now requires all_workflows in its if branch, so omitted all_workflows correctly selects workflow_dir path; schema/dispatch regression tests passed. |
+| F-107 | I-109 | P1 | U-003 | done | Windows CAS guard plus ReplaceFileW atomic replacement; external rewrite and replace-failure regressions pass in test_nature_memory.py; Windows full suite 143 tests OK and WSL Unix safety/concurrency 19 tests OK. |
+| F-108 | I-110 | P2 | U-003 | done | CAS and stale-etag responses preserve current/expected file and entry ETags with repair context; test_nature_memory.py etag and external-rewrite regressions pass. |
+| F-109 | I-111 | P2 | U-001 | done | Locator-like query parsing distinguishes hash titles from memory locators; hash-title show/touch and locator recall regressions pass. |
+| F-110 | I-112 | P2 | U-001 | done | Legacy touch rewrites only the target timestamp while preserving CRLF, blank lines, and trailing spaces; legacy touch regression passes. |
+| F-111 | I-113 | P2 | U-001 | done | Empty canonical metadata now emits invalid_schema plus missing_metadata_field diagnostics; focused parser regression and full Windows suite pass. |
+| F-112 | I-114 | P1 | U-008 | done | Migrate rejects simultaneous all_workflows=true and workflow_dir with structured conflicting_workflow_selector; migration regression passes. |
+| F-113 | I-115 | P2 | U-008 | done | All-workflow migration preserves per-workflow results and partial-operation diagnostics; migration suite and real JSON-RPC smoke pass. |
+| F-114 | I-116 | P2 | U-008 | done | Migration failure payloads retain project_root, workflow_dir, scope, memory_path and ETag context where available; full migration and MCP suites pass. |
+| F-115 | I-117 | P2 | U-004 | done | Lifecycle show/forget/supersede locator and successor behavior remains covered by lifecycle regressions and real JSON-RPC smoke. |
+| F-116 | I-119 | P1 | U-006 | done | AGENTS paths are checked lexically and symlink/hardlink escapes fail closed; Windows and WSL safety suites pass with structured diagnostics. |
+| F-117 | I-120 | P2 | U-006 | done | AGENTS compatibility/index responses preserve deprecated structured fields and legacy behavior; full Nature suite passes. |
+| F-118 | I-121 | P1 | U-009 | done | Facade memory failures preserve structured diagnostics after progress commit; test_nature_progress.py 27 tests and full suite pass. |
+| F-119 | I-122 | P2 | U-009 | done | Facade project-root and workflow selector boundaries fail closed with structured errors; progress server schema/dispatch regressions pass. |
+| F-120 | I-123 | P2 | U-007 | done | Recall-all preserves unsafe scan diagnostics under bounded response budgets, including compact structured error diagnostics; recall and safety regressions pass. |
+| F-121 | I-124 | P2 | U-007 | done | Recall-all validates scope and query before scanning, including empty roots; focused recall tests and full suite pass. |
+| F-122 | I-125 | P2 | U-007 | done | Recall bounded fallback keeps complete compact records and respects legal byte budgets; recall tests and deterministic eval pass. |
+| F-123 | I-126 | P2 | U-002 | done | Recall-all no longer drops unsafe path diagnostics at minimal budgets; Windows full suite 143 tests OK and WSL safety/concurrency 19 tests OK. |
+| F-124 | I-127 | P2 | U-002 | done | Recall-all and migrate-all validate shared/local scope and conflicting selectors before dispatch; schema/dispatch and migration regressions pass. |
+| F-125 | I-128 | P2 | U-002 | done | Recall-all rejects empty or low-trust queries even when workflow roots are empty; focused recall regression and full Nature suite pass. |
+| F-126 | I-129 | P2 | U-002 | done | Public memory APIs convert missing project roots to structured project_root_not_found errors; missing-root regressions and full Nature suite pass. |
 
 ## Deferred Issues
 
-- n/a
+- I-107 (P3): Missing direct soft-byte remember boundary assertion - round 4 only auto-fixes P0-P2
+- I-108 (P3): Missing hard-budget file identity assertion - round 4 only auto-fixes P0-P2
+- I-118 (P3): Changed-locator and stale-ETag regressions missing - round 4 only auto-fixes P0-P2

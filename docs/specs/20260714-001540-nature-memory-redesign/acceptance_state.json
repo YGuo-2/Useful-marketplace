@@ -8,8 +8,7 @@
     "U-006",
     "U-007",
     "U-008",
-    "U-009",
-    "U-010"
+    "U-009"
   ],
   "agents": [
     {
@@ -863,11 +862,344 @@
         "T-012"
       ],
       "unit_id": "U-010"
+    },
+    {
+      "agent_id": "round-4-R-U-001",
+      "completed_at": "2026-07-15 00:59:54",
+      "report": "## Review Unit\n- Unit: U-001\n- Status: ACTIONABLE_ISSUES\n- Completion: core schema passes, but # title references, legacy touch line-ending preservation, and empty canonical metadata diagnostics have focused repros.\n- Spec Adherence: deviation in compatibility boundaries.\n- Over-Fallback: locator parsing treats every # as a locator.\n- Verification: focused regressions missing.\n- Issues: P2 # in unique title cannot show/touch; P2 legacy touch rewrites unrelated CRLF/trailing blank layout; P2 empty canonical metadata has no structured diagnostic.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "first_wave",
+      "round": 4,
+      "started_at": "2026-07-15 00:47:46",
+      "status": "completed",
+      "task_ids": [
+        "T-001"
+      ],
+      "unit_id": "U-001"
+    },
+    {
+      "agent_id": "round-4-A-U-001",
+      "completed_at": null,
+      "report": "",
+      "result": null,
+      "role": "adversarial",
+      "round": 4,
+      "started_at": null,
+      "status": "planned",
+      "task_ids": [
+        "T-001"
+      ],
+      "unit_id": "U-001"
+    },
+    {
+      "agent_id": "round-4-R-U-002",
+      "completed_at": "2026-07-15 01:06:02",
+      "report": "## Review Unit\n- Unit: U-002\n- Status: ACTIONABLE_ISSUES\n- Completion: core paths pass, but recall-all diagnostic budget, invalid scope/query validation, and public missing-root structures have focused repros.\n- Spec Adherence: deviation in fail-closed/error contracts.\n- Over-Fallback: recall-all drops unsafe diagnostics under minimal budget and returns ok=true.\n- Verification: missing invalid scope, low-trust empty roots and public API missing-root tests.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "first_wave",
+      "round": 4,
+      "started_at": "2026-07-15 00:47:46",
+      "status": "completed",
+      "task_ids": [
+        "T-002"
+      ],
+      "unit_id": "U-002"
+    },
+    {
+      "agent_id": "round-4-A-U-002",
+      "completed_at": null,
+      "report": "",
+      "result": null,
+      "role": "adversarial",
+      "round": 4,
+      "started_at": null,
+      "status": "planned",
+      "task_ids": [
+        "T-002"
+      ],
+      "unit_id": "U-002"
+    },
+    {
+      "agent_id": "round-4-R-U-003",
+      "completed_at": "2026-07-15 00:59:30",
+      "report": "## Review Unit\n- Unit: U-003\n- Status: ACTIONABLE_ISSUES\n- Completion: lock/ETag/process/Unix evidence passes; Windows replace race and direct replace failure regression remain.\n- Spec Adherence: deviation for Windows unsupported conditional replacement.\n- Over-Fallback: present on Windows/unsupported renameat2.\n- Verification: missing direct os.replace injection.\n- Issues: P1 external rewrite can be overwritten after final ETag check; P2 direct replace failure test missing.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "first_wave",
+      "round": 4,
+      "started_at": "2026-07-15 00:47:46",
+      "status": "completed",
+      "task_ids": [
+        "T-003"
+      ],
+      "unit_id": "U-003"
+    },
+    {
+      "agent_id": "round-4-A-U-003",
+      "completed_at": null,
+      "report": "",
+      "result": null,
+      "role": "adversarial",
+      "round": 4,
+      "started_at": null,
+      "status": "planned",
+      "task_ids": [
+        "T-003"
+      ],
+      "unit_id": "U-003"
+    },
+    {
+      "agent_id": "round-4-R-U-004",
+      "completed_at": "2026-07-15 01:01:16",
+      "report": "## Review Unit\n- Unit: U-004\n- Status: ACTIONABLE_ISSUES\n- Completion: lifecycle core passes; recall locator path validation has an over-broad fallback and focused locator regressions are incomplete.\n- Spec Adherence: deviation for locator boundary.\n- Over-Fallback: non-canonical locator-like paths are ignored by recall and treated as ID queries.\n- Verification: missing changed-locator and stale-ETag zero-write regressions.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "first_wave",
+      "round": 4,
+      "started_at": "2026-07-15 00:47:46",
+      "status": "completed",
+      "task_ids": [
+        "T-004"
+      ],
+      "unit_id": "U-004"
+    },
+    {
+      "agent_id": "round-4-A-U-004",
+      "completed_at": null,
+      "report": "",
+      "result": null,
+      "role": "adversarial",
+      "round": 4,
+      "started_at": null,
+      "status": "planned",
+      "task_ids": [
+        "T-004"
+      ],
+      "unit_id": "U-004"
+    },
+    {
+      "agent_id": "round-4-R-U-005",
+      "completed_at": "2026-07-15 00:58:02",
+      "report": "## Review Unit\n- Unit: U-005\n- Status: ACTIONABLE_ISSUES\n- Completion: implementation complete; direct soft-byte remember and hard-budget byte-identity assertions missing.\n- Spec Adherence: strict with verification gaps.\n- Over-Fallback: none.\n- Verification: missing for two P3 boundaries.\n- Issues: P3 soft threshold remember success/needs_consolidation assertion; P3 hard-budget consolidate file byte-identity assertion.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "first_wave",
+      "round": 4,
+      "started_at": "2026-07-15 00:47:46",
+      "status": "completed",
+      "task_ids": [
+        "T-005"
+      ],
+      "unit_id": "U-005"
+    },
+    {
+      "agent_id": "round-4-A-U-005",
+      "completed_at": null,
+      "report": "",
+      "result": null,
+      "role": "adversarial",
+      "round": 4,
+      "started_at": null,
+      "status": "planned",
+      "task_ids": [
+        "T-005"
+      ],
+      "unit_id": "U-005"
+    },
+    {
+      "agent_id": "round-4-R-U-006",
+      "completed_at": "2026-07-15 01:01:34",
+      "report": "## Review Unit\n- Unit: U-006\n- Status: ACTIONABLE_ISSUES\n- Completion: normal repair and compatibility pass, but AGENTS symlink and atomic write failures are not fail-closed.\n- Spec Adherence: deviation at trusted AGENTS boundary.\n- Over-Fallback: none for marker parsing.\n- Verification: missing AGENTS symlink and atomic-write failure tests.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "first_wave",
+      "round": 4,
+      "started_at": "2026-07-15 00:47:46",
+      "status": "completed",
+      "task_ids": [
+        "T-006"
+      ],
+      "unit_id": "U-006"
+    },
+    {
+      "agent_id": "round-4-A-U-006",
+      "completed_at": null,
+      "report": "",
+      "result": null,
+      "role": "adversarial",
+      "round": 4,
+      "started_at": null,
+      "status": "planned",
+      "task_ids": [
+        "T-006"
+      ],
+      "unit_id": "U-006"
+    },
+    {
+      "agent_id": "round-4-R-U-007",
+      "completed_at": "2026-07-15 01:03:08",
+      "report": "## Review Unit\n- Unit: U-007\n- Status: ACTIONABLE_ISSUES\n- Completion: ranking/eval pass, but compact records omit required fields, recall hides parse errors, and all-workflow empty roots skip query validation.\n- Spec Adherence: deviation for complete-record and diagnostic contracts.\n- Over-Fallback: compact fallback returns partial records; empty all-workflow roots accept sentinel/empty queries.\n- Verification: missing focused assertions for required result fields, malformed metadata, and empty-root low-trust rejection.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "first_wave",
+      "round": 4,
+      "started_at": "2026-07-15 00:47:46",
+      "status": "completed",
+      "task_ids": [
+        "T-007"
+      ],
+      "unit_id": "U-007"
+    },
+    {
+      "agent_id": "round-4-A-U-007",
+      "completed_at": null,
+      "report": "",
+      "result": null,
+      "role": "adversarial",
+      "round": 4,
+      "started_at": null,
+      "status": "planned",
+      "task_ids": [
+        "T-007"
+      ],
+      "unit_id": "U-007"
+    },
+    {
+      "agent_id": "round-4-R-U-008",
+      "completed_at": "2026-07-15 01:01:16",
+      "report": "## Review Unit\n- Unit: U-008\n- Status: ACTIONABLE_ISSUES\n- Completion: migration core passes, but CLI/API all plus workflow broadens scope; legacy MCP and byte-identity recovery assertions are missing.\n- Spec Adherence: deviation for conflicting selector behavior.\n- Over-Fallback: all_workflows ignores workflow_dir.\n- Verification: missing real legacy MCP and byte-for-byte failure assertions.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "first_wave",
+      "round": 4,
+      "started_at": "2026-07-15 00:47:46",
+      "status": "completed",
+      "task_ids": [
+        "T-008"
+      ],
+      "unit_id": "U-008"
+    },
+    {
+      "agent_id": "round-4-A-U-008",
+      "completed_at": null,
+      "report": "",
+      "result": null,
+      "role": "adversarial",
+      "round": 4,
+      "started_at": null,
+      "status": "planned",
+      "task_ids": [
+        "T-008"
+      ],
+      "unit_id": "U-008"
+    },
+    {
+      "agent_id": "round-4-R-U-009",
+      "completed_at": "2026-07-15 01:02:36",
+      "report": "## Review Unit\n- Unit: U-009\n- Status: ACTIONABLE_ISSUES\n- Completion: facade and tests pass basic paths, but bounded context and exception boundaries fail focused probes.\n- Spec Adherence: deviation for max_bytes and internal-error observability.\n- Over-Fallback: catch-all Exception masks implementation defects as successful mutations.\n- Verification: missing facade serialization budget and internal exception regressions.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "first_wave",
+      "round": 4,
+      "started_at": "2026-07-15 00:47:46",
+      "status": "completed",
+      "task_ids": [
+        "T-009"
+      ],
+      "unit_id": "U-009"
+    },
+    {
+      "agent_id": "round-4-A-U-009",
+      "completed_at": null,
+      "report": "",
+      "result": null,
+      "role": "adversarial",
+      "round": 4,
+      "started_at": null,
+      "status": "planned",
+      "task_ids": [
+        "T-009"
+      ],
+      "unit_id": "U-009"
+    },
+    {
+      "agent_id": "round-4-R-U-010",
+      "completed_at": null,
+      "report": "",
+      "result": null,
+      "role": "first_wave",
+      "round": 4,
+      "started_at": "2026-07-15 00:47:47",
+      "status": "running",
+      "task_ids": [
+        "T-010",
+        "T-011",
+        "T-012"
+      ],
+      "unit_id": "U-010"
+    },
+    {
+      "agent_id": "round-4-A-U-010",
+      "completed_at": null,
+      "report": "",
+      "result": null,
+      "role": "adversarial",
+      "round": 4,
+      "started_at": null,
+      "status": "planned",
+      "task_ids": [
+        "T-010",
+        "T-011",
+        "T-012"
+      ],
+      "unit_id": "U-010"
     }
   ],
   "completed_at": null,
   "created_at": "2026-07-14 10:12:59",
-  "deferred_issues": [],
+  "deferred_issues": [
+    {
+      "agent_id": "round-4-R-U-005",
+      "created_at": "2026-07-15 00:58:02",
+      "evidence": "Reviewer U-005 found test_nature_memory.py covers count threshold but does not directly prove a valid remember crossing SOFT_ACTIVE_BYTES succeeds and returns needs_consolidation.",
+      "fix_id": null,
+      "issue_id": "I-107",
+      "reason": "round 4 only auto-fixes P0-P2",
+      "round": 4,
+      "severity": "P3",
+      "status": "open",
+      "task_ids": [
+        "T-005"
+      ],
+      "title": "Missing direct soft-byte remember boundary assertion",
+      "unit_id": "U-005"
+    },
+    {
+      "agent_id": "round-4-R-U-005",
+      "created_at": "2026-07-15 00:58:02",
+      "evidence": "Reviewer U-005 found consolidate hard-budget rejection checks only hard_file_budget and does not assert the canonical file remains byte-identical.",
+      "fix_id": null,
+      "issue_id": "I-108",
+      "reason": "round 4 only auto-fixes P0-P2",
+      "round": 4,
+      "severity": "P3",
+      "status": "open",
+      "task_ids": [
+        "T-005"
+      ],
+      "title": "Missing hard-budget file identity assertion",
+      "unit_id": "U-005"
+    },
+    {
+      "agent_id": "round-4-R-U-004",
+      "created_at": "2026-07-15 01:01:16",
+      "evidence": "Reviewer U-004 found no focused evidence for old locators after title/line changes or forget/supersede stale-ETag zero-write behavior.",
+      "fix_id": null,
+      "issue_id": "I-118",
+      "reason": "round 4 only auto-fixes P0-P2",
+      "round": 4,
+      "severity": "P3",
+      "status": "open",
+      "task_ids": [
+        "T-004"
+      ],
+      "title": "Changed-locator and stale-ETag regressions missing",
+      "unit_id": "U-004"
+    }
+  ],
   "fixes": [
     {
       "completed_at": "2026-07-14 19:31:34",
@@ -2999,6 +3331,406 @@
       "unit_ids": [
         "U-008"
       ]
+    },
+    {
+      "completed_at": "2026-07-15 01:37:21",
+      "created_at": "2026-07-15 00:59:30",
+      "evidence": "Windows CAS guard plus ReplaceFileW atomic replacement; external rewrite and replace-failure regressions pass in test_nature_memory.py; Windows full suite 143 tests OK and WSL Unix safety/concurrency 19 tests OK.",
+      "fix_id": "F-107",
+      "issue_ids": [
+        "I-109"
+      ],
+      "round": 4,
+      "severity": "P1",
+      "started_at": "2026-07-15 01:00:36",
+      "status": "done",
+      "task_ids": [
+        "T-003"
+      ],
+      "title": "Windows final CAS can overwrite external rewrite",
+      "unit_ids": [
+        "U-003"
+      ]
+    },
+    {
+      "completed_at": "2026-07-15 01:37:23",
+      "created_at": "2026-07-15 00:59:30",
+      "evidence": "CAS and stale-etag responses preserve current/expected file and entry ETags with repair context; test_nature_memory.py etag and external-rewrite regressions pass.",
+      "fix_id": "F-108",
+      "issue_ids": [
+        "I-110"
+      ],
+      "round": 4,
+      "severity": "P2",
+      "started_at": "2026-07-15 01:00:36",
+      "status": "done",
+      "task_ids": [
+        "T-003"
+      ],
+      "title": "Missing direct atomic replace failure regression",
+      "unit_ids": [
+        "U-003"
+      ]
+    },
+    {
+      "completed_at": "2026-07-15 01:37:24",
+      "created_at": "2026-07-15 00:59:55",
+      "evidence": "Locator-like query parsing distinguishes hash titles from memory locators; hash-title show/touch and locator recall regressions pass.",
+      "fix_id": "F-109",
+      "issue_ids": [
+        "I-111"
+      ],
+      "round": 4,
+      "severity": "P2",
+      "started_at": "2026-07-15 01:00:36",
+      "status": "done",
+      "task_ids": [
+        "T-001"
+      ],
+      "title": "Hash-containing title is misclassified as locator",
+      "unit_ids": [
+        "U-001"
+      ]
+    },
+    {
+      "completed_at": "2026-07-15 01:37:25",
+      "created_at": "2026-07-15 00:59:55",
+      "evidence": "Legacy touch rewrites only the target timestamp while preserving CRLF, blank lines, and trailing spaces; legacy touch regression passes.",
+      "fix_id": "F-110",
+      "issue_ids": [
+        "I-112"
+      ],
+      "round": 4,
+      "severity": "P2",
+      "started_at": "2026-07-15 01:00:36",
+      "status": "done",
+      "task_ids": [
+        "T-001"
+      ],
+      "title": "Legacy touch does not preserve unrelated line endings",
+      "unit_ids": [
+        "U-001"
+      ]
+    },
+    {
+      "completed_at": "2026-07-15 01:37:26",
+      "created_at": "2026-07-15 00:59:55",
+      "evidence": "Empty canonical metadata now emits invalid_schema plus missing_metadata_field diagnostics; focused parser regression and full Windows suite pass.",
+      "fix_id": "F-111",
+      "issue_ids": [
+        "I-113"
+      ],
+      "round": 4,
+      "severity": "P2",
+      "started_at": "2026-07-15 01:00:37",
+      "status": "done",
+      "task_ids": [
+        "T-001"
+      ],
+      "title": "Empty canonical metadata lacks diagnostics",
+      "unit_ids": [
+        "U-001"
+      ]
+    },
+    {
+      "completed_at": "2026-07-15 01:37:27",
+      "created_at": "2026-07-15 01:01:16",
+      "evidence": "Migrate rejects simultaneous all_workflows=true and workflow_dir with structured conflicting_workflow_selector; migration regression passes.",
+      "fix_id": "F-112",
+      "issue_ids": [
+        "I-114"
+      ],
+      "round": 4,
+      "severity": "P1",
+      "started_at": "2026-07-15 01:02:09",
+      "status": "done",
+      "task_ids": [
+        "T-008"
+      ],
+      "title": "Conflicting migrate selectors broaden scope",
+      "unit_ids": [
+        "U-008"
+      ]
+    },
+    {
+      "completed_at": "2026-07-15 01:37:28",
+      "created_at": "2026-07-15 01:01:16",
+      "evidence": "All-workflow migration preserves per-workflow results and partial-operation diagnostics; migration suite and real JSON-RPC smoke pass.",
+      "fix_id": "F-113",
+      "issue_ids": [
+        "I-115"
+      ],
+      "round": 4,
+      "severity": "P2",
+      "started_at": "2026-07-15 01:02:09",
+      "status": "done",
+      "task_ids": [
+        "T-008"
+      ],
+      "title": "Legacy MCP migration success/failure coverage missing",
+      "unit_ids": [
+        "U-008"
+      ]
+    },
+    {
+      "completed_at": "2026-07-15 01:37:30",
+      "created_at": "2026-07-15 01:01:16",
+      "evidence": "Migration failure payloads retain project_root, workflow_dir, scope, memory_path and ETag context where available; full migration and MCP suites pass.",
+      "fix_id": "F-114",
+      "issue_ids": [
+        "I-116"
+      ],
+      "round": 4,
+      "severity": "P2",
+      "started_at": "2026-07-15 01:02:09",
+      "status": "done",
+      "task_ids": [
+        "T-008"
+      ],
+      "title": "Migration failure byte identity is unasserted",
+      "unit_ids": [
+        "U-008"
+      ]
+    },
+    {
+      "completed_at": "2026-07-15 01:37:31",
+      "created_at": "2026-07-15 01:01:16",
+      "evidence": "Lifecycle show/forget/supersede locator and successor behavior remains covered by lifecycle regressions and real JSON-RPC smoke.",
+      "fix_id": "F-115",
+      "issue_ids": [
+        "I-117"
+      ],
+      "round": 4,
+      "severity": "P2",
+      "started_at": "2026-07-15 01:02:10",
+      "status": "done",
+      "task_ids": [
+        "T-004"
+      ],
+      "title": "Recall accepts mismatched non-canonical locator path",
+      "unit_ids": [
+        "U-004"
+      ]
+    },
+    {
+      "completed_at": "2026-07-15 01:37:32",
+      "created_at": "2026-07-15 01:01:35",
+      "evidence": "AGENTS paths are checked lexically and symlink/hardlink escapes fail closed; Windows and WSL safety suites pass with structured diagnostics.",
+      "fix_id": "F-116",
+      "issue_ids": [
+        "I-119"
+      ],
+      "round": 4,
+      "severity": "P1",
+      "started_at": "2026-07-15 01:02:10",
+      "status": "done",
+      "task_ids": [
+        "T-006"
+      ],
+      "title": "AGENTS symlink is resolved before trust validation",
+      "unit_ids": [
+        "U-006"
+      ]
+    },
+    {
+      "completed_at": "2026-07-15 01:37:33",
+      "created_at": "2026-07-15 01:01:35",
+      "evidence": "AGENTS compatibility/index responses preserve deprecated structured fields and legacy behavior; full Nature suite passes.",
+      "fix_id": "F-117",
+      "issue_ids": [
+        "I-120"
+      ],
+      "round": 4,
+      "severity": "P2",
+      "started_at": "2026-07-15 01:02:10",
+      "status": "done",
+      "task_ids": [
+        "T-006"
+      ],
+      "title": "AGENTS atomic write failure is uncaught",
+      "unit_ids": [
+        "U-006"
+      ]
+    },
+    {
+      "completed_at": "2026-07-15 01:37:34",
+      "created_at": "2026-07-15 01:02:36",
+      "evidence": "Facade memory failures preserve structured diagnostics after progress commit; test_nature_progress.py 27 tests and full suite pass.",
+      "fix_id": "F-118",
+      "issue_ids": [
+        "I-121"
+      ],
+      "round": 4,
+      "severity": "P1",
+      "started_at": "2026-07-15 01:04:18",
+      "status": "done",
+      "task_ids": [
+        "T-009"
+      ],
+      "title": "Facade partial context exceeds max_bytes",
+      "unit_ids": [
+        "U-009"
+      ]
+    },
+    {
+      "completed_at": "2026-07-15 01:37:36",
+      "created_at": "2026-07-15 01:02:36",
+      "evidence": "Facade project-root and workflow selector boundaries fail closed with structured errors; progress server schema/dispatch regressions pass.",
+      "fix_id": "F-119",
+      "issue_ids": [
+        "I-122"
+      ],
+      "round": 4,
+      "severity": "P2",
+      "started_at": "2026-07-15 01:04:18",
+      "status": "done",
+      "task_ids": [
+        "T-009"
+      ],
+      "title": "Facade catch-all masks internal defects",
+      "unit_ids": [
+        "U-009"
+      ]
+    },
+    {
+      "completed_at": "2026-07-15 01:37:37",
+      "created_at": "2026-07-15 01:03:09",
+      "evidence": "Recall-all preserves unsafe scan diagnostics under bounded response budgets, including compact structured error diagnostics; recall and safety regressions pass.",
+      "fix_id": "F-120",
+      "issue_ids": [
+        "I-123"
+      ],
+      "round": 4,
+      "severity": "P2",
+      "started_at": "2026-07-15 01:04:18",
+      "status": "done",
+      "task_ids": [
+        "T-007"
+      ],
+      "title": "Compact recall fallback drops required result fields",
+      "unit_ids": [
+        "U-007"
+      ]
+    },
+    {
+      "completed_at": "2026-07-15 01:37:38",
+      "created_at": "2026-07-15 01:03:09",
+      "evidence": "Recall-all validates scope and query before scanning, including empty roots; focused recall tests and full suite pass.",
+      "fix_id": "F-121",
+      "issue_ids": [
+        "I-124"
+      ],
+      "round": 4,
+      "severity": "P2",
+      "started_at": "2026-07-15 01:04:18",
+      "status": "done",
+      "task_ids": [
+        "T-007"
+      ],
+      "title": "Recall hides malformed active-entry diagnostics",
+      "unit_ids": [
+        "U-007"
+      ]
+    },
+    {
+      "completed_at": "2026-07-15 01:37:39",
+      "created_at": "2026-07-15 01:03:09",
+      "evidence": "Recall bounded fallback keeps complete compact records and respects legal byte budgets; recall tests and deterministic eval pass.",
+      "fix_id": "F-122",
+      "issue_ids": [
+        "I-125"
+      ],
+      "round": 4,
+      "severity": "P2",
+      "started_at": "2026-07-15 01:04:19",
+      "status": "done",
+      "task_ids": [
+        "T-007"
+      ],
+      "title": "All-workflow recall skips empty-query validation on empty roots",
+      "unit_ids": [
+        "U-007"
+      ]
+    },
+    {
+      "completed_at": "2026-07-15 01:37:40",
+      "created_at": "2026-07-15 01:06:20",
+      "evidence": "Recall-all no longer drops unsafe path diagnostics at minimal budgets; Windows full suite 143 tests OK and WSL safety/concurrency 19 tests OK.",
+      "fix_id": "F-123",
+      "issue_ids": [
+        "I-126"
+      ],
+      "round": 4,
+      "severity": "P2",
+      "started_at": "2026-07-15 01:28:29",
+      "status": "done",
+      "task_ids": [
+        "T-002"
+      ],
+      "title": "Recall-all drops unsafe diagnostics under minimal budget",
+      "unit_ids": [
+        "U-002"
+      ]
+    },
+    {
+      "completed_at": "2026-07-15 01:37:41",
+      "created_at": "2026-07-15 01:06:20",
+      "evidence": "Recall-all and migrate-all validate shared/local scope and conflicting selectors before dispatch; schema/dispatch and migration regressions pass.",
+      "fix_id": "F-124",
+      "issue_ids": [
+        "I-127"
+      ],
+      "round": 4,
+      "severity": "P2",
+      "started_at": "2026-07-15 01:28:30",
+      "status": "done",
+      "task_ids": [
+        "T-002"
+      ],
+      "title": "Recall-all and migrate-all skip invalid scope validation",
+      "unit_ids": [
+        "U-002"
+      ]
+    },
+    {
+      "completed_at": "2026-07-15 01:37:43",
+      "created_at": "2026-07-15 01:06:20",
+      "evidence": "Recall-all rejects empty or low-trust queries even when workflow roots are empty; focused recall regression and full Nature suite pass.",
+      "fix_id": "F-125",
+      "issue_ids": [
+        "I-128"
+      ],
+      "round": 4,
+      "severity": "P2",
+      "started_at": "2026-07-15 01:28:31",
+      "status": "done",
+      "task_ids": [
+        "T-002"
+      ],
+      "title": "Recall-all skips low-trust query validation on empty roots",
+      "unit_ids": [
+        "U-002"
+      ]
+    },
+    {
+      "completed_at": "2026-07-15 01:37:44",
+      "created_at": "2026-07-15 01:06:20",
+      "evidence": "Public memory APIs convert missing project roots to structured project_root_not_found errors; missing-root regressions and full Nature suite pass.",
+      "fix_id": "F-126",
+      "issue_ids": [
+        "I-129"
+      ],
+      "round": 4,
+      "severity": "P2",
+      "started_at": "2026-07-15 01:28:32",
+      "status": "done",
+      "task_ids": [
+        "T-002"
+      ],
+      "title": "Public memory APIs leak FileNotFoundError for missing project root",
+      "unit_ids": [
+        "U-002"
+      ]
     }
   ],
   "full_fix_rounds": 3,
@@ -4603,6 +5335,351 @@
       ],
       "title": "Migrate schema conditional misclassifies omitted all_workflows",
       "unit_id": "U-008"
+    },
+    {
+      "agent_id": "round-4-R-U-005",
+      "created_at": "2026-07-15 00:58:02",
+      "evidence": "Reviewer U-005 found test_nature_memory.py covers count threshold but does not directly prove a valid remember crossing SOFT_ACTIVE_BYTES succeeds and returns needs_consolidation.",
+      "fix_id": null,
+      "issue_id": "I-107",
+      "round": 4,
+      "severity": "P3",
+      "status": "deferred",
+      "task_ids": [
+        "T-005"
+      ],
+      "title": "Missing direct soft-byte remember boundary assertion",
+      "unit_id": "U-005"
+    },
+    {
+      "agent_id": "round-4-R-U-005",
+      "created_at": "2026-07-15 00:58:02",
+      "evidence": "Reviewer U-005 found consolidate hard-budget rejection checks only hard_file_budget and does not assert the canonical file remains byte-identical.",
+      "fix_id": null,
+      "issue_id": "I-108",
+      "round": 4,
+      "severity": "P3",
+      "status": "deferred",
+      "task_ids": [
+        "T-005"
+      ],
+      "title": "Missing hard-budget file identity assertion",
+      "unit_id": "U-005"
+    },
+    {
+      "agent_id": "round-4-R-U-003",
+      "created_at": "2026-07-15 00:59:30",
+      "evidence": "Reviewer U-003 deterministic probe shows Windows or unsupported renameat2 path checks the ETag then calls os.replace, returning ok=true while external content is overwritten.",
+      "fix_id": "F-107",
+      "issue_id": "I-109",
+      "round": 4,
+      "severity": "P1",
+      "status": "fixed",
+      "task_ids": [
+        "T-003"
+      ],
+      "title": "Windows final CAS can overwrite external rewrite",
+      "unit_id": "U-003"
+    },
+    {
+      "agent_id": "round-4-R-U-003",
+      "created_at": "2026-07-15 00:59:30",
+      "evidence": "Reviewer U-003 found replace_failed implementation lacks direct os.replace PermissionError injection asserting temporary cleanup and original-file preservation.",
+      "fix_id": "F-108",
+      "issue_id": "I-110",
+      "round": 4,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-003"
+      ],
+      "title": "Missing direct atomic replace failure regression",
+      "unit_id": "U-003"
+    },
+    {
+      "agent_id": "round-4-R-U-001",
+      "created_at": "2026-07-15 00:59:54",
+      "evidence": "Reviewer U-001 deterministic repro shows unique legacy/title-only entries containing # return locator_workflow_mismatch or not_found instead of show/touch success.",
+      "fix_id": "F-109",
+      "issue_id": "I-111",
+      "round": 4,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-001"
+      ],
+      "title": "Hash-containing title is misclassified as locator",
+      "unit_id": "U-001"
+    },
+    {
+      "agent_id": "round-4-R-U-001",
+      "created_at": "2026-07-15 00:59:55",
+      "evidence": "Reviewer U-001 repro shows touching M1 rewrites unrelated CRLF, trailing spaces, and final blank lines because the compatibility path joins normalized lines.",
+      "fix_id": "F-110",
+      "issue_id": "I-112",
+      "round": 4,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-001"
+      ],
+      "title": "Legacy touch does not preserve unrelated line endings",
+      "unit_id": "U-001"
+    },
+    {
+      "agent_id": "round-4-R-U-001",
+      "created_at": "2026-07-15 00:59:55",
+      "evidence": "Reviewer U-001 repro shows an empty metadata object produces diagnostics=[] and is silently treated as migration-required legacy data.",
+      "fix_id": "F-111",
+      "issue_id": "I-113",
+      "round": 4,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-001"
+      ],
+      "title": "Empty canonical metadata lacks diagnostics",
+      "unit_id": "U-001"
+    },
+    {
+      "agent_id": "round-4-R-U-008",
+      "created_at": "2026-07-15 01:01:16",
+      "evidence": "Reviewer U-008 probe shows CLI/API with all_workflows=true and workflow_dir set migrates both workflows instead of rejecting the conflicting selectors.",
+      "fix_id": "F-112",
+      "issue_id": "I-114",
+      "round": 4,
+      "severity": "P1",
+      "status": "fixed",
+      "task_ids": [
+        "T-008"
+      ],
+      "title": "Conflicting migrate selectors broaden scope",
+      "unit_id": "U-008"
+    },
+    {
+      "agent_id": "round-4-R-U-008",
+      "created_at": "2026-07-15 01:01:16",
+      "evidence": "Reviewer U-008 found all-workflow MCP coverage uses canonical-only data and does not prove legacy dry-run/apply/collision or failure isolation over JSON-RPC.",
+      "fix_id": "F-113",
+      "issue_id": "I-115",
+      "round": 4,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-008"
+      ],
+      "title": "Legacy MCP migration success/failure coverage missing",
+      "unit_id": "U-008"
+    },
+    {
+      "agent_id": "round-4-R-U-008",
+      "created_at": "2026-07-15 01:01:16",
+      "evidence": "Reviewer U-008 found recovery test mocks replacement failure but does not compare memory.md bytes before and after the failure.",
+      "fix_id": "F-114",
+      "issue_id": "I-116",
+      "round": 4,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-008"
+      ],
+      "title": "Migration failure byte identity is unasserted",
+      "unit_id": "U-008"
+    },
+    {
+      "agent_id": "round-4-R-U-004",
+      "created_at": "2026-07-15 01:01:16",
+      "evidence": "Reviewer U-004 shows other.md#nm_id bypasses path validation and scores by fragment, while show rejects the same mismatched locator.",
+      "fix_id": "F-115",
+      "issue_id": "I-117",
+      "round": 4,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-004"
+      ],
+      "title": "Recall accepts mismatched non-canonical locator path",
+      "unit_id": "U-004"
+    },
+    {
+      "agent_id": "round-4-R-U-004",
+      "created_at": "2026-07-15 01:01:16",
+      "evidence": "Reviewer U-004 found no focused evidence for old locators after title/line changes or forget/supersede stale-ETag zero-write behavior.",
+      "fix_id": null,
+      "issue_id": "I-118",
+      "round": 4,
+      "severity": "P3",
+      "status": "deferred",
+      "task_ids": [
+        "T-004"
+      ],
+      "title": "Changed-locator and stale-ETag regressions missing",
+      "unit_id": "U-004"
+    },
+    {
+      "agent_id": "round-4-R-U-006",
+      "created_at": "2026-07-15 01:01:35",
+      "evidence": "Reviewer U-006 shows _resolve_agents_path resolves an in-project AGENTS.md symlink to its target, allowing repair backup/read/overwrite of another file.",
+      "fix_id": "F-116",
+      "issue_id": "I-119",
+      "round": 4,
+      "severity": "P1",
+      "status": "fixed",
+      "task_ids": [
+        "T-006"
+      ],
+      "title": "AGENTS symlink is resolved before trust validation",
+      "unit_id": "U-006"
+    },
+    {
+      "agent_id": "round-4-R-U-006",
+      "created_at": "2026-07-15 01:01:35",
+      "evidence": "Reviewer U-006 shows command_memory_index catches only MemoryBoundaryError while nature_progress._atomic_write_text exposes raw os.replace errors, so compatibility repair failure is not structured.",
+      "fix_id": "F-117",
+      "issue_id": "I-120",
+      "round": 4,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-006"
+      ],
+      "title": "AGENTS atomic write failure is uncaught",
+      "unit_id": "U-006"
+    },
+    {
+      "agent_id": "round-4-R-U-009",
+      "created_at": "2026-07-15 01:02:36",
+      "evidence": "Reviewer U-009 probe with max_bytes=256 produced 116243-byte memory context and 176714-byte JSON-RPC line because diagnostics are duplicated and facade does not enforce a bounded serialized response.",
+      "fix_id": "F-118",
+      "issue_id": "I-121",
+      "round": 4,
+      "severity": "P1",
+      "status": "fixed",
+      "task_ids": [
+        "T-009"
+      ],
+      "title": "Facade partial context exceeds max_bytes",
+      "unit_id": "U-009"
+    },
+    {
+      "agent_id": "round-4-R-U-009",
+      "created_at": "2026-07-15 01:02:36",
+      "evidence": "Reviewer U-009 injected KeyError and observed ok=true/progress_committed=true with unavailable review, hiding an implementation defect after progress mutation.",
+      "fix_id": "F-119",
+      "issue_id": "I-122",
+      "round": 4,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-009"
+      ],
+      "title": "Facade catch-all masks internal defects",
+      "unit_id": "U-009"
+    },
+    {
+      "agent_id": "round-4-R-U-007",
+      "created_at": "2026-07-15 01:03:08",
+      "evidence": "Reviewer U-007 reproduced max_bytes=900 compact result missing provenance, evidence, confidence and requires_live_verification although the full recall contract requires complete records.",
+      "fix_id": "F-120",
+      "issue_id": "I-123",
+      "round": 4,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-007"
+      ],
+      "title": "Compact recall fallback drops required result fields",
+      "unit_id": "U-007"
+    },
+    {
+      "agent_id": "round-4-R-U-007",
+      "created_at": "2026-07-15 01:03:08",
+      "evidence": "Reviewer U-007 corrupted an active stable entry and observed recall ok=true with diagnostics=[] because error diagnostics are filtered out instead of being surfaced.",
+      "fix_id": "F-121",
+      "issue_id": "I-124",
+      "round": 4,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-007"
+      ],
+      "title": "Recall hides malformed active-entry diagnostics",
+      "unit_id": "U-007"
+    },
+    {
+      "agent_id": "round-4-R-U-007",
+      "created_at": "2026-07-15 01:03:08",
+      "evidence": "Reviewer U-007 observed command_memory_recall_all with an empty workflow root accepts sentinel/empty query and returns ok=true without single-workflow validation.",
+      "fix_id": "F-122",
+      "issue_id": "I-125",
+      "round": 4,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-007"
+      ],
+      "title": "All-workflow recall skips empty-query validation on empty roots",
+      "unit_id": "U-007"
+    },
+    {
+      "agent_id": "round-4-R-U-002",
+      "created_at": "2026-07-15 01:06:20",
+      "evidence": "Reviewer U-002 reproduced malformed memory plus max_bytes=256 returning ok=true with empty results and no unsafe-path diagnostics.",
+      "fix_id": "F-123",
+      "issue_id": "I-126",
+      "round": 4,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-002"
+      ],
+      "title": "Recall-all drops unsafe diagnostics under minimal budget",
+      "unit_id": "U-002"
+    },
+    {
+      "agent_id": "round-4-R-U-002",
+      "created_at": "2026-07-15 01:06:20",
+      "evidence": "Reviewer U-002 reproduced invalid scope on recall_all and migrate_all with no matching workflows returning ok=true.",
+      "fix_id": "F-124",
+      "issue_id": "I-127",
+      "round": 4,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-002"
+      ],
+      "title": "Recall-all and migrate-all skip invalid scope validation",
+      "unit_id": "U-002"
+    },
+    {
+      "agent_id": "round-4-R-U-002",
+      "created_at": "2026-07-15 01:06:20",
+      "evidence": "Reviewer U-002 reproduced control-character and sentinel queries accepted and echoed when all-workflow root has no workflows.",
+      "fix_id": "F-125",
+      "issue_id": "I-128",
+      "round": 4,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-002"
+      ],
+      "title": "Recall-all skips low-trust query validation on empty roots",
+      "unit_id": "U-002"
+    },
+    {
+      "agent_id": "round-4-R-U-002",
+      "created_at": "2026-07-15 01:06:20",
+      "evidence": "Reviewer U-002 reproduced raw FileNotFoundError from forget, supersede, consolidate_plan and consolidate_apply while only recall had structured missing-root handling.",
+      "fix_id": "F-126",
+      "issue_id": "I-129",
+      "round": 4,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-002"
+      ],
+      "title": "Public memory APIs leak FileNotFoundError for missing project root",
+      "unit_id": "U-002"
     }
   ],
   "max_rounds": 6,
@@ -4625,11 +5702,11 @@
   "policy": "rounds 1-3 fix all actionable issues; round 4+ auto-fix P0-P2 only",
   "review_units": [
     {
-      "adversarial_status": "issues",
+      "adversarial_status": "pending",
       "last_result": "ACTIONABLE_ISSUES",
       "phase": "阶段 1：Canonical 数据与事务边界",
       "review_status": "issues",
-      "round_started": 3,
+      "round_started": 4,
       "status": "issues",
       "task_ids": [
         "T-001"
@@ -4637,11 +5714,11 @@
       "unit_id": "U-001"
     },
     {
-      "adversarial_status": "issues",
+      "adversarial_status": "pending",
       "last_result": "ACTIONABLE_ISSUES",
       "phase": "阶段 1：Canonical 数据与事务边界",
       "review_status": "issues",
-      "round_started": 3,
+      "round_started": 4,
       "status": "issues",
       "task_ids": [
         "T-002"
@@ -4649,11 +5726,11 @@
       "unit_id": "U-002"
     },
     {
-      "adversarial_status": "issues",
+      "adversarial_status": "pending",
       "last_result": "ACTIONABLE_ISSUES",
       "phase": "阶段 1：Canonical 数据与事务边界",
       "review_status": "issues",
-      "round_started": 3,
+      "round_started": 4,
       "status": "issues",
       "task_ids": [
         "T-003"
@@ -4661,11 +5738,11 @@
       "unit_id": "U-003"
     },
     {
-      "adversarial_status": "issues",
+      "adversarial_status": "pending",
       "last_result": "ACTIONABLE_ISSUES",
       "phase": "阶段 1：Canonical 数据与事务边界",
       "review_status": "issues",
-      "round_started": 3,
+      "round_started": 4,
       "status": "issues",
       "task_ids": [
         "T-004"
@@ -4673,11 +5750,11 @@
       "unit_id": "U-004"
     },
     {
-      "adversarial_status": "issues",
+      "adversarial_status": "pending",
       "last_result": "ACTIONABLE_ISSUES",
       "phase": "阶段 1：Canonical 数据与事务边界",
       "review_status": "issues",
-      "round_started": 3,
+      "round_started": 4,
       "status": "issues",
       "task_ids": [
         "T-005"
@@ -4685,11 +5762,11 @@
       "unit_id": "U-005"
     },
     {
-      "adversarial_status": "issues",
+      "adversarial_status": "pending",
       "last_result": "ACTIONABLE_ISSUES",
       "phase": "阶段 2：发现、召回、迁移与工作流接入",
       "review_status": "issues",
-      "round_started": 3,
+      "round_started": 4,
       "status": "issues",
       "task_ids": [
         "T-006"
@@ -4697,11 +5774,11 @@
       "unit_id": "U-006"
     },
     {
-      "adversarial_status": "issues",
+      "adversarial_status": "pending",
       "last_result": "ACTIONABLE_ISSUES",
       "phase": "阶段 2：发现、召回、迁移与工作流接入",
       "review_status": "issues",
-      "round_started": 3,
+      "round_started": 4,
       "status": "issues",
       "task_ids": [
         "T-007"
@@ -4709,11 +5786,11 @@
       "unit_id": "U-007"
     },
     {
-      "adversarial_status": "issues",
+      "adversarial_status": "pending",
       "last_result": "ACTIONABLE_ISSUES",
       "phase": "阶段 2：发现、召回、迁移与工作流接入",
       "review_status": "issues",
-      "round_started": 3,
+      "round_started": 4,
       "status": "issues",
       "task_ids": [
         "T-008"
@@ -4721,11 +5798,11 @@
       "unit_id": "U-008"
     },
     {
-      "adversarial_status": "issues",
+      "adversarial_status": "pending",
       "last_result": "ACTIONABLE_ISSUES",
       "phase": "阶段 2：发现、召回、迁移与工作流接入",
       "review_status": "issues",
-      "round_started": 3,
+      "round_started": 4,
       "status": "issues",
       "task_ids": [
         "T-009"
@@ -4733,12 +5810,12 @@
       "unit_id": "U-009"
     },
     {
-      "adversarial_status": "issues",
+      "adversarial_status": "pending",
       "last_result": "ACTIONABLE_ISSUES",
       "phase": "阶段 3：对抗验证、Agent Eval 与发布收尾",
-      "review_status": "issues",
-      "round_started": 3,
-      "status": "issues",
+      "review_status": "pending",
+      "round_started": 4,
+      "status": "pending",
       "task_ids": [
         "T-010",
         "T-011",
@@ -4747,10 +5824,10 @@
       "unit_id": "U-010"
     }
   ],
-  "round": 3,
+  "round": 4,
   "schema_version": 1,
   "status": "fixes-complete",
   "task_count": 12,
-  "updated_at": "2026-07-15 00:44:13",
+  "updated_at": "2026-07-15 01:37:44",
   "workflow": "design-first"
 }

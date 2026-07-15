@@ -4753,9 +4753,9 @@
       ]
     },
     {
-      "completed_at": null,
+      "completed_at": "2026-07-15 03:44:03",
       "created_at": "2026-07-15 03:19:58",
-      "evidence": "pending",
+      "evidence": "Updated tasks.md through the Spec Progress script's allowed completion-log/top-summary fields with current checkpoint 6bb7d9a. T-011/T-012 now record independent reviewer_verdicts.json evidence, offline-only eval scope, 171 Windows script tests, 19 WSL safety/concurrency tests, 10 MCP tests, compile/JSON/spec/resume/diff checks; no design/requirements/task structure changed.",
       "fix_id": "F-162",
       "issue_ids": [
         "I-167"
@@ -4763,7 +4763,7 @@
       "round": 5,
       "severity": "P1",
       "started_at": "2026-07-15 03:20:23",
-      "status": "active",
+      "status": "done",
       "task_ids": [
         "T-011",
         "T-012"
@@ -7289,7 +7289,7 @@
       "issue_id": "I-167",
       "round": 5,
       "severity": "P1",
-      "status": "planned",
+      "status": "fixed",
       "task_ids": [
         "T-011",
         "T-012"
@@ -7442,8 +7442,8 @@
   ],
   "round": 5,
   "schema_version": 1,
-  "status": "fixes-running",
+  "status": "fixes-complete",
   "task_count": 12,
-  "updated_at": "2026-07-15 03:42:10",
+  "updated_at": "2026-07-15 03:44:03",
   "workflow": "design-first"
 }

@@ -2,10 +2,10 @@
 
 > **功能名称：** Paper-scoped Memory Lifecycle
 > **关联规范：** `docs/specs/20260714-001540-nature-memory-redesign/design.md` · `docs/specs/20260714-001540-nature-memory-redesign/requirements.md`
-> **状态：** Approved
+> **状态：** Completed
 > **当前任务：** n/a
 > **进度：** 12 / 12 已完成
-> **最后更新：** 2026-07-14 19:13:54
+> **最后更新：** 2026-07-15 03:43:38
 
 ---
 
@@ -241,3 +241,5 @@
 | T-010 | 2026-07-14 08:26:41 | d6ec024 | python -B -m unittest discover -s plugins/nature-workflow/scripts -p "test_nature_memory*.py" (74 tests OK, 2 symlink tests skipped because Windows symlink privilege is unavailable); python -m py_compile plugins/nature-workflow/scripts/nature_memory.py plugins/nature-workflow/scripts/test_nature_memory.py plugins/nature-workflow/scripts/test_nature_memory_recall.py plugins/nature-workflow/scripts/test_nature_memory_safety.py plugins/nature-workflow/scripts/test_nature_memory_concurrency.py; git diff --check | n/a |
 | T-011 | 2026-07-14 09:05:46 | d6ec024 | python plugins/nature-workflow/evals/nature_memory_eval.py --mode deterministic (5 workflows, 80 records, 50 queries; Recall@3=1.0, MRR=1.0, nDCG@3=1.0, no-hit FPR=0.0); python plugins/nature-workflow/evals/nature_memory_eval.py --mode agent --runs 3 (20 scenarios x 3 fresh processes; write precision=1.0, write recall=1.0, locator valid=100%, security failures=0); python -m json.tool plugins/nature-workflow/evals/fixtures/recall_cases.json; python -m json.tool plugins/nature-workflow/evals/fixtures/agent_scenarios.json; python -m py_compile plugins/nature-workflow/evals/nature_memory_eval.py | n/a |
 | T-012 | 2026-07-14 09:36:21 | d6ec024 | 99 Nature unittest passed (2 Windows symlink skips); compileall passed; deterministic eval 5 workflows/80 records/50 queries Recall@3=1.0 MRR=1.0 nDCG@3=1.0 no-hit FPR=0.0; agent eval 20 scenarios x 3 fresh processes write precision=1.0 write recall=1.0 locator=100% security failures=0; MCP JSON-RPC smoke passed; fixture and manifest JSON validation passed; spec validator/resume and git diff --check run | 同步 README、docs/nature-memory-redesign.md、Nature skill、orchestrator、hook、MCP version/config、plugin manifest 和 marketplace 到 schema-v1 / 0.2.0；离线 fixture eval 不声明 connected model evaluation。 |
+| T-011 | 2026-07-15 00:00:00 | 6bb7d9a | deterministic eval and agent eval --runs 3 passed; Recall@3/MRR/nDCG@3=1.0; no-hit FPR=0.0; 20 scenarios x 3 fresh processes; write precision/recall=1.0; locator=true; security failures=0; external reviewer_verdicts.json disagreements=0; connected_model_evaluation=false | round 5 acceptance checkpoint |
+| T-012 | 2026-07-15 00:00:01 | 6bb7d9a | 171 Nature script tests passed (9 skips); WSL safety/concurrency 19 passed; MCP JSON-RPC 10 passed; compile, JSON fixtures, spec validation, resume, and git diff --check passed | current round 5 checkpoint; eval is offline and does not claim connected model evaluation |

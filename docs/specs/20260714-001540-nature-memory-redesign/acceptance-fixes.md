@@ -170,7 +170,7 @@
 | F-159 | I-164 | P2 | U-003 | done | unexpected renameat2 errno is converted to structured retryable CAS error with ETag context; regression passes. |
 | F-160 | I-165 | P2 | U-003 | done | CAS restore failures include current/expected ETag context and preserve auditable zero-write behavior; focused concurrency/safety tests pass. |
 | F-161 | I-166 | P1 | U-008 | done | all-workflows migration converts replacement OSError to structured per-workflow failure, cleans operation backup, preserves bytes, and permits retry; migration regressions pass. |
-| F-162 | I-167 | P1 | U-010 | active | pending |
+| F-162 | I-167 | P1 | U-010 | done | Updated tasks.md through the Spec Progress script's allowed completion-log/top-summary fields with current checkpoint 6bb7d9a. T-011/T-012 now record independent reviewer_verdicts.json evidence, offline-only eval scope, 171 Windows script tests, 19 WSL safety/concurrency tests, 10 MCP tests, compile/JSON/spec/resume/diff checks; no design/requirements/task structure changed. |
 
 ## Deferred Issues
 

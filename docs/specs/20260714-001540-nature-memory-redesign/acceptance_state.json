@@ -1686,7 +1686,7 @@
       "unit_id": "U-010"
     }
   ],
-  "completed_at": null,
+  "completed_at": "2026-07-15 06:05:06",
   "created_at": "2026-07-14 10:12:59",
   "deferred_issues": [
     {
@@ -8157,8 +8157,8 @@
   ],
   "round": 6,
   "schema_version": 1,
-  "status": "fixes-complete",
+  "status": "accepted",
   "task_count": 12,
-  "updated_at": "2026-07-15 06:03:45",
+  "updated_at": "2026-07-15 06:05:06",
   "workflow": "design-first"
 }

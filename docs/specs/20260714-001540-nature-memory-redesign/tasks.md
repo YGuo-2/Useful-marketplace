@@ -2,10 +2,10 @@
 
 > **功能名称：** Paper-scoped Memory Lifecycle
 > **关联规范：** `docs/specs/20260714-001540-nature-memory-redesign/design.md` · `docs/specs/20260714-001540-nature-memory-redesign/requirements.md`
-> **状态：** Completed
+> **状态：** Accepted
 > **当前任务：** n/a
 > **进度：** 12 / 12 已完成
-> **最后更新：** 2026-07-15 03:43:38
+> **最后更新：** 2026-07-15 06:05:06
 
 ---
 

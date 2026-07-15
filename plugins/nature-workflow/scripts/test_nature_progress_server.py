@@ -89,6 +89,35 @@ class ServerEncodingSmokeTest(unittest.TestCase):
         self.assertIn("nature_complete_with_memory_review", tools)
         self.assertIn("nature_block_with_memory_review", tools)
 
+    def test_memory_read_schemas_require_explicit_workflow_selection(self) -> None:
+        request = _rpc({"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}}) + "\n"
+        proc = subprocess.run([sys.executable, str(SERVER)], input=request, text=True, capture_output=True, timeout=30)
+        replies = [json.loads(line) for line in proc.stdout.splitlines() if line.strip()]
+        declared = {tool["name"]: tool["inputSchema"] for tool in replies[-1]["result"]["tools"]}
+        for name in ("nature_memory_check", "nature_memory_list", "nature_memory_recall", "nature_memory_migrate"):
+            condition = declared[name]["allOf"][0]
+            self.assertIn("all_workflows", condition["if"]["required"])
+            self.assertEqual(condition["if"]["properties"]["all_workflows"]["const"], True)
+            self.assertEqual(condition["else"]["required"], ["workflow_dir"])
+
+    def test_memory_dispatch_does_not_broaden_missing_workflow_and_validates_empty_all_root(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            requests = [
+                {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "nature_memory_list", "arguments": {"project_root": tmp, "scope": "shared"}}},
+                {"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": "nature_memory_recall", "arguments": {"project_root": tmp, "scope": "shared", "query": "empty", "all_workflows": True, "top_k": 6}}},
+                {"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": {"name": "nature_memory_migrate", "arguments": {"project_root": tmp, "scope": "shared", "workflow_dir": "docs/nature-workflows/wf", "dry_run": True}}},
+            ]
+            proc = subprocess.run([sys.executable, str(SERVER)], input="\n".join(_rpc(item) for item in requests) + "\n", text=True, capture_output=True, timeout=30)
+            replies = [json.loads(line) for line in proc.stdout.splitlines() if line.strip()]
+            missing_workflow = next(reply for reply in replies if reply.get("id") == 1)
+            invalid_all_recall = next(reply for reply in replies if reply.get("id") == 2)
+            migrate = next(reply for reply in replies if reply.get("id") == 3)
+            self.assertIn("error", missing_workflow)
+            self.assertIn("error", invalid_all_recall)
+            self.assertNotIn("error", migrate)
+            migrate_payload = json.loads(migrate["result"]["content"][0]["text"])
+            self.assertEqual(migrate_payload["error"]["code"], "invalid_workflow_dir")
+
     def test_new_memory_tools_round_trip_real_json_rpc_calls(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             create_requests = "\n".join(

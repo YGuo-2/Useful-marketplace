@@ -34,6 +34,10 @@ from nature_context import (  # noqa: E402
     resume_with_memory,
 )
 from nature_memory import (  # noqa: E402
+    RECALL_DEFAULT_TOP_K,
+    RECALL_MAX_BYTES,
+    RECALL_MAX_TOP_K,
+    RECALL_MIN_BYTES,
     command_memory_consolidate_apply,
     command_memory_consolidate_plan,
     command_memory_check,
@@ -55,6 +59,29 @@ WORKFLOW_INPUTS = {
     "project_root": {"type": "string"},
     "workflow_dir": {"type": "string"},
 }
+
+
+def _workflow_selection_condition() -> dict[str, Any]:
+    """Require a workflow unless the caller explicitly opts into a global read."""
+    return {
+        "if": {
+            "required": ["all_workflows"],
+            "properties": {"all_workflows": {"const": True}},
+        },
+        "then": {"not": {"required": ["workflow_dir"]}},
+        "else": {"required": ["workflow_dir"]},
+    }
+
+
+def _workflow_selection_schema(properties: dict[str, Any], *, required: list[str] | None = None) -> dict[str, Any]:
+    schema: dict[str, Any] = {
+        "type": "object",
+        "properties": properties,
+        "allOf": [_workflow_selection_condition()],
+    }
+    if required:
+        schema["required"] = required
+    return schema
 
 
 TOOLS = [
@@ -186,10 +213,9 @@ TOOLS = [
     {
         "name": "nature_memory_check",
         "description": "Lint a Nature workflow memory file; entry count and byte thresholds are advisory signals.",
-        "inputSchema": {
-            "type": "object",
-            "properties": {**WORKFLOW_INPUTS, "scope": {"type": "string", "enum": ["shared", "local"]}, "all_workflows": {"type": "boolean"}},
-        },
+        "inputSchema": _workflow_selection_schema(
+            {**WORKFLOW_INPUTS, "scope": {"type": "string", "enum": ["shared", "local"]}, "all_workflows": {"type": "boolean"}},
+        ),
     },
     {
         "name": "nature_memory_touch",
@@ -214,10 +240,9 @@ TOOLS = [
     {
         "name": "nature_memory_list",
         "description": "List memory.md entry summaries for a Nature workflow.",
-        "inputSchema": {
-            "type": "object",
-            "properties": {**WORKFLOW_INPUTS, "scope": {"type": "string", "enum": ["shared", "local"]}, "all_workflows": {"type": "boolean"}},
-        },
+        "inputSchema": _workflow_selection_schema(
+            {**WORKFLOW_INPUTS, "scope": {"type": "string", "enum": ["shared", "local"]}, "all_workflows": {"type": "boolean"}},
+        ),
     },
 ]
 
@@ -247,9 +272,8 @@ TOOLS.extend(
         {
             "name": "nature_memory_recall",
             "description": "Recall bounded, deterministic low-trust memory context from one explicit scope.",
-            "inputSchema": {
-                "type": "object",
-                "properties": {
+            "inputSchema": _workflow_selection_schema(
+                {
                     "project_root": {"type": "string"},
                     "workflow_dir": {"type": "string"},
                     "scope": {"type": "string", "enum": ["shared", "local"]},
@@ -259,8 +283,8 @@ TOOLS.extend(
                     "filters": {"type": "object"},
                     "all_workflows": {"type": "boolean"},
                 },
-                "required": ["project_root", "scope", "query"],
-            },
+                required=["project_root", "scope", "query"],
+            ),
         },
         {
             "name": "nature_memory_show",
@@ -346,24 +370,16 @@ TOOLS.extend(
         {
             "name": "nature_memory_migrate",
             "description": "Explicitly dry-run or migrate legacy memory entries, per workflow.",
-            "inputSchema": {
-                "type": "object",
-                "properties": {
+            "inputSchema": _workflow_selection_schema(
+                {
                     "project_root": {"type": "string"},
                     "workflow_dir": {"type": "string"},
                     "scope": {"type": "string", "enum": ["shared", "local"]},
                     "dry_run": {"type": "boolean"},
                     "all_workflows": {"type": "boolean"},
                 },
-                "required": ["project_root", "scope"],
-                "allOf": [
-                    {
-                        "if": {"properties": {"all_workflows": {"const": True}}},
-                        "then": {"not": {"required": ["workflow_dir"]}},
-                        "else": {"required": ["workflow_dir"]},
-                    }
-                ],
-            },
+                required=["project_root", "scope"],
+            ),
         },
         {
             "name": "nature_resume_with_memory",
@@ -480,6 +496,33 @@ def _required_string(args: dict[str, Any], name: str) -> str:
     return raw
 
 
+def _all_workflows(args: dict[str, Any]) -> bool:
+    raw = args.get("all_workflows", False)
+    if not isinstance(raw, bool):
+        raise NatureProgressError("all_workflows must be a boolean")
+    return raw
+
+
+def _workflow_selection(args: dict[str, Any]) -> tuple[str | None, bool]:
+    workflow_dir = _workflow(args)
+    all_workflows = _all_workflows(args)
+    if all_workflows and workflow_dir is not None:
+        raise NatureProgressError("workflow_dir must be omitted when all_workflows is true")
+    if not all_workflows and workflow_dir is None:
+        raise NatureProgressError("workflow_dir is required unless all_workflows is true")
+    return workflow_dir, all_workflows
+
+
+def _recall_parameters(args: dict[str, Any]) -> tuple[int, int]:
+    top_k = args.get("top_k", RECALL_DEFAULT_TOP_K)
+    if isinstance(top_k, bool) or not isinstance(top_k, int) or not 1 <= top_k <= RECALL_MAX_TOP_K:
+        raise NatureProgressError(f"top_k must be between 1 and {RECALL_MAX_TOP_K}")
+    max_bytes = args.get("max_bytes", RECALL_MAX_BYTES)
+    if isinstance(max_bytes, bool) or not isinstance(max_bytes, int) or not RECALL_MIN_BYTES <= max_bytes <= RECALL_MAX_BYTES:
+        raise NatureProgressError(f"max_bytes must be between {RECALL_MIN_BYTES} and {RECALL_MAX_BYTES}")
+    return top_k, max_bytes
+
+
 def _project_root_required(args: dict[str, Any]) -> Path:
     raw = args.get("project_root")
     if not isinstance(raw, str) or not raw.strip():
@@ -549,12 +592,12 @@ def call_tool(name: str, args: dict[str, Any]) -> Any:
             base=base,
         )
     if name == "nature_memory_check":
-        workflow_dir = _workflow(args)
+        workflow_dir, all_workflows = _workflow_selection(args)
         return command_memory_check(
             _root(args),
             workflow_dir,
             base=base,
-            all_workflows=bool(args.get("all_workflows", False)) or workflow_dir is None,
+            all_workflows=all_workflows,
             scope=args.get("scope", "shared"),
         )
     if name == "nature_memory_touch":
@@ -562,12 +605,12 @@ def call_tool(name: str, args: dict[str, Any]) -> Any:
     if name == "nature_memory_index":
         return command_memory_index(_root(args), _workflow(args), base=base, all_workflows=_workflow(args) is None)
     if name == "nature_memory_list":
-        workflow_dir = _workflow(args)
+        workflow_dir, all_workflows = _workflow_selection(args)
         return command_memory_list(
             _root(args),
             workflow_dir,
             base=base,
-            all_workflows=bool(args.get("all_workflows", False)) or workflow_dir is None,
+            all_workflows=all_workflows,
             scope=args.get("scope", "shared"),
         )
     if name == "nature_memory_remember":
@@ -585,23 +628,25 @@ def call_tool(name: str, args: dict[str, Any]) -> Any:
         project_root = _project_root_required(args)
         scope = _required_scope(args)
         query = _required_string(args, "query")
-        if bool(args.get("all_workflows", False)):
+        workflow_dir, all_workflows = _workflow_selection(args)
+        top_k, max_bytes = _recall_parameters(args)
+        if all_workflows:
             return command_memory_recall_all(
                 project_root,
                 _root(args),
                 scope,
                 query,
-                top_k=args.get("top_k", 3),
-                max_bytes=args.get("max_bytes", 4096),
+                top_k=top_k,
+                max_bytes=max_bytes,
                 filters=args.get("filters") if isinstance(args.get("filters"), dict) else None,
             )
         return command_memory_recall(
             project_root,
-            _required_string(args, "workflow_dir"),
+            workflow_dir,
             scope,
             query,
-            top_k=args.get("top_k", 3),
-            max_bytes=args.get("max_bytes", 4096),
+            top_k=top_k,
+            max_bytes=max_bytes,
             filters=args.get("filters") if isinstance(args.get("filters"), dict) else None,
         )
     if name == "nature_memory_show":
@@ -654,10 +699,7 @@ def call_tool(name: str, args: dict[str, Any]) -> Any:
             _required_object(args, "new_metadata"),
         )
     if name == "nature_memory_migrate":
-        all_workflows = bool(args.get("all_workflows", False))
-        workflow_dir = _workflow(args)
-        if not all_workflows and not workflow_dir:
-            raise NatureProgressError("workflow_dir is required unless all_workflows is true")
+        workflow_dir, all_workflows = _workflow_selection(args)
         return command_memory_migrate(
             _project_root_required(args),
             workflow_dir,

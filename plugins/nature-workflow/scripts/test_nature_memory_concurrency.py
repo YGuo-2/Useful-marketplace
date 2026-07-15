@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 import tempfile
 import unittest
@@ -50,6 +51,18 @@ def process_update(root_text: str, workflow_text: str, entry_id: str, etag: str,
 
 
 class MemoryConcurrencyTests(unittest.TestCase):
+    def test_real_fcntl_lock_backend_on_unix(self) -> None:
+        if os.name == "nt":
+            self.skipTest("Unix fcntl backend is not applicable on Windows")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            wf = workflow(root, "real-fcntl")
+            with memory.workflow_memory_lock(wf):
+                pass
+            lock_path = wf / ".nature-memory.lock"
+            self.assertTrue(lock_path.is_file())
+            self.assertEqual(lock_path.stat().st_nlink, 1)
+
     def test_fcntl_lock_backend_is_executable(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

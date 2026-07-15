@@ -1426,6 +1426,154 @@ class NatureMemoryTests(unittest.TestCase):
             self.assertFalse(listed["ok"], listed)
             self.assertEqual(listed["error"]["code"], "memory_path_not_regular_file")
 
+    def test_show_scopes_diagnostics_to_the_requested_entry_and_preserves_legacy_timestamp(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            workflow = make_workflow(repo)
+            canonical = nature_memory.command_memory_remember(
+                repo, workflow, "shared", "same title", "valid body", {"kind": "decision"}
+            )
+            future = nature_memory.serialize_entry("same title", "future body", schema_v1_metadata(schema=2))
+            (workflow / "memory.md").write_text(
+                (workflow / "memory.md").read_text(encoding="utf-8") + future,
+                encoding="utf-8",
+            )
+            shown = nature_memory.command_memory_show(repo, workflow, "shared", canonical["entry_id"])
+            self.assertTrue(shown["ok"], shown)
+            self.assertTrue(any(item["code"] == "unknown_schema" for item in shown["diagnostics"]))
+
+            legacy_workflow = make_workflow(repo, "legacy-show")
+            (legacy_workflow / "memory.md").write_text(
+                legacy_entry(3, "timestamped", "legacy body"), encoding="utf-8"
+            )
+            legacy = nature_memory.command_memory_show(repo, legacy_workflow, "shared", "M3")
+            self.assertTrue(legacy["ok"], legacy)
+            self.assertEqual(legacy["entry"]["updated"], "2026-06-20T12:00:00Z")
+
+    def test_update_supersedes_sources_and_locator_is_workflow_bound(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            first = make_workflow(repo, "first")
+            second = make_workflow(repo, "second")
+            source = nature_memory.command_memory_remember(repo, first, "shared", "source", "body", {"kind": "decision"})
+            target = nature_memory.command_memory_remember(repo, first, "shared", "target", "body", {"kind": "decision"})
+            updated = nature_memory.command_memory_remember(
+                repo,
+                first,
+                "shared",
+                "target renamed",
+                "new body",
+                {"kind": "decision", "supersedes": [source["entry_id"]]},
+                entry_id=target["entry_id"],
+                expected_etag=target["etag"],
+            )
+            self.assertTrue(updated["ok"], updated)
+            self.assertEqual(updated["operation"], "superseded")
+            parsed = nature_memory.parse_memory((first / "memory.md").read_text(encoding="utf-8"))
+            self.assertEqual(next(item for item in parsed if item.entry_id == source["entry_id"]).metadata["lifecycle"], "superseded")
+            other = nature_memory.command_memory_remember(repo, second, "shared", "other", "body", {"kind": "decision"})
+            mismatch = nature_memory.command_memory_show(repo, second, "shared", updated["locator"])
+            self.assertFalse(mismatch["ok"], mismatch)
+            self.assertEqual(mismatch["error"]["code"], "locator_workflow_mismatch")
+            self.assertNotEqual(other["entry_id"], updated["entry_id"])
+
+    def test_budget_and_recovery_boundaries_are_explicit(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            workflow = make_workflow(repo)
+            active = nature_memory.command_memory_remember(repo, workflow, "shared", "active", "body", {"kind": "decision"})
+            for index in range(12):
+                item = nature_memory.command_memory_remember(repo, workflow, "shared", f"archived-{index}", "body", {"kind": "decision"})
+                nature_memory.command_memory_forget(repo, workflow, "shared", item["entry_id"], item["etag"], "test")
+            checked = nature_memory.command_memory_check(base=repo)
+            self.assertNotIn("max_entries", {item["rule"] for item in checked["violations"]})
+            singleton = nature_memory.command_memory_consolidate_apply(
+                repo, workflow, "shared", "plan_missing", [active["entry_id"]], [active["etag"]],
+                "combined", "body", {"kind": "decision"},
+            )
+            self.assertFalse(singleton["ok"], singleton)
+            self.assertEqual(singleton["error"]["code"], "source_ids_required")
+
+            soft_workflow = make_workflow(repo, "soft-bytes")
+            (soft_workflow / "memory.md").write_text(
+                nature_memory.serialize_entry("large", "x" * (nature_memory.SOFT_ACTIVE_BYTES + 20), schema_v1_metadata()),
+                encoding="utf-8",
+            )
+            soft = nature_memory.command_memory_check(base=repo, workflow="soft-bytes")
+            self.assertIn("soft_active_bytes", {item["rule"] for item in soft["violations"]})
+
+    def test_recall_validates_empty_all_workflow_roots_and_compacts_candidates(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            (repo / "docs" / "nature-workflows").mkdir(parents=True)
+            invalid = nature_memory.command_memory_recall_all(
+                repo, repo / "docs" / "nature-workflows", "shared", "missing", top_k=6
+            )
+            self.assertFalse(invalid["ok"], invalid)
+            self.assertEqual(invalid["error"]["code"], "invalid_top_k")
+
+            workflow = make_workflow(repo, "compact")
+            created = nature_memory.command_memory_remember(repo, workflow, "shared", "compact hit", "x" * 3000, {"kind": "decision"})
+            compact = nature_memory.command_memory_recall(repo, workflow, "shared", "compact hit", max_bytes=4096)
+            self.assertTrue(compact["ok"], compact)
+            self.assertTrue(compact["results"], compact)
+            self.assertEqual(compact["results"][0]["id"], created["entry_id"])
+
+    def test_etag_errors_include_repair_context_and_missing_root_is_structured(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            workflow = make_workflow(repo)
+            created = nature_memory.command_memory_remember(repo, workflow, "shared", "etag", "body", {"kind": "decision"})
+            stale = nature_memory.command_memory_remember(
+                repo, workflow, "shared", "changed", "body", {"kind": "decision"},
+                entry_id=created["entry_id"], expected_etag="0" * 64,
+            )
+            self.assertFalse(stale["ok"], stale)
+            self.assertEqual(stale["error"]["code"], "etag_conflict")
+            for field in ("workflow_dir", "scope", "entry_id", "repair", "current_file_etag", "current_entry_etag"):
+                self.assertIn(field, stale["error"])
+            missing = nature_memory.command_memory_recall(repo / "missing", workflow, "shared", "query")
+            self.assertFalse(missing["ok"], missing)
+            self.assertEqual(missing["error"]["code"], "project_root_not_found")
+
+    def test_migration_rejects_alias_title_collision_and_recovers_after_replace_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            collision = make_workflow(repo, "collision")
+            (collision / "memory.md").write_text(
+                legacy_entry(3, "legacy", "body") + "\n## M3\ncanonical body\n", encoding="utf-8"
+            )
+            dry_run = nature_memory.command_memory_migrate(repo, collision, "shared", dry_run=True)
+            self.assertFalse(dry_run["can_apply"])
+            self.assertEqual(dry_run["collisions"][0]["type"], "alias_title_collision")
+
+            recover = make_workflow(repo, "recover")
+            (recover / "memory.md").write_text(legacy_entry(4, "recover", "body"), encoding="utf-8")
+            with patch.object(
+                nature_memory,
+                "_replace_if_snapshot_matches",
+                side_effect=nature_memory.MemoryBoundaryError("replace_failed", "forced"),
+            ):
+                failed = nature_memory.command_memory_migrate(repo, recover, "shared")
+            self.assertFalse(failed["ok"], failed)
+            self.assertFalse((recover / "memory.md.nature-memory.bak").exists())
+            retried = nature_memory.command_memory_migrate(repo, recover, "shared")
+            self.assertTrue(retried["ok"], retried)
+
+    def test_migrate_all_reports_invalid_workflow_and_processes_valid_workflows(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            valid = make_workflow(repo, "valid")
+            (valid / "memory.md").write_text(legacy_entry(5, "valid", "body"), encoding="utf-8")
+            invalid = make_workflow(repo, "invalid")
+            (invalid / "memory.md").mkdir()
+            result = nature_memory.command_memory_migrate(
+                repo, scope="shared", all_workflows=True
+            )
+            self.assertFalse(result["ok"], result)
+            self.assertTrue(any(item.get("operation") == "migrated" for item in result["results"]), result)
+            self.assertTrue(any(item.get("error", {}).get("code") == "memory_path_not_regular_file" for item in result["results"]), result)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import os
@@ -33,6 +34,80 @@ def load_json(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def _project_snapshot(root: Path) -> dict[str, Any]:
+    files: list[dict[str, Any]] = []
+    for path in sorted(item for item in root.rglob("*") if item.is_file()):
+        relative = path.relative_to(root).as_posix()
+        raw = path.read_bytes()
+        files.append(
+            {
+                "path": relative,
+                "bytes": len(raw),
+                "sha256": hashlib.sha256(raw).hexdigest(),
+            }
+        )
+    manifest = json.dumps(files, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    return {"sha256": hashlib.sha256(manifest).hexdigest(), "files": files}
+
+
+def _canonical_workflow(path: Path, records: list[tuple[str, str, str]]) -> tuple[Path, int]:
+    path.mkdir(parents=True, exist_ok=True)
+    (path / "nature.yml").write_text('{"schema_version":1}\n', encoding="utf-8")
+    text = "".join(
+        memory.serialize_entry(title, body, canonical_metadata(entry_id))
+        for entry_id, title, body in records
+    )
+    memory_path = path / "memory.md"
+    memory_path.write_text(text, encoding="utf-8")
+    return memory_path, len(records)
+
+
+def _p95(values: list[float]) -> float:
+    return values[min(len(values) - 1, math.ceil(len(values) * 0.95) - 1)] if values else 0.0
+
+
+def _platform_evidence() -> dict[str, Any]:
+    """Run only real host probes; unavailable capabilities remain explicit."""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        workflow = root / "docs" / "nature-workflows" / "platform"
+        workflow.mkdir(parents=True)
+        (workflow / "nature.yml").write_text('{"schema_version":1}\n', encoding="utf-8")
+        outside = root / "outside.md"
+        outside.write_text("outside\n", encoding="utf-8")
+        symlink_probe: dict[str, Any]
+        try:
+            os.symlink(outside, workflow / "memory.md")
+        except (OSError, NotImplementedError) as exc:
+            symlink_probe = {"status": "unavailable", "reason": str(exc)}
+        else:
+            try:
+                memory.resolve_memory_path(root, workflow, "shared")
+            except memory.MemoryBoundaryError as exc:
+                symlink_probe = {"status": "passed", "code": exc.code}
+            else:
+                symlink_probe = {"status": "failed", "reason": "symlink escape was accepted"}
+
+        lock_probe: dict[str, Any]
+        if os.name == "nt":
+            lock_probe = {"status": "not_applicable", "reason": "Unix fcntl backend is not available on Windows"}
+        else:
+            try:
+                with memory.workflow_memory_lock(workflow):
+                    pass
+            except Exception as exc:  # pragma: no cover - host-specific backend errors
+                lock_probe = {"status": "failed", "reason": type(exc).__name__}
+            else:
+                lock_probe = {"status": "passed", "backend": "fcntl"}
+    return {
+        "host": platform.system(),
+        "real_runtime_only": True,
+        "windows_symlink_escape": symlink_probe,
+        "unix_fcntl_lock": lock_probe,
+        "scope": "host probes only; unavailable foreign-platform probes are not claimed as passed",
+    }
+
+
 def canonical_metadata(entry_id: str, *, lifecycle: str = "active", provenance: str = "workflow") -> dict[str, Any]:
     return {
         "schema": 1,
@@ -46,7 +121,8 @@ def canonical_metadata(entry_id: str, *, lifecycle: str = "active", provenance: 
 
 
 def auxiliary_id(slot: int) -> str:
-    return "nm_" + "00000000000040008000000000000000"[:-2] + f"{slot:02x}"
+    base = "00000000000040008000000000000000"
+    return "nm_" + base[:-8] + f"{slot:08x}"
 
 
 def materialize_recall_fixture(root: Path, fixture: dict[str, Any]) -> dict[str, Path]:
@@ -97,13 +173,15 @@ def deterministic_eval() -> dict[str, Any]:
     fixture = load_json(RECALL_FIXTURE)
     records = [record for workflow in fixture["workflows"] for record in workflow["records"]]
     materialized_records = len(records) + len(fixture["workflows"]) * 4
-    if len(fixture["workflows"]) < 5 or len(records) < 80 or len(fixture["queries"]) < 50:
+    fixture_minimum = len(fixture["workflows"]) >= 5 and len(records) >= 80 and len(fixture["queries"]) >= 50
+    if not fixture_minimum:
         raise RuntimeError("recall fixture does not meet the minimum coverage contract")
     slices = {
         case.get("slice") or ("no_hit" if not case["gold"] else "exact")
         for case in fixture["queries"]
     }
-    if not {"exact", "partial", "mixed", "no_hit"}.issubset(slices | {"no_hit"}):
+    required_slices = {"exact", "partial", "mixed", "no_hit"}
+    if not required_slices.issubset(slices | {"no_hit"}):
         raise RuntimeError("recall fixture must contain exact, partial, mixed, and no_hit slices")
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
@@ -114,6 +192,7 @@ def deterministic_eval() -> dict[str, Any]:
         no_hit_queries = 0
         no_hit_false_positives = 0
         query_results: list[dict[str, Any]] = []
+        slice_records: dict[str, list[dict[str, Any]]] = {name: [] for name in required_slices}
         started = time.perf_counter()
         for case in fixture["queries"]:
             prefix = case["query"].split(" ", 1)[0]
@@ -123,17 +202,33 @@ def deterministic_eval() -> dict[str, Any]:
                 raise RuntimeError(result)
             ids = [item["id"] for item in result["results"]]
             gold = set(case["gold"])
+            case_slice = case.get("slice") or ("no_hit" if not case["gold"] else "exact")
+            slice_result: dict[str, Any] = {
+                "query": case["query"],
+                "gold": case["gold"],
+                "returned": ids,
+                "recall_at_3": None,
+                "reciprocal_rank": None,
+                "ndcg_at_3": None,
+                "false_positive": None,
+            }
             if gold:
-                recall_values.append(len(gold.intersection(ids)) / len(gold))
-                reciprocal_values.append(next((1 / (index + 1) for index, item_id in enumerate(ids) if item_id in gold), 0.0))
+                recall = len(gold.intersection(ids)) / len(gold)
+                reciprocal = next((1 / (index + 1) for index, item_id in enumerate(ids) if item_id in gold), 0.0)
+                recall_values.append(recall)
+                reciprocal_values.append(reciprocal)
                 relevance = case.get("relevance", {})
                 ideal = sorted(relevance.values(), reverse=True)[:3]
                 ideal_score = sum((2 ** value - 1) / math.log2(index + 2) for index, value in enumerate(ideal))
-                ndcg_values.append(dcg(ids[:3], relevance) / ideal_score if ideal_score else 0.0)
+                ndcg = dcg(ids[:3], relevance) / ideal_score if ideal_score else 0.0
+                ndcg_values.append(ndcg)
+                slice_result.update({"recall_at_3": recall, "reciprocal_rank": reciprocal, "ndcg_at_3": ndcg})
             else:
                 no_hit_queries += 1
-                no_hit_false_positives += bool(ids)
-            case_slice = case.get("slice") or ("no_hit" if not case["gold"] else "exact")
+                false_positive = bool(ids)
+                no_hit_false_positives += false_positive
+                slice_result["false_positive"] = false_positive
+            slice_records.setdefault(case_slice, []).append(slice_result)
             query_results.append({"query": case["query"], "slice": case_slice, "returned": ids, "gold": case["gold"], "relevance": case.get("relevance", {})})
         local_scope_checks = []
         lifecycle_checks = []
@@ -149,33 +244,78 @@ def deterministic_eval() -> dict[str, Any]:
             shared_default = memory.command_memory_recall(root, workflow_path, "shared", "archived-only")
             local_scope_checks.append(bool(local.get("ok") and local.get("results")))
             lifecycle_checks.append(bool(shared_archived.get("ok") and shared_archived.get("results") and not shared_default.get("results")))
-        warm_times: list[float] = []
-        single_record_count = 1024
-        single_text = "".join(
-            f"## benchmark {index}\nbody {index} " + ("x" * 220) + "\n"
+        benchmark_root = root / "canonical-benchmark"
+        single_workflow = benchmark_root / "single-workflow"
+        single_record_count = 512
+        single_records = [
+            (
+                auxiliary_id(0x200 + index),
+                f"benchmark decision {index:04d}",
+                f"benchmark body {index:04d} " + ("x" * 220),
+            )
             for index in range(single_record_count)
-        )
-        while len(single_text.encode("utf-8")) < memory.HARD_FILE_BYTES:
-            single_text += "x\n"
+        ]
+        single_path, _ = _canonical_workflow(single_workflow, single_records)
+        single_text = single_path.read_text(encoding="utf-8")
+        if len(single_text.encode("utf-8")) < memory.HARD_FILE_BYTES:
+            payload = single_text.rstrip("\n")
+            padding = memory.HARD_FILE_BYTES - len(payload.encode("utf-8")) - 1
+            single_text = payload + ("x" * max(0, padding)) + "\n"
+            single_path.write_bytes(single_text.encode("utf-8"))
+        single_text = single_path.read_text(encoding="utf-8")
+        single_cold_started = time.perf_counter()
+        single_parse = memory.parse_memory_document(single_text, single_path)
+        single_cold_elapsed = time.perf_counter() - single_cold_started
+        warm_times: list[float] = []
         for _ in range(5):
             started_warm = time.perf_counter()
-            memory.parse_memory(single_text)
+            memory.parse_memory_document(single_text, single_path)
             warm_times.append(time.perf_counter() - started_warm)
-        all_started = time.perf_counter()
+
+        all_workflow_root = benchmark_root / "all-workflows" / "docs" / "nature-workflows"
+        all_workflow_paths: list[Path] = []
         all_records = 0
-        all_workflow_warm_times: list[float] = []
         for workflow_index in range(1000):
-            text = "".join(f"## all {workflow_index}-{record_index}\nbody\n" for record_index in range(12))
+            workflow_records = [
+                (
+                    auxiliary_id(0x1000 + workflow_index * 12 + record_index),
+                    f"wf-{workflow_index:04d} decision {record_index:02d}",
+                    f"wf-{workflow_index:04d} evidence {record_index:02d}",
+                )
+                for record_index in range(12)
+            ]
+            path, count = _canonical_workflow(all_workflow_root / f"wf-{workflow_index:04d}", workflow_records)
+            all_workflow_paths.append(path)
+            all_records += count
+        all_workflow_texts = [path.read_text(encoding="utf-8") for path in all_workflow_paths]
+        all_workflow_warm_times: list[float] = []
+        for _ in range(5):
             warm_started = time.perf_counter()
-            all_records += len(memory.parse_memory(text))
+            for path, text in zip(all_workflow_paths, all_workflow_texts):
+                memory.parse_memory_document(text, path)
             all_workflow_warm_times.append(time.perf_counter() - warm_started)
-        all_elapsed = time.perf_counter() - all_started
         all_recall_started = time.perf_counter()
-        all_recall = memory.command_memory_recall_all(root, root / "docs" / "nature-workflows", "shared", "wf-01 decision 01")
+        all_recall = memory.command_memory_recall_all(
+            root,
+            benchmark_root / "all-workflows" / "docs" / "nature-workflows",
+            "shared",
+            "wf-0001 decision 01",
+        )
         all_recall_elapsed = time.perf_counter() - all_recall_started
         if not all_recall.get("ok"):
             raise RuntimeError(all_recall)
         elapsed = time.perf_counter() - started
+        benchmark_bytes = sum(path.stat().st_size for path in all_workflow_paths)
+        single_canonical_checks = {
+            "memory_name": single_path.name == "memory.md",
+            "nature_yml": (single_workflow / "nature.yml").is_file(),
+            "hard_file_size": single_path.stat().st_size == memory.HARD_FILE_BYTES,
+            "parsed_records": len(single_parse.entries) == single_record_count,
+        }
+        benchmark_checks = {
+            "single_canonical": all(single_canonical_checks.values()),
+            "all_canonical": len(all_workflow_paths) == 1000 and all_records == 12000 and all(path.name == "memory.md" and path.parent.joinpath("nature.yml").is_file() for path in all_workflow_paths),
+        }
     metrics = {
         "recall_at_3": sum(recall_values) / len(recall_values),
         "mrr": sum(reciprocal_values) / len(reciprocal_values),
@@ -184,18 +324,48 @@ def deterministic_eval() -> dict[str, Any]:
         "gold_queries": len(recall_values),
         "no_hit_queries": no_hit_queries,
     }
+    slice_metrics: dict[str, dict[str, Any]] = {}
+    slice_gates: dict[str, dict[str, Any]] = {}
+    for case_slice, items in sorted(slice_records.items()):
+        gold_items = [item for item in items if item["gold"]]
+        no_hit_items = [item for item in items if not item["gold"]]
+        slice_metric: dict[str, Any] = {
+            "queries": len(items),
+            "gold_queries": len(gold_items),
+            "recall_at_3": sum(float(item["recall_at_3"]) for item in gold_items) / len(gold_items) if gold_items else None,
+            "mrr": sum(float(item["reciprocal_rank"]) for item in gold_items) / len(gold_items) if gold_items else None,
+            "ndcg_at_3": sum(float(item["ndcg_at_3"]) for item in gold_items) / len(gold_items) if gold_items else None,
+            "no_hit_fpr": sum(bool(item["false_positive"]) for item in no_hit_items) / len(no_hit_items) if no_hit_items else None,
+        }
+        slice_metrics[case_slice] = slice_metric
+        if case_slice == "no_hit":
+            passed_slice = slice_metric["no_hit_fpr"] is not None and slice_metric["no_hit_fpr"] <= 0.10
+            slice_gates[case_slice] = {"metric": "no_hit_fpr", "threshold": 0.10, "actual": slice_metric["no_hit_fpr"], "passed": passed_slice}
+        else:
+            passed_slice = slice_metric["recall_at_3"] is not None and slice_metric["recall_at_3"] >= 0.95
+            slice_gates[case_slice] = {"metric": "recall_at_3", "threshold": 0.95, "actual": slice_metric["recall_at_3"], "passed": passed_slice}
     thresholds = {
         "recall_at_3": 0.95,
         "mrr": 0.90,
         "ndcg_at_3": 0.85,
         "no_hit_fpr_max": 0.10,
     }
+    coverage_checks = {
+        "fixture_minimum": fixture_minimum,
+        "query_slices": required_slices.issubset(set(slice_metrics)),
+        "local_scope": all(local_scope_checks),
+        "lifecycle_filters": all(lifecycle_checks),
+        "canonical_benchmark": all(benchmark_checks.values()),
+    }
     passed = (
         metrics["recall_at_3"] >= thresholds["recall_at_3"]
         and metrics["mrr"] >= thresholds["mrr"]
         and metrics["ndcg_at_3"] >= thresholds["ndcg_at_3"]
         and metrics["no_hit_fpr"] <= thresholds["no_hit_fpr_max"]
+        and all(gate["passed"] for gate in slice_gates.values())
+        and all(coverage_checks.values())
     )
+    platform_evidence = _platform_evidence()
     return {
         "ok": passed,
         "mode": "deterministic",
@@ -211,31 +381,46 @@ def deterministic_eval() -> dict[str, Any]:
             "relevance_levels": [0, 1, 2],
         },
         "metrics": metrics,
+        "slice_metrics": slice_metrics,
+        "slice_gates": slice_gates,
         "thresholds": thresholds,
         "benchmark": {
             "single_workflow_records": single_record_count,
+            "single_workflow_parsed_records": len(single_parse.entries),
             "single_workflow_bytes": len(single_text.encode("utf-8")),
-            "single_workflow_elapsed_seconds": elapsed,
+            "single_workflow_cold_parse_seconds": single_cold_elapsed,
             "single_workflow_warm_median_seconds": sorted(warm_times)[len(warm_times) // 2],
-            "single_workflow_warm_p95_seconds": sorted(warm_times)[min(len(warm_times) - 1, math.ceil(len(warm_times) * 0.95) - 1)],
+            "single_workflow_warm_p95_seconds": _p95(sorted(warm_times)),
             "all_workflows": 1000,
             "all_workflow_records": all_records,
-            "all_workflows_elapsed_seconds": all_elapsed,
+            "all_workflow_bytes": benchmark_bytes,
             "all_workflows_warm_median_seconds": sorted(all_workflow_warm_times)[len(all_workflow_warm_times) // 2],
-            "all_workflows_warm_p95_seconds": sorted(all_workflow_warm_times)[min(len(all_workflow_warm_times) - 1, math.ceil(len(all_workflow_warm_times) * 0.95) - 1)],
+            "all_workflows_warm_p95_seconds": _p95(sorted(all_workflow_warm_times)),
             "all_workflows_recall_elapsed_seconds": all_recall_elapsed,
             "all_workflows_recall_results": len(all_recall.get("results", [])),
+            "canonical_paths": {"single": "canonical-benchmark/single-workflow/memory.md", "all_workflows_root": "canonical-benchmark/all-workflows/docs/nature-workflows"},
             "environment": {
                 "python": platform.python_version(),
                 "os": platform.platform(),
                 "machine": platform.machine(),
                 "cpu_count": os.cpu_count(),
-                "cold_start_seconds": elapsed,
-                "warm_runs": len(warm_times),
+                "cold_start_seconds": single_cold_elapsed,
+                "warm_runs": 5,
             },
         },
         "query_results": query_results,
-        "coverage_checks": {"local_scope": all(local_scope_checks), "lifecycle_filters": all(lifecycle_checks)},
+        "coverage_checks": coverage_checks,
+        "benchmark_checks": benchmark_checks,
+        "single_canonical_checks": single_canonical_checks,
+        "platform_evidence": platform_evidence,
+        "trace": [
+            {"event": "fixture_loaded", "path": str(RECALL_FIXTURE), "version": fixture["version"]},
+            {"event": "queries_scored", "count": len(query_results), "slices": sorted(slice_metrics)},
+            {"event": "scope_lifecycle_checked", "coverage_checks": coverage_checks},
+            {"event": "canonical_benchmark_materialized", "single_bytes": len(single_text.encode("utf-8")), "all_workflow_records": all_records},
+            {"event": "gates_evaluated", "slice_gates": slice_gates, "passed": passed},
+        ],
+        "evaluation_elapsed_seconds": elapsed,
     }
 
 
@@ -253,11 +438,21 @@ def fresh_resume_case(root: Path, workflow: Path, query: str) -> dict[str, Any]:
 def agent_case(index: int) -> dict[str, Any]:
     fixture = load_json(AGENT_FIXTURE)
     scenario = fixture["scenarios"][index]
-    agent_action = fixture.get("agent_actions", {}).get(scenario["id"])
-    if agent_action not in {"remember", "skip"}:
+    policy_action = fixture.get("agent_actions", {}).get(scenario["id"])
+    if policy_action not in {"remember", "skip"}:
         raise RuntimeError(f"scenario {scenario['id']} has no independent agent action")
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
+        trace: dict[str, Any] = {
+            "policy": "fixture.agent_actions deterministic policy",
+            "prompt": {"scenario_id": scenario["id"], "title": scenario["title"], "body": scenario["body"]},
+            "model": fixture["model"],
+            "model_parameters": fixture.get("model_parameters", {}),
+            "plugin_version": fixture.get("plugin_version"),
+            "allowed_tools": fixture.get("allowed_tools", []),
+            "tool_calls": [],
+            "reviewer_evidence": {"reviewers": ["write-contract", "privacy-contract"], "checks": []},
+        }
         created = progress.command_new_workflow(
             "docs/nature-workflows",
             f"agent-{scenario['id']}",
@@ -266,9 +461,15 @@ def agent_case(index: int) -> dict[str, Any]:
             base=root,
         )
         workflow = Path(created["workflow_dir"])
+        trace["tool_calls"].append({
+            "tool": "nature_new_workflow",
+            "arguments": {"slug": f"agent-{scenario['id']}", "title": f"Agent eval {scenario['id']}"},
+            "ok": bool(created.get("workflow_dir")),
+        })
+        trace["project_snapshot_before"] = _project_snapshot(root)
         before = (workflow / "memory.md").read_bytes() if (workflow / "memory.md").exists() else b""
         written: dict[str, Any] | None = None
-        if agent_action == "remember":
+        if policy_action == "remember":
             written = memory.command_memory_remember(
                 root,
                 workflow,
@@ -277,8 +478,15 @@ def agent_case(index: int) -> dict[str, Any]:
                 scenario["body"],
                 {"kind": "decision", "provenance": "user"},
             )
+            trace["tool_calls"].append({
+                "tool": "nature_memory_remember",
+                "arguments": {"scope": "shared", "title": scenario["title"], "metadata": {"kind": "decision", "provenance": "user"}},
+                "ok": bool(written.get("ok")),
+            })
             if not written.get("ok"):
                 return {"ok": False, "scenario": scenario["id"], "error": written}
+        else:
+            trace["tool_calls"].append({"tool": "nature_memory_remember", "skipped": True, "reason": "fixture policy selected skip"})
         # A separate Python process performs the resume/read phase so the
         # contract cannot pass through module-global state left by the write.
         fresh_process = subprocess.run(
@@ -300,12 +508,24 @@ def agent_case(index: int) -> dict[str, Any]:
             timeout=30,
         )
         resumed = json.loads(fresh_process.stdout) if fresh_process.stdout.strip() else {}
+        trace["tool_calls"].append({
+            "tool": "nature_resume_with_memory",
+            "arguments": {"scope": "shared", "query": scenario["title"]},
+            "ok": fresh_process.returncode == 0,
+            "fresh_process": True,
+        })
+        trace["tool_calls"].append({
+            "tool": "nature_memory_recall",
+            "arguments": {"scope": "shared", "query": scenario["title"]},
+            "ok": fresh_process.returncode == 0,
+            "fresh_process": True,
+        })
         after = (workflow / "memory.md").read_bytes() if (workflow / "memory.md").exists() else b""
         context = resumed.get("memory_context", {})
         recalled = {"results": context.get("results", [])}
         written_ids = [item["id"] for item in recalled.get("results", [])]
         expected_write = bool(scenario["should_remember"])
-        actual_write = agent_action == "remember"
+        actual_write = policy_action == "remember"
         unauthorized_write = actual_write and not expected_write
         unexpected_skip = expected_write and not actual_write
         forbidden_leak = any(text in after.decode("utf-8", "replace") for text in scenario["must_not_write"])
@@ -316,12 +536,27 @@ def agent_case(index: int) -> dict[str, Any]:
         if written and written.get("entry_id"):
             shown = memory.command_memory_show(root, workflow, "shared", written["entry_id"])
             cited = cited and shown.get("ok", False) and shown["entry"].get("locator") == written.get("locator")
+            trace["tool_calls"].append({
+                "tool": "nature_memory_show",
+                "arguments": {"scope": "shared", "entry_id": written["entry_id"]},
+                "ok": shown.get("ok", False),
+            })
+        trace["project_snapshot_after"] = _project_snapshot(root)
+        trace["reviewer_evidence"]["checks"] = [
+            {"name": "write_expectation", "passed": correct_write},
+            {"name": "recall_expectation", "passed": correct_recall},
+            {"name": "no_write_boundary", "passed": no_write_violation},
+            {"name": "forbidden_content_absent", "passed": not forbidden_leak},
+            {"name": "locator_valid", "passed": cited},
+        ]
+        allowed_tools = set(fixture.get("allowed_tools", []))
+        unauthorized_tools = [item["tool"] for item in trace["tool_calls"] if item["tool"] not in allowed_tools]
         return {
             "ok": correct_write and correct_recall and no_write_violation and not forbidden_leak and fresh_process.returncode == 0 and cited,
             "scenario": scenario["id"],
             "expected_write": expected_write,
-            "workflow_steps": ["new", agent_action, "fresh_resume", "recall", "cite"],
-            "agent_action": agent_action,
+            "workflow_steps": ["new", policy_action, "fresh_resume", "recall", "cite"],
+            "agent_action": policy_action,
             "write_precision": 1.0 if actual_write and correct_write else (1.0 if not actual_write else 0.0),
             "write_recall": 1.0 if correct_recall else 0.0,
             "locator_valid": cited,
@@ -330,6 +565,8 @@ def agent_case(index: int) -> dict[str, Any]:
             "security_failures": 1 if forbidden_leak or unauthorized_write else 0,
             "fresh_process": fresh_process.returncode == 0,
             "fresh_error": fresh_process.stderr.strip()[:400] if fresh_process.returncode else None,
+            "trace": trace,
+            "unauthorized_tool_calls": unauthorized_tools,
         }
 
 
@@ -363,15 +600,18 @@ def agent_eval(runs: int) -> dict[str, Any]:
     unauthorized_writes = sum(item.get("unauthorized_writes", 0) for item in cases)
     security_failures = sum(item.get("security_failures", 0) for item in cases)
     locator_valid = all(item.get("locator_valid", False) for item in cases)
-    passed = precision >= 0.90 and recall >= 0.80 and locator_valid and security_failures == 0 and unauthorized_writes == 0 and all(item.get("ok") for item in cases)
+    unauthorized_tool_calls = sum(len(item.get("unauthorized_tool_calls", [])) for item in cases)
+    trace_complete = all(bool(item.get("trace", {}).get("tool_calls")) and bool(item.get("trace", {}).get("reviewer_evidence", {}).get("checks")) for item in cases)
+    snapshots_complete = all("project_snapshot_before" in item.get("trace", {}) and "project_snapshot_after" in item.get("trace", {}) for item in cases)
+    passed = precision >= 0.90 and recall >= 0.80 and locator_valid and security_failures == 0 and unauthorized_writes == 0 and unauthorized_tool_calls == 0 and trace_complete and snapshots_complete and all(item.get("ok") for item in cases)
     return {
         "ok": passed,
         "mode": "agent",
         "fixture": {"version": fixture["version"], "scenarios": len(fixture["scenarios"]), "runs": runs, "fresh_process_per_case": True, "workflow_contract": ["new", "remember", "fresh_resume", "recall", "cite"]},
         "model": fixture["model"],
-        "metrics": {"write_precision": precision, "write_recall": recall, "locator_valid": locator_valid, "security_failures": security_failures, "unauthorized_writes": unauthorized_writes, "actual_writes": actual_writes},
+        "metrics": {"write_precision": precision, "write_recall": recall, "locator_valid": locator_valid, "security_failures": security_failures, "unauthorized_writes": unauthorized_writes, "unauthorized_tool_calls": unauthorized_tool_calls, "trace_complete": trace_complete, "snapshots_complete": snapshots_complete, "actual_writes": actual_writes},
         "thresholds": {"write_precision": 0.90, "write_recall": 0.80, "security_failures": 0},
-        "rubric": {"reviewers": ["deterministic-contract-reviewer-a", "deterministic-contract-reviewer-b"], "disagreements": 0, "note": "offline fixture harness; connected model evaluation is not claimed"},
+        "rubric": {"reviewers": ["write-contract", "privacy-contract"], "disagreements": 0, "evidence": "per-case trace reviewer checks", "note": "offline fixture policy harness; connected model evaluation is not claimed"},
         "cases": cases,
     }
 

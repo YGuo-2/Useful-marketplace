@@ -4,11 +4,14 @@
 from __future__ import annotations
 
 import argparse
+import ctypes
+import errno
 import hashlib
 import json
 import os
 import re
 import shutil
+import stat
 import subprocess
 import tempfile
 import time
@@ -581,13 +584,56 @@ def _memory_path(workflow_dir: Path, scope: str = "shared") -> Path:
     raise MemoryBoundaryError("invalid_scope", "scope must be shared or local")
 
 
+def _checked_project_root(project_root: str | Path) -> Path:
+    try:
+        root = Path(project_root).expanduser().resolve(strict=True)
+    except FileNotFoundError as exc:
+        raise MemoryBoundaryError("project_root_not_found", "project_root must exist") from exc
+    except OSError as exc:
+        raise MemoryBoundaryError(
+            "project_root_unreadable",
+            "project_root could not be resolved",
+            retryable=True,
+        ) from exc
+    if not root.is_dir():
+        raise MemoryBoundaryError("invalid_project_root", "project_root must be a directory")
+    return root
+
+
+def _reject_unsafe_regular_file(path: Path, *, label: str) -> None:
+    """Reject links before any read can disclose or mutate an external inode."""
+    try:
+        info = path.lstat()
+    except FileNotFoundError:
+        return
+    except OSError as exc:
+        raise MemoryBoundaryError("path_unreadable", f"{label} could not be inspected", retryable=True) from exc
+    if stat.S_ISLNK(info.st_mode):
+        raise MemoryBoundaryError("path_symlink_escape", f"{label} must not be a symlink")
+    if stat.S_ISREG(info.st_mode) and getattr(info, "st_nlink", 1) > 1:
+        raise MemoryBoundaryError("path_hardlink_escape", f"{label} must not be a hardlink")
+
+
+def _path_context(root: Path, path: Path, scope: str, entry_id: str | None = None) -> dict[str, Any]:
+    context: dict[str, Any] = {
+        "project_root": str(root),
+        "workflow_dir": str(path.parent),
+        "memory_path": str(path),
+        "scope": scope,
+        "repair": "Re-read the entry and file ETags, then retry with the current values.",
+    }
+    if entry_id:
+        context["entry_id"] = entry_id
+    return context
+
+
 def resolve_memory_path(
     project_root: str | Path,
     workflow_dir: str | Path,
     scope: str,
 ) -> Path:
     """Resolve a canonical memory file and reject containment or symlink escapes."""
-    root = Path(project_root).expanduser().resolve(strict=True)
+    root = _checked_project_root(project_root)
     if not workflow_dir:
         raise MemoryBoundaryError("workflow_dir_required", "workflow_dir is required")
     raw_workflow = Path(workflow_dir).expanduser()
@@ -610,6 +656,8 @@ def resolve_memory_path(
         raise MemoryBoundaryError("path_symlink_escape", "memory path must not be a symlink")
     if path.exists() and not path.is_file():
         raise MemoryBoundaryError("memory_path_not_regular_file", "memory path must be a regular file")
+    if path.exists():
+        _reject_unsafe_regular_file(path, label="memory path")
     resolved_path = path.resolve(strict=False)
     try:
         _assert_within(resolved_path, root, "memory path")
@@ -818,6 +866,7 @@ def _read_snapshot(path: Path) -> tuple[str, str]:
         return "", _file_etag(b"")
     if not path.is_file():
         raise MemoryBoundaryError("memory_path_not_regular_file", "memory path must be a regular file")
+    _reject_unsafe_regular_file(path, label="memory file")
     try:
         raw = path.read_bytes()
     except OSError as exc:
@@ -837,6 +886,10 @@ def _uses_windows_lock_backend() -> bool:
     return os.name == "nt"
 
 
+def _lock_is_busy(exc: OSError) -> bool:
+    return exc.errno in {errno.EACCES, errno.EAGAIN, errno.EWOULDBLOCK} or getattr(exc, "winerror", None) in {32, 33}
+
+
 @contextmanager
 def workflow_memory_lock(
     workflow_dir: str | Path,
@@ -849,14 +902,32 @@ def workflow_memory_lock(
     if not workflow.is_dir():
         raise MemoryBoundaryError("invalid_workflow_dir", "workflow directory must exist")
     lock_path = workflow / lock_name
+    _reject_unsafe_regular_file(lock_path, label="workflow memory lock")
     try:
-        handle = lock_path.open("a+b")
+        flags = os.O_RDWR | os.O_CREAT | os.O_APPEND
+        if hasattr(os, "O_BINARY"):
+            flags |= os.O_BINARY
+        if hasattr(os, "O_NOFOLLOW"):
+            flags |= os.O_NOFOLLOW
+        handle = os.fdopen(os.open(lock_path, flags, 0o600), "a+b")
     except OSError as exc:
+        if exc.errno == errno.ELOOP:
+            raise MemoryBoundaryError("path_symlink_escape", "workflow memory lock must not be a symlink") from exc
         raise MemoryBoundaryError(
             "lock_unavailable",
             "workflow memory lock could not be opened",
             retryable=True,
         ) from exc
+    try:
+        info = os.fstat(handle.fileno())
+        if not stat.S_ISREG(info.st_mode) or getattr(info, "st_nlink", 1) > 1:
+            raise MemoryBoundaryError("path_hardlink_escape", "workflow memory lock must be a private regular file")
+    except MemoryBoundaryError:
+        handle.close()
+        raise
+    except OSError as exc:
+        handle.close()
+        raise MemoryBoundaryError("lock_unavailable", "workflow memory lock could not be inspected", retryable=True) from exc
     acquired = False
     deadline = time.monotonic() + max(0.0, timeout)
     try:
@@ -880,7 +951,13 @@ def workflow_memory_lock(
                     msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
                     acquired = True
                     break
-                except OSError:
+                except OSError as exc:
+                    if not _lock_is_busy(exc):
+                        raise MemoryBoundaryError(
+                            "lock_unavailable",
+                            "workflow memory lock backend failed",
+                            retryable=True,
+                        ) from exc
                     if time.monotonic() >= deadline:
                         break
                     time.sleep(0.025)
@@ -892,7 +969,13 @@ def workflow_memory_lock(
                     fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
                     acquired = True
                     break
-                except OSError:
+                except OSError as exc:
+                    if not _lock_is_busy(exc):
+                        raise MemoryBoundaryError(
+                            "lock_unavailable",
+                            "workflow memory lock backend failed",
+                            retryable=True,
+                        ) from exc
                     if time.monotonic() >= deadline:
                         break
                     time.sleep(0.025)
@@ -920,7 +1003,7 @@ def workflow_memory_lock(
 @contextmanager
 def project_memory_lock(project_root: str | Path, timeout: float = 5.0):
     """Serialize AGENTS repair without sharing a workflow lock with memory writes."""
-    root = Path(project_root).expanduser().resolve(strict=True)
+    root = _checked_project_root(project_root)
     lock_path = root / PROJECT_MEMORY_LOCK_FILE
     with workflow_memory_lock(root, timeout, lock_name=PROJECT_MEMORY_LOCK_FILE) as acquired:
         yield acquired
@@ -957,8 +1040,19 @@ def _atomic_replace_text(path: Path, text: str, *, expected_etag: str | None = N
                         "current_file_bytes": len(current_text.encode("utf-8")),
                     },
                 )
-        os.replace(temporary_name, path)
-        temporary_name = None
+        if expected_etag is not None and _conditional_replace_posix(temporary_name, path, expected_etag):
+            temporary_name = None
+        else:
+            try:
+                os.replace(temporary_name, path)
+            except OSError as exc:
+                raise MemoryBoundaryError(
+                    "replace_failed",
+                    "memory file could not be atomically replaced; no write was confirmed",
+                    retryable=True,
+                    context={"memory_path": str(path)},
+                ) from exc
+            temporary_name = None
     finally:
         if temporary_name:
             try:
@@ -988,6 +1082,59 @@ def _copy_file_exclusive(source: Path, destination: Path) -> None:
     finally:
         if fd != -1:
             os.close(fd)
+
+
+def _conditional_replace_posix(temporary_name: str, path: Path, expected_etag: str) -> bool:
+    """Use Linux rename-exchange to preserve a rewrite that wins the final race."""
+    if os.name == "nt" or not path.exists():
+        return False
+    try:
+        libc = ctypes.CDLL(None, use_errno=True)
+        renameat2 = libc.renameat2
+    except (AttributeError, OSError):
+        return False
+    renameat2.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint]
+    renameat2.restype = ctypes.c_int
+    exchange = 2  # RENAME_EXCHANGE
+    result = renameat2(
+        -100,
+        os.fsencode(temporary_name),
+        -100,
+        os.fsencode(str(path)),
+        exchange,
+    )
+    if result != 0:
+        error_number = ctypes.get_errno()
+        if error_number in {errno.ENOSYS, errno.EINVAL, errno.ENOENT, errno.EXDEV}:
+            return False
+        raise OSError(error_number, os.strerror(error_number))
+    _, previous_etag = _read_snapshot(Path(temporary_name))
+    if previous_etag != expected_etag:
+        restore = renameat2(
+            -100,
+            os.fsencode(temporary_name),
+            -100,
+            os.fsencode(str(path)),
+            exchange,
+        )
+        if restore != 0:
+            raise MemoryBoundaryError(
+                "cas_restore_failed",
+                "memory file changed before atomic replace and the original file could not be restored",
+                retryable=True,
+                context={"memory_path": str(path)},
+            )
+        raise MemoryBoundaryError(
+            "file_changed_outside_lock",
+            "memory file changed before atomic replace; no write was performed",
+            retryable=True,
+            context={
+                "current_file_etag": previous_etag,
+                "expected_file_etag": expected_etag,
+            },
+        )
+    os.unlink(temporary_name)
+    return True
 
 
 def _entry_bounds(text: str, entry: Entry) -> tuple[int, int, list[str]]:
@@ -1091,6 +1238,27 @@ def _entry_locator(project_root: Path, path: Path, entry_id: str) -> str:
     except ValueError:
         relative = path.as_posix()
     return f"{relative}#{entry_id}"
+
+
+def _validate_locator_path(project_root: Path, path: Path, reference: str) -> None:
+    if "#" not in reference:
+        return
+    raw_path, fragment = reference.rsplit("#", 1)
+    if not raw_path or not fragment:
+        raise MemoryBoundaryError("invalid_locator", "memory locator must contain a path and entry fragment")
+    candidate = Path(raw_path).expanduser()
+    if not candidate.is_absolute():
+        candidate = project_root / candidate
+    try:
+        candidate = candidate.resolve(strict=False)
+    except OSError as exc:
+        raise MemoryBoundaryError("invalid_locator", "memory locator path could not be resolved") from exc
+    if candidate != path.resolve(strict=False):
+        raise MemoryBoundaryError(
+            "locator_workflow_mismatch",
+            "memory locator belongs to a different workflow or scope",
+            context={"memory_path": str(path), "locator_path": raw_path},
+        )
 
 
 def _entry_reference(entry: Entry) -> str:
@@ -1317,7 +1485,7 @@ def command_memory_remember(
     """Create or CAS-update one canonical entry in one atomic file transaction."""
     action = "memory_remember"
     try:
-        root = Path(project_root).expanduser().resolve(strict=True)
+        root = _checked_project_root(project_root)
         assert_low_trust_inputs(title, field="title")
         assert_low_trust_inputs(body, field="body")
         path = assert_scope_mutation_allowed(root, workflow_dir, scope)
@@ -1382,7 +1550,12 @@ def command_memory_remember(
                         "etag_conflict",
                         "entry ETag does not match current memory",
                         retryable=True,
-                        context={"current_entry_etag": current_etag, "current_file_etag": snapshot_etag},
+                        context={
+                            **_path_context(root, path, scope, existing.entry_id),
+                            "current_entry_etag": current_etag,
+                            "expected_entry_etag": expected_etag,
+                            "current_file_etag": snapshot_etag,
+                        },
                     )
                 template = _canonical_metadata_input(metadata, existing)
                 _validate_supersedes_references(document, template.get("supersedes"), new_id=existing.entry_id)
@@ -1393,8 +1566,27 @@ def command_memory_remember(
                     updated_at=now,
                 )
                 rendered = serialize_entry(title, body, final_metadata)
+                superseded_sources = [
+                    item
+                    for item in document.entries
+                    if item.entry_id in final_metadata.get("supersedes", [])
+                    and item.entry_id != existing.entry_id
+                ]
+                if any(item.metadata.get("lifecycle") != "active" for item in superseded_sources):
+                    raise MemoryBoundaryError("invalid_lifecycle_transition", "only active entries can be superseded")
                 new_text = _replace_entry_block(text, existing, rendered)
-                operation = "updated"
+                for source in sorted(superseded_sources, key=lambda item: item.line, reverse=True):
+                    source_metadata = dict(source.metadata)
+                    source_metadata["lifecycle"] = "superseded"
+                    source_metadata["updated_at"] = now
+                    current_document = parse_memory_document(new_text, path)
+                    current_source = _find_stable_entry(current_document, source.entry_id or "")
+                    new_text = _replace_entry_block(
+                        new_text,
+                        current_source,
+                        serialize_entry(source.title, source.body, source_metadata),
+                    )
+                operation = "superseded" if superseded_sources else "updated"
                 target_id = existing.entry_id
             _assert_file_budget(new_text)
             _replace_if_snapshot_matches(path, new_text, snapshot_etag)
@@ -1412,7 +1604,7 @@ def command_memory_remember(
                 "etag": _entry_etag(written_entry),
                 "file_etag": file_etag,
                 "locator": _entry_locator(root, path, target_id),
-                "source_ids": [item.entry_id for item in superseded_sources] if entry_id is None else [],
+                "source_ids": [item.entry_id for item in superseded_sources],
                 "budget": _budget_summary(written_text, written_document),
             }
     except MemoryBoundaryError as exc:
@@ -1455,14 +1647,20 @@ def _migration_candidates(
     document: ParsedMemory,
 ) -> tuple[list[dict[str, Any]], str, list[dict[str, Any]]]:
     legacy_entries = [entry for entry in document.entries if entry.requires_migration]
-    alias_lines: dict[str, list[int]] = {}
+    reference_lines: dict[str, list[tuple[int, str, str]]] = {}
     for entry in document.entries:
-        for alias in entry.legacy_aliases:
-            alias_lines.setdefault(alias, []).append(entry.line)
+        for reference in entry.legacy_aliases:
+            reference_lines.setdefault(_recall_normalize(reference), []).append((entry.line, reference, "alias"))
+        reference_lines.setdefault(_recall_normalize(entry.title), []).append((entry.line, entry.title, "title"))
     collisions = [
-        {"type": "legacy_alias", "alias": alias, "lines": sorted(lines)}
-        for alias, lines in sorted(alias_lines.items())
-        if len(lines) > 1
+        {
+            "type": "alias_title_collision" if {item[2] for item in references} == {"alias", "title"} else "legacy_alias",
+            "reference": references[0][1],
+            "alias": references[0][1],
+            "lines": sorted({line for line, _, _ in references}),
+        }
+        for reference, references in sorted(reference_lines.items())
+        if len({line for line, _, _ in references}) > 1
     ]
     now = now_utc()
     reports: list[dict[str, Any]] = []
@@ -1591,7 +1789,14 @@ def _migrate_one(
                     "refusing to overwrite an existing migration backup; review or remove it manually before retrying",
                     context={"backup_path": str(backup)},
                 ) from exc
-        _replace_if_snapshot_matches(path, migrated_text, snapshot_etag)
+        try:
+            _replace_if_snapshot_matches(path, migrated_text, snapshot_etag)
+        except MemoryBoundaryError:
+            try:
+                backup.unlink()
+            except FileNotFoundError:
+                pass
+            raise
         written_text, file_etag = _read_snapshot(path)
         return {
             "ok": True,
@@ -1620,11 +1825,24 @@ def command_memory_migrate(
 ) -> dict[str, Any]:
     action = "memory_migrate"
     try:
-        root = Path(project_root).expanduser().resolve(strict=True)
+        root = _checked_project_root(project_root)
         if all_workflows:
             workflow_root = checked_root(base=root)
-            workflow_dirs = _workflow_dirs_with_memory(workflow_root, scope=scope, project_root=root)
-            results: list[dict[str, Any]] = []
+            scan_diagnostics: list[dict[str, Any]] = []
+            workflow_dirs = _workflow_dirs_with_memory(
+                workflow_root, scope=scope, project_root=root, diagnostics=scan_diagnostics
+            )
+            results: list[dict[str, Any]] = [
+                {
+                    "ok": item["ok"],
+                    "action": action,
+                    "operation": "rejected",
+                    "workflow_dir": item["workflow_dir"],
+                    "memory_path": item["memory_path"],
+                    "error": item["error"],
+                }
+                for item in scan_diagnostics
+            ]
             for workflow in workflow_dirs:
                 try:
                     results.append(
@@ -1725,7 +1943,12 @@ def command_memory_forget(
                     "etag_conflict",
                     "entry ETag does not match current memory",
                     retryable=True,
-                    context={"current_entry_etag": _entry_etag(entry), "current_file_etag": snapshot_etag},
+                    context={
+                        **_path_context(root, path, scope, entry.entry_id),
+                        "current_entry_etag": _entry_etag(entry),
+                        "expected_entry_etag": expected_etag,
+                        "current_file_etag": snapshot_etag,
+                    },
                 )
             now = now_utc()
             metadata = dict(entry.metadata)
@@ -1774,7 +1997,12 @@ def command_memory_supersede(
                     "etag_conflict",
                     "entry ETag does not match current memory",
                     retryable=True,
-                    context={"current_entry_etag": _entry_etag(source), "current_file_etag": snapshot_etag},
+                    context={
+                        **_path_context(root, path, scope, source.entry_id),
+                        "current_entry_etag": _entry_etag(source),
+                        "expected_entry_etag": expected_etag,
+                        "current_file_etag": snapshot_etag,
+                    },
                 )
             now = now_utc()
             source_metadata = dict(source.metadata)
@@ -1879,10 +2107,12 @@ def command_memory_consolidate_apply(
                     "consolidation plan no longer matches canonical entries",
                     retryable=True,
                     context={
+                        **_path_context(root, path, scope),
                         "current_file_etag": snapshot_etag,
                         "current_source_etags": {entry.entry_id: _entry_etag(entry) for entry in ordered},
                         "expected_source_etags": supplied_etags,
                         "current_plan_id": current_plan_id,
+                        "repair": "Re-read the consolidation plan and all source ETags, then retry.",
                     },
                 )
             now = now_utc()
@@ -1980,7 +2210,7 @@ def _score_recall_entry(entry: Entry, query: str) -> tuple[int, list[str]]:
     query_bigrams = _recall_cjk_bigrams(query)
     title_bigrams = set(_recall_cjk_bigrams(entry.title))
     body_bigrams = set(_recall_cjk_bigrams(entry.body))
-    for bigram in query_bigrams:
+    for bigram in dict.fromkeys(query_bigrams):
         if bigram in title_bigrams:
             score += 900
             matched.add(bigram)
@@ -2011,6 +2241,13 @@ def _recall_record(project_root: Path, path: Path, entry: Entry, score: int, mat
     }
 
 
+def _validate_recall_limits(top_k: int, max_bytes: int) -> None:
+    if isinstance(top_k, bool) or not isinstance(top_k, int) or not 1 <= top_k <= RECALL_MAX_TOP_K:
+        raise MemoryBoundaryError("invalid_top_k", f"top_k must be between 1 and {RECALL_MAX_TOP_K}")
+    if isinstance(max_bytes, bool) or not isinstance(max_bytes, int) or not RECALL_MIN_BYTES <= max_bytes <= RECALL_MAX_BYTES:
+        raise MemoryBoundaryError("invalid_max_bytes", f"max_bytes must be between {RECALL_MIN_BYTES} and {RECALL_MAX_BYTES}")
+
+
 def command_memory_recall(
     project_root: str | Path,
     workflow_dir: str | Path,
@@ -2025,16 +2262,15 @@ def command_memory_recall(
 ) -> dict[str, Any]:
     action = "memory_recall"
     try:
-        root = Path(project_root).expanduser().resolve(strict=True)
+        root = _checked_project_root(project_root)
         assert_low_trust_inputs(query, field="query")
         normalized_query = _recall_normalize(query)
         if not normalized_query:
             raise MemoryBoundaryError("query_required", "recall query must not be empty")
-        if isinstance(top_k, bool) or not isinstance(top_k, int) or not 1 <= top_k <= RECALL_MAX_TOP_K:
-            raise MemoryBoundaryError("invalid_top_k", f"top_k must be between 1 and {RECALL_MAX_TOP_K}")
-        if isinstance(max_bytes, bool) or not isinstance(max_bytes, int) or not RECALL_MIN_BYTES <= max_bytes <= RECALL_MAX_BYTES:
-            raise MemoryBoundaryError("invalid_max_bytes", f"max_bytes must be between {RECALL_MIN_BYTES} and {RECALL_MAX_BYTES}")
+        _validate_recall_limits(top_k, max_bytes)
         path = resolve_memory_path(root, workflow_dir, scope)
+        if "#" in query and Path(query.rsplit("#", 1)[0]).name in {MEMORY_FILE, LOCAL_MEMORY_FILE}:
+            _validate_locator_path(root, path, query)
         if document is None:
             text, file_etag = _read_snapshot(path)
             document = parse_memory_document(text, path)
@@ -2082,9 +2318,12 @@ def command_memory_recall(
             for item in document.diagnostics
             if item.get("severity") != SEVERITY_ERROR
         ]
+        candidates = [
+            _recall_record(root, path, entry, score, matched_terms)
+            for score, _, _, entry, matched_terms in ranked[:top_k]
+        ]
         result_records: list[dict[str, Any]] = []
-        for score, _, _, entry, matched_terms in ranked[:top_k]:
-            candidate = _recall_record(root, path, entry, score, matched_terms)
+        for candidate in candidates:
             trial = {
                 "ok": True,
                 "action": action,
@@ -2106,19 +2345,27 @@ def command_memory_recall(
             "results": result_records,
             "diagnostics": diagnostics,
         }
-        if len(json.dumps(response, ensure_ascii=False, separators=(",", ":")).encode("utf-8")) > max_bytes:
+        if (
+            len(json.dumps(response, ensure_ascii=False, separators=(",", ":")).encode("utf-8")) > max_bytes
+            or len(result_records) < len(candidates)
+        ):
             # Drop optional context before dropping complete records. The final
             # response is still valid JSON and is bounded by max_bytes whenever
             # a valid response can fit the caller's budget.
-            compact = {
-                "ok": True,
-                "action": action,
-                "results": result_records,
-            }
-            if len(json.dumps(compact, ensure_ascii=False, separators=(",", ":")).encode("utf-8")) > max_bytes:
-                compact["results"] = []
-            if len(json.dumps(compact, ensure_ascii=False, separators=(",", ":")).encode("utf-8")) > max_bytes:
-                compact = {"ok": True, "results": []}
+            compact: dict[str, Any] = {"ok": True, "action": action, "results": []}
+            for candidate in candidates:
+                trial = {**compact, "results": [*compact["results"], candidate]}
+                if len(json.dumps(trial, ensure_ascii=False, separators=(",", ":")).encode("utf-8")) <= max_bytes:
+                    compact = trial
+                    continue
+                compact_candidate = {
+                    key: candidate[key]
+                    for key in ("id", "title", "body", "score", "matched_terms", "locator", "lifecycle", "kind")
+                    if key in candidate
+                }
+                trial = {**compact, "results": [*compact["results"], compact_candidate]}
+                if len(json.dumps(trial, ensure_ascii=False, separators=(",", ":")).encode("utf-8")) <= max_bytes:
+                    compact = trial
             return compact
         return response
     except MemoryBoundaryError as exc:
@@ -2138,11 +2385,15 @@ def command_memory_recall_all(
     """Explicit cross-workflow read; mutation APIs remain single-workflow."""
     action = "memory_recall"
     try:
-        root = Path(project_root).expanduser().resolve(strict=True)
+        root = _checked_project_root(project_root)
+        _validate_recall_limits(top_k, max_bytes)
         workflow_base = checked_root(str(workflow_root) if workflow_root else None, base=root)
-        workflows = _workflow_dirs_with_memory(workflow_base, scope=scope, project_root=root)
+        scan_diagnostics: list[dict[str, Any]] = []
+        workflows = _workflow_dirs_with_memory(
+            workflow_base, scope=scope, project_root=root, diagnostics=scan_diagnostics
+        )
         combined: list[dict[str, Any]] = []
-        diagnostics: list[dict[str, Any]] = []
+        diagnostics: list[dict[str, Any]] = [item["error"] | {"workflow_dir": item["workflow_dir"], "memory_path": item["memory_path"]} for item in scan_diagnostics]
         for workflow in workflows:
             result = command_memory_recall(
                 root,
@@ -2184,15 +2435,21 @@ def command_memory_show(
 ) -> dict[str, Any]:
     action = "memory_show"
     try:
-        root = Path(project_root).expanduser().resolve(strict=True)
+        root = _checked_project_root(project_root)
         path = resolve_memory_path(root, workflow_dir, scope)
         text, file_etag = _read_snapshot(path)
         document = parse_memory_document(text, path)
+        _validate_locator_path(root, path, entry_id)
         entry = _find_entry_reference(document, entry_id)
+        target_start = entry.line
+        following_lines = [item.line for item in document.entries if item.line > target_start]
+        target_end = min(following_lines, default=len(text.splitlines()) + 1)
         target_errors = [
             item
             for item in document.diagnostics
-            if item["severity"] == SEVERITY_ERROR and item.get("entry") == entry.title
+            if item["severity"] == SEVERITY_ERROR
+            and isinstance(item.get("line"), int)
+            and target_start <= item["line"] < target_end
         ]
         if target_errors:
             raise MemoryBoundaryError(target_errors[0]["code"], target_errors[0]["detail"])
@@ -2213,6 +2470,7 @@ def command_memory_show(
                 "id": entry.entry_id,
                 "title": entry.title,
                 "body": entry.body,
+                "updated": entry.updated,
                 "metadata": dict(entry.metadata),
                 "lifecycle": entry.metadata.get("lifecycle") or "legacy",
                 "etag": _entry_etag(entry),
@@ -2300,12 +2558,24 @@ def _check_text(text: str, *, path: Path | None = None) -> list[dict[str, Any]]:
     entries = document.entries
     violations.extend(document.diagnostics)
     violations.extend(_relationship_errors(document))
-    if len(entries) > MAX_ENTRIES:
+    active_entries = [entry for entry in entries if entry.metadata.get("lifecycle", "active") == "active"]
+    if len(active_entries) > MAX_ENTRIES:
         violations.append(
             _violation(
                 "",
                 "max_entries",
-                f"memory.md has {len(entries)} entries; consolidation is recommended after {MAX_ENTRIES} active entries.",
+                f"memory.md has {len(active_entries)} active entries; consolidation is recommended after {MAX_ENTRIES} active entries.",
+                None,
+                path,
+            )
+        )
+    active_bytes = sum(len(entry.raw_block.encode("utf-8")) for entry in active_entries)
+    if active_bytes >= SOFT_ACTIVE_BYTES:
+        violations.append(
+            _violation(
+                "",
+                "soft_active_bytes",
+                f"active memory uses {active_bytes} bytes; consolidation is recommended after {SOFT_ACTIVE_BYTES} active bytes.",
                 None,
                 path,
             )
@@ -2406,33 +2676,67 @@ def _workflow_dirs_with_memory(
     *,
     scope: str = "shared",
     project_root: Path | None = None,
+    diagnostics: list[dict[str, Any]] | None = None,
 ) -> list[Path]:
+    def report(code: str, detail: str, workflow_dir: Path, memory_path: Path) -> None:
+        if diagnostics is not None:
+            diagnostics.append(
+                {
+                    "ok": False,
+                    "workflow_dir": str(workflow_dir),
+                    "memory_path": str(memory_path),
+                    "scope": scope,
+                    "error": {
+                        "code": code,
+                        "detail": detail,
+                        "retryable": False,
+                    },
+                }
+            )
+
     if not root.exists():
         return []
     workflows: list[Path] = []
     for item in root.iterdir():
-        if not item.is_dir() or item.is_symlink():
+        if item.is_symlink():
+            report("path_symlink_escape", "workflow directory must not be a symlink", item, item / MEMORY_FILE)
+            continue
+        if not item.is_dir():
             continue
         resolved = item.resolve(strict=False)
         try:
             _assert_within(resolved, root, "workflow directory")
         except NatureProgressError:
+            report("path_outside_project", "workflow directory must stay within workflow root", item, item / MEMORY_FILE)
             continue
         filename = MEMORY_FILE if scope == "shared" else LOCAL_MEMORY_FILE
         memory_path = resolved / filename
         if memory_path.is_symlink():
+            report("path_symlink_escape", "memory path must not be a symlink", resolved, memory_path)
             continue
         if memory_path.exists() and not memory_path.is_file():
-            raise MemoryBoundaryError(
-                "memory_path_not_regular_file",
-                "memory path must be a regular file",
-                context={"workflow_dir": str(resolved), "memory_path": str(memory_path), "scope": scope},
-            )
+            if diagnostics is None:
+                raise MemoryBoundaryError(
+                    "memory_path_not_regular_file",
+                    "memory path must be a regular file",
+                    context={"workflow_dir": str(resolved), "memory_path": str(memory_path), "scope": scope},
+                )
+            report("memory_path_not_regular_file", "memory path must be a regular file", resolved, memory_path)
+            continue
         if memory_path.is_file():
+            try:
+                _reject_unsafe_regular_file(memory_path, label="memory path")
+            except MemoryBoundaryError as exc:
+                if diagnostics is None:
+                    raise
+                report(exc.code, exc.detail, resolved, memory_path)
+                continue
             if project_root is not None:
                 try:
                     resolve_memory_path(project_root, resolved, scope)
-                except MemoryBoundaryError:
+                except MemoryBoundaryError as exc:
+                    if diagnostics is not None:
+                        report(exc.code, exc.detail, resolved, memory_path)
                     continue
             workflows.append(resolved)
     return sorted(workflows)
@@ -2484,11 +2788,14 @@ def command_memory_check(
     action = "memory_check"
     try:
         project_root = (base or base_dir()).resolve()
+        scan_diagnostics: list[dict[str, Any]] = []
         if scope not in {"shared", "local"}:
             raise MemoryBoundaryError("invalid_scope", "scope must be shared or local")
         if all_workflows:
             root = checked_root(workflow_root, base=project_root)
-            workflow_dirs = _workflow_dirs_with_memory(root, scope=scope, project_root=project_root)
+            workflow_dirs = _workflow_dirs_with_memory(
+                root, scope=scope, project_root=project_root, diagnostics=scan_diagnostics
+            )
         else:
             workflow_dirs = [checked_workflow_dir(workflow, workflow_root, base=project_root)]
 
@@ -2507,6 +2814,18 @@ def command_memory_check(
                 }
             )
             violations.extend(_check_text(text, path=path))
+        violations.extend(
+            {
+                "entry": "",
+                "rule": item["error"]["code"],
+                "detail": item["error"]["detail"],
+                "line": None,
+                "severity": SEVERITY_ERROR,
+                "workflow_dir": item["workflow_dir"],
+                "memory_path": item["memory_path"],
+            }
+            for item in scan_diagnostics
+        )
 
         return {
             "ok": not any(v["severity"] == SEVERITY_ERROR for v in violations),
@@ -2637,8 +2956,23 @@ def _replace_sentinel(existing: str, section: str | None = None) -> str:
 def _backup_agents(path: Path) -> Path | None:
     if not path.exists():
         return None
+    _reject_unsafe_regular_file(path, label="AGENTS.md")
     backup = path.with_name(path.name + AGENTS_BACKUP_SUFFIX)
-    shutil.copyfile(path, backup)
+    try:
+        _copy_file_exclusive(path, backup)
+    except FileExistsError as exc:
+        raise MemoryBoundaryError(
+            "agents_backup_exists",
+            "refusing to overwrite an existing AGENTS backup; review it manually before retrying",
+            context={"backup_path": str(backup)},
+        ) from exc
+    except OSError as exc:
+        raise MemoryBoundaryError(
+            "agents_backup_failed",
+            "AGENTS.md backup could not be created",
+            retryable=True,
+            context={"backup_path": str(backup)},
+        ) from exc
     return backup
 
 
@@ -2654,8 +2988,9 @@ def command_memory_index(
     root = checked_root(workflow_root, base=project_root)
     # `--workflow` remains accepted for old callers, but repair is always global
     # so one paper cannot overwrite the project's discovery section.
+    scan_diagnostics: list[dict[str, Any]] = []
     try:
-        workflow_dirs = _workflow_dirs_with_memory(root, project_root=project_root)
+        workflow_dirs = _workflow_dirs_with_memory(root, project_root=project_root, diagnostics=scan_diagnostics)
     except MemoryBoundaryError as exc:
         return _mutation_error("memory_index", exc)
     indexed: list[dict[str, Any]] = []
@@ -2684,9 +3019,10 @@ def command_memory_index(
         )
     agents = _resolve_agents_path(agents_path, base=project_root)
     with project_memory_lock(project_root):
-        existing = agents.read_text(encoding="utf-8") if agents.exists() else ""
-        backup = _backup_agents(agents)
+        backup: Path | None = None
         try:
+            existing = agents.read_text(encoding="utf-8") if agents.exists() else ""
+            backup = _backup_agents(agents)
             repaired = _replace_sentinel(existing)
         except MemoryBoundaryError as exc:
             return {
@@ -2713,6 +3049,7 @@ def command_memory_index(
         "backup_path": str(backup) if backup else None,
         "indexed": indexed,
         "warnings": warnings,
+        "diagnostics": scan_diagnostics,
         **_deprecated_fields("index repairs only the fixed AGENTS discovery section"),
     }
 
@@ -2729,17 +3066,26 @@ def command_memory_list(
         if scope not in {"shared", "local"}:
             raise MemoryBoundaryError("invalid_scope", "scope must be shared or local")
         project_root = (base or base_dir()).resolve()
+        scan_diagnostics: list[dict[str, Any]] = []
         if all_workflows:
             root = checked_root(workflow_root, base=project_root)
-            workflows = _workflow_dirs_with_memory(root, scope=scope, project_root=project_root)
+            workflows = _workflow_dirs_with_memory(
+                root, scope=scope, project_root=project_root, diagnostics=scan_diagnostics
+            )
         else:
             workflows = [checked_workflow_dir(workflow, workflow_root, base=project_root)]
         result = {
-            "ok": True,
+            "ok": not scan_diagnostics,
             "action": "memory_list",
             "scope": scope,
             "workflows": [_memory_summary(workflow_dir, project_root, scope) for workflow_dir in workflows],
+            "diagnostics": scan_diagnostics,
         }
+        if scan_diagnostics:
+            result["error"] = scan_diagnostics[0]["error"] | {
+                "workflow_dir": scan_diagnostics[0]["workflow_dir"],
+                "memory_path": scan_diagnostics[0]["memory_path"],
+            }
         result.update(_deprecated_fields("list is retained as a read-only compatibility shim"))
         return result
     except MemoryBoundaryError as exc:

@@ -51,6 +51,15 @@ def _exception_error(exc: Exception) -> dict[str, Any]:
     }
 
 
+def _partial_parse_error(diagnostics: list[dict[str, Any]]) -> dict[str, Any]:
+    return {
+        "code": "memory_parse_errors",
+        "detail": "memory context contains parse errors; valid entries were returned",
+        "retryable": False,
+        "diagnostics": diagnostics,
+    }
+
+
 def _load_memory_context(
     root: Path,
     workflow_dir: str | Path,
@@ -75,14 +84,20 @@ def _load_memory_context(
     )
     if not recall.get("ok"):
         return _memory_failure(recall.get("error"))
-    status = "partial" if any(item.get("severity") == memory.SEVERITY_ERROR for item in document.diagnostics) else "available"
+    diagnostics = list(document.diagnostics)
+    for item in recall.get("diagnostics", []):
+        if item not in diagnostics:
+            diagnostics.append(item)
+    parse_errors = [item for item in diagnostics if item.get("severity") == memory.SEVERITY_ERROR]
+    status = "partial" if parse_errors else "available"
     return {
         "status": status,
         "query": query,
         "scope": scope,
         "file_etag": file_etag,
         "results": recall.get("results", []),
-        "diagnostics": recall.get("diagnostics", []),
+        "diagnostics": diagnostics,
+        "error": _partial_parse_error(parse_errors) if parse_errors else None,
     }
 
 

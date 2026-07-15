@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import os
+import errno
 import subprocess
 import sys
 import tempfile
@@ -129,6 +130,23 @@ class MemorySafetyTests(unittest.TestCase):
                 memory.resolve_memory_path(root, wf, "shared")
             self.assertEqual(error.exception.code, "path_symlink_escape")
 
+    def test_lock_symlink_escape_is_rejected_when_platform_allows_symlinks(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "repo"
+            root.mkdir()
+            wf = workflow(root)
+            outside = Path(tmp) / "outside.lock"
+            outside.write_bytes(b"outside")
+            try:
+                os.symlink(outside, wf / ".nature-memory.lock")
+            except (OSError, NotImplementedError) as exc:
+                self.skipTest(f"symlink unavailable: {exc}")
+            with self.assertRaises(memory.MemoryBoundaryError) as error:
+                with memory.workflow_memory_lock(wf):
+                    pass
+            self.assertIn(error.exception.code, {"path_symlink_escape", "path_hardlink_escape"})
+            self.assertEqual(outside.read_bytes(), b"outside")
+
     def test_symlink_boundary_rejection_branch_has_deterministic_fallback_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "repo"
@@ -140,6 +158,77 @@ class MemorySafetyTests(unittest.TestCase):
                 with self.assertRaises(memory.MemoryBoundaryError) as error:
                     memory.resolve_memory_path(root, wf, "shared")
             self.assertEqual(error.exception.code, "path_symlink_escape")
+
+    def test_memory_hardlink_is_rejected_before_external_content_is_read(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "repo"
+            root.mkdir()
+            wf = workflow(root)
+            outside = Path(tmp) / "outside.md"
+            outside.write_text("## external\nexternal body\n", encoding="utf-8")
+            try:
+                os.link(outside, wf / "memory.md")
+            except OSError as exc:
+                self.skipTest(f"hardlink unavailable: {exc}")
+            with self.assertRaises(memory.MemoryBoundaryError) as error:
+                memory.resolve_memory_path(root, wf, "shared")
+            self.assertEqual(error.exception.code, "path_hardlink_escape")
+
+    def test_agents_backup_uses_exclusive_create_and_does_not_follow_external_hardlink(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "repo"
+            root.mkdir()
+            wf = workflow(root)
+            memory_path = wf / "memory.md"
+            memory_path.write_text(memory.serialize_entry("entry", "body", {
+                "schema": 1,
+                "id": "nm_1234567890ab4cde8f0123456789abcd",
+                "kind": "decision",
+                "lifecycle": "active",
+                "provenance": "user",
+                "created_at": "2026-07-14T07:00:00Z",
+                "updated_at": "2026-07-14T07:00:00Z",
+            }), encoding="utf-8")
+            agents = root / "AGENTS.md"
+            agents.write_text("original", encoding="utf-8")
+            external = Path(tmp) / "external-backup-target"
+            external.write_text("must remain", encoding="utf-8")
+            os.link(external, root / "AGENTS.md.nature-memory.bak")
+            result = memory.command_memory_index(base=root)
+            self.assertFalse(result["ok"], result)
+            self.assertEqual(result["error"]["code"], "agents_backup_exists")
+            self.assertEqual(external.read_text(encoding="utf-8"), "must remain")
+
+    def test_lock_backend_permission_failure_is_not_reported_as_timeout(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            wf = workflow(root)
+
+            def permission_failure(fd: int, operation: int) -> None:
+                raise OSError(errno.EPERM, "permission denied")
+
+            fake_fcntl = type("Fcntl", (), {"LOCK_EX": 1, "LOCK_NB": 2, "LOCK_UN": 4, "flock": permission_failure})
+            with patch.object(memory, "_uses_windows_lock_backend", return_value=False), patch.dict(sys.modules, {"fcntl": fake_fcntl}):
+                with self.assertRaises(memory.MemoryBoundaryError) as error:
+                    with memory.workflow_memory_lock(wf, timeout=0.01):
+                        pass
+            self.assertEqual(error.exception.code, "lock_unavailable")
+
+    def test_lock_file_links_are_rejected_before_open(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            wf = workflow(root)
+            outside = root / "outside.lock"
+            outside.write_bytes(b"0")
+            lock = wf / ".nature-memory.lock"
+            try:
+                os.link(outside, lock)
+            except OSError as exc:
+                self.skipTest(f"hardlink unavailable: {exc}")
+            with self.assertRaises(memory.MemoryBoundaryError) as error:
+                with memory.workflow_memory_lock(wf):
+                    pass
+            self.assertEqual(error.exception.code, "path_hardlink_escape")
 
 
 if __name__ == "__main__":

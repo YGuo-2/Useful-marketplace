@@ -241,6 +241,29 @@ class StateEngineTests(unittest.TestCase):
         self.assertEqual(calls, 1)
         self.assertIn(result["memory_context"]["status"], {"available", "partial"})
 
+    def test_resume_with_memory_preserves_partial_parse_errors(self) -> None:
+        wf = self.make(["T1: collect evidence"])
+        metadata = {
+            "schema": 1,
+            "id": "nm_f47ac10b58cc4372a5670e02b2c3d479",
+            "kind": "decision",
+            "lifecycle": "active",
+            "provenance": "user",
+            "created_at": "2026-07-14T07:00:00Z",
+            "updated_at": "2026-07-14T07:00:00Z",
+        }
+        text = nature_memory.serialize_entry("collect evidence", "first", metadata)
+        text += nature_memory.serialize_entry("duplicate evidence", "second", metadata)
+        (Path(wf) / "memory.md").write_text(text, encoding="utf-8")
+
+        result = nc.resume_with_memory(project_root=self.base, workflow_dir=wf, query="collect evidence")
+        context = result["memory_context"]
+        self.assertEqual(context["status"], "partial")
+        self.assertTrue(context["results"], context)
+        self.assertEqual(context["error"]["code"], "memory_parse_errors")
+        self.assertIn("duplicate_id", {item["code"] for item in context["diagnostics"]})
+        self.assertIn("duplicate_id", {item["code"] for item in context["error"]["diagnostics"]})
+
     def test_resume_memory_failure_is_partial_without_changing_progress(self) -> None:
         wf = self.make(["T1: collect evidence"])
         with patch.object(nc, "_load_memory_context", side_effect=RuntimeError("unavailable")):

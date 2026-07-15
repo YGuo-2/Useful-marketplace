@@ -10,6 +10,7 @@ import tempfile
 import unicodedata
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
@@ -126,6 +127,18 @@ class MemorySafetyTests(unittest.TestCase):
                 self.skipTest(f"symlink unavailable: {exc}")
             with self.assertRaises(memory.MemoryBoundaryError) as error:
                 memory.resolve_memory_path(root, wf, "shared")
+            self.assertEqual(error.exception.code, "path_symlink_escape")
+
+    def test_symlink_boundary_rejection_branch_has_deterministic_fallback_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "repo"
+            root.mkdir()
+            wf = workflow(root)
+            # This keeps the boundary branch executable even when Windows
+            # symlink creation is disabled by the host privilege policy.
+            with patch.object(memory.Path, "is_symlink", return_value=True):
+                with self.assertRaises(memory.MemoryBoundaryError) as error:
+                    memory.resolve_memory_path(root, wf, "shared")
             self.assertEqual(error.exception.code, "path_symlink_escape")
 
 

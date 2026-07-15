@@ -295,6 +295,290 @@
         "T-012"
       ],
       "unit_id": "U-010"
+    },
+    {
+      "agent_id": "round-2-R-U-001",
+      "completed_at": "2026-07-14 19:56:40",
+      "report": "## Review Unit\n- Unit: U-001 / T-001\n- Status: ACTIONABLE_ISSUES\n- Completion: incomplete; 105 tests pass with 2 platform skips.\n- Spec Adherence: deviation in alias/title ambiguity, mixed-read isolation, and canonical touch timestamp.\n- Over-Fallback: none.\n- Verification: missing permanent regressions for these boundaries.\n- Issues: P2 alias/title collision resolves by alias priority instead of ambiguous_legacy_ref; P2 show aborts on unrelated unknown-schema entries instead of showing a valid requested entry; P2 stable touch updates only legacy timestamp and leaves metadata updated_at stale. Evidence: nature_memory.py resolver/show/touch paths and U-001 round-2 repro.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "first_wave",
+      "round": 2,
+      "started_at": "2026-07-14 19:36:12",
+      "status": "completed",
+      "task_ids": [
+        "T-001"
+      ],
+      "unit_id": "U-001"
+    },
+    {
+      "agent_id": "round-2-A-U-001",
+      "completed_at": "2026-07-14 20:17:00",
+      "report": "## Review Unit\n- Unit: U-001 / T-001\n- Status: ACTIONABLE_ISSUES\n- Completion: incomplete.\n- Spec Adherence: alias/title ambiguity and unrelated unknown-schema read isolation remain deviations.\n- Over-Fallback: present in show-wide schema failure.\n- Verification: focused regressions missing.\n- Issues: P2 alias/title collision must fail closed; P2 show should still resolve a valid requested entry when an unrelated entry has unknown schema. The stable-ID metadata timestamp claim was rejected as intentional legacy-only touch behavior.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "adversarial",
+      "round": 2,
+      "started_at": "2026-07-14 19:36:13",
+      "status": "completed",
+      "task_ids": [
+        "T-001"
+      ],
+      "unit_id": "U-001"
+    },
+    {
+      "agent_id": "round-2-R-U-002",
+      "completed_at": "2026-07-14 19:56:41",
+      "report": "## Review Unit\n- Unit: U-002 / T-002\n- Status: ACTIONABLE_ISSUES\n- Completion: incomplete; path and local safety gaps remain.\n- Spec Adherence: deviation in physical local backup containment and malformed-file fail-closed errors.\n- Over-Fallback: present.\n- Verification: 105 tests pass with 2 symlink skips; no successful local mutation/Git failure branch evidence.\n- Issues: P1 local migration backup can overwrite an external hardlink target because check_local_scope uses lexical abspath; P2 directory memory paths can raise uncaught PermissionError instead of structured errors; P2 symlink privilege skips leave Windows evidence incomplete; P2 public local success and forced Git failure are untested.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "first_wave",
+      "round": 2,
+      "started_at": "2026-07-14 19:36:14",
+      "status": "completed",
+      "task_ids": [
+        "T-002"
+      ],
+      "unit_id": "U-002"
+    },
+    {
+      "agent_id": "round-2-A-U-002",
+      "completed_at": "2026-07-14 20:17:01",
+      "report": "## Review Unit\n- Unit: U-002 / T-002\n- Status: ACTIONABLE_ISSUES\n- Completion: incomplete.\n- Spec Adherence: local backup physical containment and malformed path fail-closed behavior remain deviated.\n- Over-Fallback: --all silently skips malformed directory-valued memory paths.\n- Verification: symlink privilege skip and local branch coverage remain.\n- Issues: P1 ignored local backup hardlink/symlink can overwrite external target; P2 directory memory paths raise raw PermissionError; P2 Windows symlink/local mutation evidence incomplete; P2 all-workflows silently hides directory-valued memory entries.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "adversarial",
+      "round": 2,
+      "started_at": "2026-07-14 19:36:15",
+      "status": "completed",
+      "task_ids": [
+        "T-002"
+      ],
+      "unit_id": "U-002"
+    },
+    {
+      "agent_id": "round-2-R-U-003",
+      "completed_at": "2026-07-14 19:56:43",
+      "report": "## Review Unit\n- Unit: U-003 / T-003\n- Status: ACTIONABLE_ISSUES\n- Completion: incomplete due external-write CAS race.\n- Spec Adherence: deviation from AC-004.1.\n- Over-Fallback: none.\n- Verification: 79 memory tests pass with 2 skips; Unix fcntl branch unverified; old task evidence is stale.\n- Issues: P1 final ETag read and os.replace remain separately interceptable and an external rewrite can be overwritten; P2 no Unix/fcntl execution evidence.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "first_wave",
+      "round": 2,
+      "started_at": "2026-07-14 19:36:17",
+      "status": "completed",
+      "task_ids": [
+        "T-003"
+      ],
+      "unit_id": "U-003"
+    },
+    {
+      "agent_id": "round-2-A-U-003",
+      "completed_at": "2026-07-14 20:17:02",
+      "report": "## Review Unit\n- Unit: U-003 / T-003\n- Status: ACTIONABLE_ISSUES\n- Completion: incomplete.\n- Spec Adherence: final CAS still has residual external-write race.\n- Over-Fallback: none.\n- Verification: WSL branch passed ad hoc but no durable Unix/fcntl test.\n- Issues: P1 final ETag/os.replace race remains; P2 Unix fcntl execution evidence remains missing. Both corroborate first-wave findings.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "adversarial",
+      "round": 2,
+      "started_at": "2026-07-14 19:36:18",
+      "status": "completed",
+      "task_ids": [
+        "T-003"
+      ],
+      "unit_id": "U-003"
+    },
+    {
+      "agent_id": "round-2-R-U-004",
+      "completed_at": "2026-07-14 19:56:44",
+      "report": "## Review Unit\n- Unit: U-004 / T-004\n- Status: ACTIONABLE_ISSUES\n- Completion: incomplete; lifecycle and locator gaps remain.\n- Spec Adherence: deviation in remember.supersedes transitions and locator consumption.\n- Over-Fallback: none.\n- Verification: 79 memory tests and MCP smoke pass; supersede/locator regressions absent.\n- Issues: P1 remember with supersedes leaves referenced active entries active instead of superseded; P2 show/recall cannot consume emitted memory.md#nm_<uuid> locators; P2 no real JSON-RPC supersede coverage.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "first_wave",
+      "round": 2,
+      "started_at": "2026-07-14 19:36:19",
+      "status": "completed",
+      "task_ids": [
+        "T-004"
+      ],
+      "unit_id": "U-004"
+    },
+    {
+      "agent_id": "round-2-A-U-004",
+      "completed_at": "2026-07-14 20:17:03",
+      "report": "## Review Unit\n- Unit: U-004 / T-004\n- Status: ACTIONABLE_ISSUES\n- Completion: incomplete.\n- Spec Adherence: remember supersedes lifecycle and locator consumption remain wrong.\n- Over-Fallback: none.\n- Verification: no locator-input or supersede JSON-RPC regression.\n- Issues: P1 remember.supersedes leaves source active; P2 emitted memory locator cannot be consumed by show/recall. Missing supersede MCP call is duplicate of U-010 release smoke issue.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "adversarial",
+      "round": 2,
+      "started_at": "2026-07-14 19:36:20",
+      "status": "completed",
+      "task_ids": [
+        "T-004"
+      ],
+      "unit_id": "U-004"
+    },
+    {
+      "agent_id": "round-2-R-U-005",
+      "completed_at": "2026-07-14 19:56:45",
+      "report": "## Review Unit\n- Unit: U-005 / T-005\n- Status: ACTIONABLE_ISSUES\n- Completion: incomplete for strict acceptance.\n- Spec Adherence: deviation between legal soft budget and max_entries lint.\n- Over-Fallback: none.\n- Verification: missing singleton, byte-soft-threshold, and consolidate hard-budget regressions.\n- Issues: P2 check treats legal 13th active entry as hard error despite soft budget; P3 singleton guard lacks direct regression; P3 SOFT_ACTIVE_BYTES and consolidate-apply hard-budget branches lack tests.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "first_wave",
+      "round": 2,
+      "started_at": "2026-07-14 19:36:22",
+      "status": "completed",
+      "task_ids": [
+        "T-005"
+      ],
+      "unit_id": "U-005"
+    },
+    {
+      "agent_id": "round-2-A-U-005",
+      "completed_at": "2026-07-14 20:17:04",
+      "report": "## Review Unit\n- Unit: U-005 / T-005\n- Status: ACTIONABLE_ISSUES\n- Completion: incomplete.\n- Spec Adherence: check max_entries conflicts with soft budget and archived entries count toward the wall.\n- Over-Fallback: none.\n- Verification: singleton, byte-soft and consolidate hard-budget tests missing.\n- Issues: P2 soft-budget check inconsistency; P3 singleton coverage gap; P3 byte-budget coverage gap. Round-1 functional fixes are confirmed.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "adversarial",
+      "round": 2,
+      "started_at": "2026-07-14 19:36:23",
+      "status": "completed",
+      "task_ids": [
+        "T-005"
+      ],
+      "unit_id": "U-005"
+    },
+    {
+      "agent_id": "round-2-R-U-006",
+      "completed_at": "2026-07-14 19:56:46",
+      "report": "## Review Unit\n- Unit: U-006 / T-006\n- Status: ACTIONABLE_ISSUES\n- Completion: incomplete; stable touch compatibility response is incomplete.\n- Spec Adherence: deviation because deprecated warning is only returned for legacy entries.\n- Over-Fallback: none.\n- Verification: stable-ID touch test does not assert deprecated fields.\n- Issues: P2 touch on schema-v1 stable ID omits structured deprecated fields required for compatibility shims.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "first_wave",
+      "round": 2,
+      "started_at": "2026-07-14 19:36:24",
+      "status": "completed",
+      "task_ids": [
+        "T-006"
+      ],
+      "unit_id": "U-006"
+    },
+    {
+      "agent_id": "round-2-A-U-006",
+      "completed_at": "2026-07-14 20:17:06",
+      "report": "## Review Unit\n- Unit: U-006 / T-006\n- Status: ACTIONABLE_ISSUES\n- Completion: incomplete.\n- Spec Adherence: stable-ID touch lacks deprecated fields.\n- Over-Fallback: none.\n- Verification: stable-ID deprecated response not asserted.\n- Issues: P2 stable touch compatibility response gap.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "adversarial",
+      "round": 2,
+      "started_at": "2026-07-14 19:36:25",
+      "status": "completed",
+      "task_ids": [
+        "T-006"
+      ],
+      "unit_id": "U-006"
+    },
+    {
+      "agent_id": "round-2-R-U-007",
+      "completed_at": "2026-07-14 19:56:47",
+      "report": "## Review Unit\n- Unit: U-007 / T-007\n- Status: ACTIONABLE_ISSUES\n- Completion: incomplete; recall filtering and local list are incomplete.\n- Spec Adherence: deviation from requires_live_verification pre-filter and explicit local scope.\n- Over-Fallback: present.\n- Verification: recall/eval pass but missing filter and local-list coverage.\n- Issues: P1 recall ignores filters.requires_live_verification; P2 command_memory_list and MCP list have no scope/local contract and silently return shared memory.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "first_wave",
+      "round": 2,
+      "started_at": "2026-07-14 19:36:27",
+      "status": "completed",
+      "task_ids": [
+        "T-007"
+      ],
+      "unit_id": "U-007"
+    },
+    {
+      "agent_id": "round-2-A-U-007",
+      "completed_at": "2026-07-14 20:17:07",
+      "report": "## Review Unit\n- Unit: U-007 / T-007\n- Status: ACTIONABLE_ISSUES\n- Completion: incomplete.\n- Spec Adherence: requires_live_verification filtering and explicit local list remain missing.\n- Over-Fallback: ignored local scope silently falls back to shared.\n- Verification: focused filter/local-list tests missing.\n- Issues: P1 live-verification filter ignored; P2 local list contract unavailable.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "adversarial",
+      "round": 2,
+      "started_at": "2026-07-14 19:36:28",
+      "status": "completed",
+      "task_ids": [
+        "T-007"
+      ],
+      "unit_id": "U-007"
+    },
+    {
+      "agent_id": "round-2-R-U-008",
+      "completed_at": "2026-07-14 19:56:48",
+      "report": "## Review Unit\n- Unit: U-008 / T-008\n- Status: ACTIONABLE_ISSUES\n- Completion: implementation exists but migration evidence/diagnostics are incomplete.\n- Spec Adherence: deviation in collision context, conditional MCP schema, and recovery evidence.\n- Over-Fallback: none.\n- Verification: no committed JSON-RPC migrate or failed-workflow recovery/restore test.\n- Issues: P2 collision rejection lacks project/scope/current ETag context; P2 MCP migrate schema cannot express workflow_dir required unless all_workflows; P2 no real migrate JSON-RPC coverage; P2 no per-workflow failure recovery/rollback regression.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "first_wave",
+      "round": 2,
+      "started_at": "2026-07-14 19:36:29",
+      "status": "completed",
+      "task_ids": [
+        "T-008"
+      ],
+      "unit_id": "U-008"
+    },
+    {
+      "agent_id": "round-2-A-U-008",
+      "completed_at": "2026-07-14 20:17:08",
+      "report": "## Review Unit\n- Unit: U-008 / T-008\n- Status: ACTIONABLE_ISSUES\n- Completion: incomplete.\n- Spec Adherence: collision context and conditional migration schema remain deviations.\n- Over-Fallback: none.\n- Verification: no real JSON-RPC migrate or failure recovery test.\n- Issues: P2 collision error context; P2 conditional schema; P2 migration JSON-RPC coverage; P2 rollback/recovery coverage. Prior CLI/partial-result fixes confirmed.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "adversarial",
+      "round": 2,
+      "started_at": "2026-07-14 19:36:30",
+      "status": "completed",
+      "task_ids": [
+        "T-008"
+      ],
+      "unit_id": "U-008"
+    },
+    {
+      "agent_id": "round-2-R-U-009",
+      "completed_at": "2026-07-14 19:56:49",
+      "report": "## Review Unit\n- Unit: U-009 / T-009\n- Status: ACTIONABLE_ISSUES\n- Completion: incomplete; strict facade/MCP contracts remain.\n- Spec Adherence: deviation in structured review errors and explicit workflow mutation selection.\n- Over-Fallback: present.\n- Verification: direct facade tests pass but JSON-RPC coverage is incomplete.\n- Issues: P1 complete/block review drops context.error; P1 facade mutation schemas omit workflow_dir and can mutate latest workflow implicitly; P2 no JSON-RPC resume/complete/block/legacy shim/recovery coverage.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "first_wave",
+      "round": 2,
+      "started_at": "2026-07-14 19:36:32",
+      "status": "completed",
+      "task_ids": [
+        "T-009"
+      ],
+      "unit_id": "U-009"
+    },
+    {
+      "agent_id": "round-2-A-U-009",
+      "completed_at": "2026-07-14 20:17:09",
+      "report": "## Review Unit\n- Unit: U-009 / T-009\n- Status: ACTIONABLE_ISSUES\n- Completion: incomplete.\n- Spec Adherence: structured post-commit errors and explicit facade workflow selection remain deviations.\n- Over-Fallback: implicit latest workflow mutation.\n- Verification: facade/legacy/recovery JSON-RPC coverage missing.\n- Issues: P1 complete/block drops nested memory error; P1 omitted workflow_dir can mutate latest; P2 missing real JSON-RPC coverage.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "adversarial",
+      "round": 2,
+      "started_at": "2026-07-14 19:36:33",
+      "status": "completed",
+      "task_ids": [
+        "T-009"
+      ],
+      "unit_id": "U-009"
+    },
+    {
+      "agent_id": "round-2-R-U-010",
+      "completed_at": "2026-07-14 19:56:51",
+      "report": "## Review Unit\n- Unit: U-010 / T-010/T-011/T-012\n- Status: ACTIONABLE_ISSUES\n- Completion: incomplete under strict acceptance.\n- Spec Adherence: deviation in eval admission, graded recall, benchmark load, cross-platform evidence, MCP release evidence, docs, and current task evidence.\n- Over-Fallback: present in gold-driven eval.\n- Verification: evals pass but evidence is stale/incomplete.\n- Issues: P1 Agent eval directly controls writes from should_remember and cannot detect unauthorized writes; P1 recall fixture labels exact/relevance levels without actual partial/mixed graded cases; P2 benchmark is not canonical 256 KiB and lacks all-workflow warm/p95/recall evidence; P2 symlink/fcntl evidence remains incomplete; P2 MCP smoke omits supersede/consolidate/migrate/touch/index/list/facade calls; P2 docs secret wording conflicts with warning semantics; P2 T-010/T-011/T-012 evidence points to pre-fix commits.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "first_wave",
+      "round": 2,
+      "started_at": "2026-07-14 19:36:34",
+      "status": "completed",
+      "task_ids": [
+        "T-010",
+        "T-011",
+        "T-012"
+      ],
+      "unit_id": "U-010"
+    },
+    {
+      "agent_id": "round-2-A-U-010",
+      "completed_at": "2026-07-14 20:17:10",
+      "report": "## Review Unit\n- Unit: U-010 / T-010/T-011/T-012\n- Status: ACTIONABLE_ISSUES\n- Completion: incomplete.\n- Spec Adherence: residual eval validity, canonical benchmark, platform, full MCP smoke, docs wording, and current evidence gaps remain.\n- Over-Fallback: gold-driven negative cases.\n- Verification: current runs pass but do not establish required slices/tools/platforms.\n- Issues: P1 gold-driven Agent admission; P1 relevance-2-only recall; P2 noncanonical benchmark; P2 symlink/fcntl evidence; P2 incomplete MCP smoke; P2 secret warning docs contradiction; P2 stale task evidence. Approval contradiction, workflow eval chain, mixed materialization, process test, and locator docs fixes are confirmed.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "adversarial",
+      "round": 2,
+      "started_at": "2026-07-14 19:36:35",
+      "status": "completed",
+      "task_ids": [
+        "T-010",
+        "T-011",
+        "T-012"
+      ],
+      "unit_id": "U-010"
     }
   ],
   "completed_at": null,
@@ -1060,6 +1344,670 @@
       "unit_ids": [
         "U-008"
       ]
+    },
+    {
+      "completed_at": "2026-07-14 20:58:34",
+      "created_at": "2026-07-14 20:18:21",
+      "evidence": "unique alias/title matching now fails closed; alias-title regression passed",
+      "fix_id": "F-039",
+      "issue_ids": [
+        "I-039"
+      ],
+      "round": 2,
+      "severity": "P2",
+      "started_at": "2026-07-14 20:29:06",
+      "status": "done",
+      "task_ids": [
+        "T-001"
+      ],
+      "title": "Alias/title collisions must fail closed",
+      "unit_ids": [
+        "U-001"
+      ]
+    },
+    {
+      "completed_at": "2026-07-14 20:58:34",
+      "created_at": "2026-07-14 20:18:21",
+      "evidence": "show resolves requested valid entry and returns unrelated diagnostics; mixed-schema regression passed",
+      "fix_id": "F-040",
+      "issue_ids": [
+        "I-040"
+      ],
+      "round": 2,
+      "severity": "P2",
+      "started_at": "2026-07-14 20:29:06",
+      "status": "done",
+      "task_ids": [
+        "T-001"
+      ],
+      "title": "Show should isolate valid requested entries from unrelated unknown schema",
+      "unit_ids": [
+        "U-001"
+      ]
+    },
+    {
+      "completed_at": "2026-07-14 20:58:34",
+      "created_at": "2026-07-14 20:18:21",
+      "evidence": "stable touch rewrites canonical updated_at without changing ID; regression passed",
+      "fix_id": "F-041",
+      "issue_ids": [
+        "I-041"
+      ],
+      "round": 2,
+      "severity": "P2",
+      "started_at": "2026-07-14 20:29:06",
+      "status": "done",
+      "task_ids": [
+        "T-001"
+      ],
+      "title": "Stable touch must update canonical metadata timestamp",
+      "unit_ids": [
+        "U-001"
+      ]
+    },
+    {
+      "completed_at": "2026-07-14 20:58:34",
+      "created_at": "2026-07-14 20:18:21",
+      "evidence": "local migration backup uses exclusive create and rejects hardlink/existing destination; regression passed",
+      "fix_id": "F-042",
+      "issue_ids": [
+        "I-042"
+      ],
+      "round": 2,
+      "severity": "P1",
+      "started_at": "2026-07-14 20:29:06",
+      "status": "done",
+      "task_ids": [
+        "T-002"
+      ],
+      "title": "Local migration backup must reject external hardlinks",
+      "unit_ids": [
+        "U-002"
+      ]
+    },
+    {
+      "completed_at": "2026-07-14 20:58:34",
+      "created_at": "2026-07-14 20:18:21",
+      "evidence": "directory memory paths return memory_path_not_regular_file structured errors",
+      "fix_id": "F-043",
+      "issue_ids": [
+        "I-043"
+      ],
+      "round": 2,
+      "severity": "P2",
+      "started_at": "2026-07-14 20:29:06",
+      "status": "done",
+      "task_ids": [
+        "T-002"
+      ],
+      "title": "Directory memory paths need structured fail-closed errors",
+      "unit_ids": [
+        "U-002"
+      ]
+    },
+    {
+      "completed_at": "2026-07-14 20:58:34",
+      "created_at": "2026-07-14 20:18:21",
+      "evidence": "symlink boundary has executable OS test plus deterministic Windows fallback branch; safety suite passed",
+      "fix_id": "F-044",
+      "issue_ids": [
+        "I-044"
+      ],
+      "round": 2,
+      "severity": "P2",
+      "started_at": "2026-07-14 20:29:07",
+      "status": "done",
+      "task_ids": [
+        "T-002"
+      ],
+      "title": "Windows symlink boundary needs executable evidence",
+      "unit_ids": [
+        "U-002"
+      ]
+    },
+    {
+      "completed_at": "2026-07-14 20:58:34",
+      "created_at": "2026-07-14 20:18:21",
+      "evidence": "ignored local success and forced Git failure regressions passed",
+      "fix_id": "F-045",
+      "issue_ids": [
+        "I-045"
+      ],
+      "round": 2,
+      "severity": "P2",
+      "started_at": "2026-07-14 20:29:07",
+      "status": "done",
+      "task_ids": [
+        "T-002"
+      ],
+      "title": "Public local success and Git failure branches need regression coverage",
+      "unit_ids": [
+        "U-002"
+      ]
+    },
+    {
+      "completed_at": "2026-07-14 20:58:34",
+      "created_at": "2026-07-14 20:18:21",
+      "evidence": "final CAS check is co-located with atomic replacement and external rewrite remains intact; regression passed",
+      "fix_id": "F-046",
+      "issue_ids": [
+        "I-046"
+      ],
+      "round": 2,
+      "severity": "P1",
+      "started_at": "2026-07-14 20:29:07",
+      "status": "done",
+      "task_ids": [
+        "T-003"
+      ],
+      "title": "Final CAS must prevent external rewrite overwrite race",
+      "unit_ids": [
+        "U-003"
+      ]
+    },
+    {
+      "completed_at": "2026-07-14 20:58:34",
+      "created_at": "2026-07-14 20:18:21",
+      "evidence": "fcntl lock backend harness exercised flock acquire/release; concurrency suite passed",
+      "fix_id": "F-047",
+      "issue_ids": [
+        "I-047"
+      ],
+      "round": 2,
+      "severity": "P2",
+      "started_at": "2026-07-14 20:29:07",
+      "status": "done",
+      "task_ids": [
+        "T-003"
+      ],
+      "title": "Unix fcntl lock branch needs execution evidence",
+      "unit_ids": [
+        "U-003"
+      ]
+    },
+    {
+      "completed_at": "2026-07-14 20:58:35",
+      "created_at": "2026-07-14 20:18:21",
+      "evidence": "remember supersedes transitions all referenced active sources to superseded; regression passed",
+      "fix_id": "F-048",
+      "issue_ids": [
+        "I-048"
+      ],
+      "round": 2,
+      "severity": "P1",
+      "started_at": "2026-07-14 20:29:07",
+      "status": "done",
+      "task_ids": [
+        "T-004"
+      ],
+      "title": "remember supersedes must transition referenced active entries",
+      "unit_ids": [
+        "U-004"
+      ]
+    },
+    {
+      "completed_at": "2026-07-14 20:58:35",
+      "created_at": "2026-07-14 20:18:21",
+      "evidence": "stable memory locator is accepted by show and recall; regression passed",
+      "fix_id": "F-049",
+      "issue_ids": [
+        "I-049"
+      ],
+      "round": 2,
+      "severity": "P2",
+      "started_at": "2026-07-14 20:29:07",
+      "status": "done",
+      "task_ids": [
+        "T-004"
+      ],
+      "title": "Stable memory locators must be consumable by show and recall",
+      "unit_ids": [
+        "U-004"
+      ]
+    },
+    {
+      "completed_at": "2026-07-14 20:58:35",
+      "created_at": "2026-07-14 20:18:21",
+      "evidence": "real JSON-RPC supersede call covered by MCP lifecycle suite",
+      "fix_id": "F-050",
+      "issue_ids": [
+        "I-050"
+      ],
+      "round": 2,
+      "severity": "P2",
+      "started_at": "2026-07-14 20:29:07",
+      "status": "done",
+      "task_ids": [
+        "T-004"
+      ],
+      "title": "MCP supersede needs real JSON-RPC regression coverage",
+      "unit_ids": [
+        "U-004"
+      ]
+    },
+    {
+      "completed_at": "2026-07-14 20:58:35",
+      "created_at": "2026-07-14 20:18:21",
+      "evidence": "active count over 12 is advisory and check remains successful",
+      "fix_id": "F-051",
+      "issue_ids": [
+        "I-051"
+      ],
+      "round": 2,
+      "severity": "P2",
+      "started_at": "2026-07-14 20:29:07",
+      "status": "done",
+      "task_ids": [
+        "T-005"
+      ],
+      "title": "Soft active budget must not make check fail",
+      "unit_ids": [
+        "U-005"
+      ]
+    },
+    {
+      "completed_at": "2026-07-14 20:58:35",
+      "created_at": "2026-07-14 20:18:21",
+      "evidence": "singleton consolidate plan rejects source_ids_required",
+      "fix_id": "F-052",
+      "issue_ids": [
+        "I-052"
+      ],
+      "round": 2,
+      "severity": "P3",
+      "started_at": "2026-07-14 20:29:07",
+      "status": "done",
+      "task_ids": [
+        "T-005"
+      ],
+      "title": "Singleton consolidate guard needs direct regression coverage",
+      "unit_ids": [
+        "U-005"
+      ]
+    },
+    {
+      "completed_at": "2026-07-14 20:58:35",
+      "created_at": "2026-07-14 20:18:21",
+      "evidence": "soft-byte and hard consolidate budget paths covered by regression",
+      "fix_id": "F-053",
+      "issue_ids": [
+        "I-053"
+      ],
+      "round": 2,
+      "severity": "P3",
+      "started_at": "2026-07-14 20:29:07",
+      "status": "done",
+      "task_ids": [
+        "T-005"
+      ],
+      "title": "Byte-soft and consolidate hard-budget branches need regression coverage",
+      "unit_ids": [
+        "U-005"
+      ]
+    },
+    {
+      "completed_at": "2026-07-14 20:58:35",
+      "created_at": "2026-07-14 20:18:21",
+      "evidence": "stable touch returns deprecated compatibility fields",
+      "fix_id": "F-054",
+      "issue_ids": [
+        "I-054"
+      ],
+      "round": 2,
+      "severity": "P2",
+      "started_at": "2026-07-14 20:29:08",
+      "status": "done",
+      "task_ids": [
+        "T-006"
+      ],
+      "title": "Stable touch must return deprecated compatibility fields",
+      "unit_ids": [
+        "U-006"
+      ]
+    },
+    {
+      "completed_at": "2026-07-14 20:58:35",
+      "created_at": "2026-07-14 20:18:21",
+      "evidence": "recall requires_live_verification filter enforced and tested",
+      "fix_id": "F-055",
+      "issue_ids": [
+        "I-055"
+      ],
+      "round": 2,
+      "severity": "P1",
+      "started_at": "2026-07-14 20:29:08",
+      "status": "done",
+      "task_ids": [
+        "T-007"
+      ],
+      "title": "Recall must filter requires_live_verification",
+      "unit_ids": [
+        "U-007"
+      ]
+    },
+    {
+      "completed_at": "2026-07-14 20:58:35",
+      "created_at": "2026-07-14 20:18:21",
+      "evidence": "list accepts explicit local scope and reports scope in output",
+      "fix_id": "F-056",
+      "issue_ids": [
+        "I-056"
+      ],
+      "round": 2,
+      "severity": "P2",
+      "started_at": "2026-07-14 20:29:08",
+      "status": "done",
+      "task_ids": [
+        "T-007"
+      ],
+      "title": "List must expose explicit local scope",
+      "unit_ids": [
+        "U-007"
+      ]
+    },
+    {
+      "completed_at": "2026-07-14 20:58:35",
+      "created_at": "2026-07-14 20:18:21",
+      "evidence": "migration collision error preserves collisions, scope, path and current ETag context",
+      "fix_id": "F-057",
+      "issue_ids": [
+        "I-057"
+      ],
+      "round": 2,
+      "severity": "P2",
+      "started_at": "2026-07-14 20:29:08",
+      "status": "done",
+      "task_ids": [
+        "T-008"
+      ],
+      "title": "Migration collision errors need project scope and ETag context",
+      "unit_ids": [
+        "U-008"
+      ]
+    },
+    {
+      "completed_at": "2026-07-14 20:58:36",
+      "created_at": "2026-07-14 20:18:21",
+      "evidence": "MCP migrate schema conditionally requires workflow_dir unless all_workflows=true",
+      "fix_id": "F-058",
+      "issue_ids": [
+        "I-058"
+      ],
+      "round": 2,
+      "severity": "P2",
+      "started_at": "2026-07-14 20:29:08",
+      "status": "done",
+      "task_ids": [
+        "T-008"
+      ],
+      "title": "Migration MCP schema must encode workflow conditional",
+      "unit_ids": [
+        "U-008"
+      ]
+    },
+    {
+      "completed_at": "2026-07-14 20:58:36",
+      "created_at": "2026-07-14 20:18:21",
+      "evidence": "real JSON-RPC migrate dry-run covered in all-tools smoke",
+      "fix_id": "F-059",
+      "issue_ids": [
+        "I-059"
+      ],
+      "round": 2,
+      "severity": "P2",
+      "started_at": "2026-07-14 20:29:08",
+      "status": "done",
+      "task_ids": [
+        "T-008"
+      ],
+      "title": "MCP migrate needs committed real JSON-RPC coverage",
+      "unit_ids": [
+        "U-008"
+      ]
+    },
+    {
+      "completed_at": "2026-07-14 20:58:36",
+      "created_at": "2026-07-14 20:18:21",
+      "evidence": "real per-workflow facade/migration recovery and partial lifecycle paths covered",
+      "fix_id": "F-060",
+      "issue_ids": [
+        "I-060"
+      ],
+      "round": 2,
+      "severity": "P2",
+      "started_at": "2026-07-14 20:29:08",
+      "status": "done",
+      "task_ids": [
+        "T-008"
+      ],
+      "title": "Per-workflow migration failure recovery needs regression coverage",
+      "unit_ids": [
+        "U-008"
+      ]
+    },
+    {
+      "completed_at": "2026-07-14 20:58:36",
+      "created_at": "2026-07-14 20:18:21",
+      "evidence": "facade review preserves structured memory error context after progress commit",
+      "fix_id": "F-061",
+      "issue_ids": [
+        "I-061"
+      ],
+      "round": 2,
+      "severity": "P1",
+      "started_at": "2026-07-14 20:29:08",
+      "status": "done",
+      "task_ids": [
+        "T-009"
+      ],
+      "title": "Complete/block review must preserve structured memory error",
+      "unit_ids": [
+        "U-009"
+      ]
+    },
+    {
+      "completed_at": "2026-07-14 20:58:36",
+      "created_at": "2026-07-14 20:18:21",
+      "evidence": "facade complete/block require explicit workflow_dir in schema, dispatch and implementation",
+      "fix_id": "F-062",
+      "issue_ids": [
+        "I-062"
+      ],
+      "round": 2,
+      "severity": "P1",
+      "started_at": "2026-07-14 20:29:08",
+      "status": "done",
+      "task_ids": [
+        "T-009"
+      ],
+      "title": "Facade mutation must require explicit workflow_dir",
+      "unit_ids": [
+        "U-009"
+      ]
+    },
+    {
+      "completed_at": "2026-07-14 20:58:36",
+      "created_at": "2026-07-14 20:18:21",
+      "evidence": "real JSON-RPC resume/complete/block and missing-workflow recovery covered",
+      "fix_id": "F-063",
+      "issue_ids": [
+        "I-063"
+      ],
+      "round": 2,
+      "severity": "P2",
+      "started_at": "2026-07-14 20:29:08",
+      "status": "done",
+      "task_ids": [
+        "T-009"
+      ],
+      "title": "Facade and legacy shim recovery need real JSON-RPC coverage",
+      "unit_ids": [
+        "U-009"
+      ]
+    },
+    {
+      "completed_at": "2026-07-14 20:58:36",
+      "created_at": "2026-07-14 20:18:21",
+      "evidence": "recall fixture contains exact partial mixed no-hit slices with relevance 0/1/2",
+      "fix_id": "F-064",
+      "issue_ids": [
+        "I-064"
+      ],
+      "round": 2,
+      "severity": "P1",
+      "started_at": "2026-07-14 20:29:08",
+      "status": "done",
+      "task_ids": [
+        "T-011"
+      ],
+      "title": "Recall fixture needs real partial/mixed graded cases",
+      "unit_ids": [
+        "U-010"
+      ]
+    },
+    {
+      "completed_at": "2026-07-14 20:58:36",
+      "created_at": "2026-07-14 20:18:21",
+      "evidence": "deterministic benchmark now records 256 KiB single workload, 12000 all-workflow records, warm/p95 and recall",
+      "fix_id": "F-065",
+      "issue_ids": [
+        "I-065"
+      ],
+      "round": 2,
+      "severity": "P2",
+      "started_at": "2026-07-14 20:29:09",
+      "status": "done",
+      "task_ids": [
+        "T-011"
+      ],
+      "title": "Benchmark must match canonical workload and all-workflow statistics",
+      "unit_ids": [
+        "U-010"
+      ]
+    },
+    {
+      "completed_at": "2026-07-14 20:58:36",
+      "created_at": "2026-07-14 20:18:21",
+      "evidence": "cross-platform symlink fallback and fcntl execution evidence added",
+      "fix_id": "F-066",
+      "issue_ids": [
+        "I-066"
+      ],
+      "round": 2,
+      "severity": "P2",
+      "started_at": "2026-07-14 20:29:09",
+      "status": "done",
+      "task_ids": [
+        "T-010"
+      ],
+      "title": "Cross-platform symlink and fcntl evidence remains incomplete",
+      "unit_ids": [
+        "U-010"
+      ]
+    },
+    {
+      "completed_at": "2026-07-14 20:58:36",
+      "created_at": "2026-07-14 20:18:21",
+      "evidence": "MCP JSON-RPC smoke exercises all 24 declared tools",
+      "fix_id": "F-067",
+      "issue_ids": [
+        "I-067"
+      ],
+      "round": 2,
+      "severity": "P2",
+      "started_at": "2026-07-14 20:29:09",
+      "status": "done",
+      "task_ids": [
+        "T-012"
+      ],
+      "title": "MCP release smoke must exercise all declared tools",
+      "unit_ids": [
+        "U-010"
+      ]
+    },
+    {
+      "completed_at": "2026-07-14 20:58:37",
+      "created_at": "2026-07-14 20:18:21",
+      "evidence": "secret documentation distinguishes hard-rejected known formats from warning-only suspicious assignments",
+      "fix_id": "F-068",
+      "issue_ids": [
+        "I-068"
+      ],
+      "round": 2,
+      "severity": "P2",
+      "started_at": "2026-07-14 20:29:09",
+      "status": "done",
+      "task_ids": [
+        "T-012"
+      ],
+      "title": "Secret handling documentation must match warning semantics",
+      "unit_ids": [
+        "U-010"
+      ]
+    },
+    {
+      "completed_at": "2026-07-14 20:58:37",
+      "created_at": "2026-07-14 20:18:21",
+      "evidence": "agent eval executes independent fixture actions and counts unauthorized writes explicitly",
+      "fix_id": "F-069",
+      "issue_ids": [
+        "I-069"
+      ],
+      "round": 2,
+      "severity": "P1",
+      "started_at": "2026-07-14 20:29:09",
+      "status": "done",
+      "task_ids": [
+        "T-010",
+        "T-011",
+        "T-012"
+      ],
+      "title": "Agent eval must detect unauthorized writes instead of gold-driving writes",
+      "unit_ids": [
+        "U-010"
+      ]
+    },
+    {
+      "completed_at": "2026-07-14 20:58:37",
+      "created_at": "2026-07-14 20:18:21",
+      "evidence": "current worktree full verification refreshed: 120 tests, compile, JSON, deterministic and agent evals, diff check",
+      "fix_id": "F-070",
+      "issue_ids": [
+        "I-070"
+      ],
+      "round": 2,
+      "severity": "P1",
+      "started_at": "2026-07-14 20:29:09",
+      "status": "done",
+      "task_ids": [
+        "T-010",
+        "T-011",
+        "T-012"
+      ],
+      "title": "Current task verification evidence must be refreshed",
+      "unit_ids": [
+        "U-010"
+      ]
+    },
+    {
+      "completed_at": "2026-07-14 20:58:37",
+      "created_at": "2026-07-14 20:18:21",
+      "evidence": "all-workflows no longer skips directory-valued memory paths and returns structured malformed-path diagnostics",
+      "fix_id": "F-071",
+      "issue_ids": [
+        "I-071"
+      ],
+      "round": 2,
+      "severity": "P2",
+      "started_at": "2026-07-14 20:29:09",
+      "status": "done",
+      "task_ids": [
+        "T-002"
+      ],
+      "title": "all-workflows silently skips malformed directory-valued memory paths",
+      "unit_ids": [
+        "U-002"
+      ]
     }
   ],
   "full_fix_rounds": 3,
@@ -1633,6 +2581,505 @@
       ],
       "title": "local migration backup can leak into Git",
       "unit_id": "U-008"
+    },
+    {
+      "agent_id": "round-2-R-U-001",
+      "created_at": "2026-07-14 20:03:32",
+      "evidence": "_find_entry_reference alias-first matching accepts a legacy M3 alias when a title-only ## M3 also exists; round-2 U-001 repro; design.md:300",
+      "fix_id": "F-039",
+      "issue_id": "I-039",
+      "round": 2,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-001"
+      ],
+      "title": "Alias/title collisions must fail closed",
+      "unit_id": "U-001"
+    },
+    {
+      "agent_id": "round-2-R-U-001",
+      "created_at": "2026-07-14 20:03:33",
+      "evidence": "show aborts on any document error before resolving requested valid entry; round-2 U-001 mixed-schema repro; requirements.md:214-216",
+      "fix_id": "F-040",
+      "issue_id": "I-040",
+      "round": 2,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-001"
+      ],
+      "title": "Show should isolate valid requested entries from unrelated unknown schema",
+      "unit_id": "U-001"
+    },
+    {
+      "agent_id": "round-2-R-U-001",
+      "created_at": "2026-07-14 20:03:34",
+      "evidence": "stable-ID touch refreshes legacy timestamp only while metadata.updated_at remains stale; round-2 U-001 repro",
+      "fix_id": "F-041",
+      "issue_id": "I-041",
+      "round": 2,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-001"
+      ],
+      "title": "Stable touch must update canonical metadata timestamp",
+      "unit_id": "U-001"
+    },
+    {
+      "agent_id": "round-2-R-U-002",
+      "created_at": "2026-07-14 20:03:35",
+      "evidence": "check_local_scope uses abspath and shutil.copyfile can overwrite an external hardlink target; round-2 U-002 probe",
+      "fix_id": "F-042",
+      "issue_id": "I-042",
+      "round": 2,
+      "severity": "P1",
+      "status": "fixed",
+      "task_ids": [
+        "T-002"
+      ],
+      "title": "Local migration backup must reject external hardlinks",
+      "unit_id": "U-002"
+    },
+    {
+      "agent_id": "round-2-R-U-002",
+      "created_at": "2026-07-14 20:03:36",
+      "evidence": "directory at memory.md or memory.local.md raises uncaught PermissionError in read paths; round-2 U-002 probe",
+      "fix_id": "F-043",
+      "issue_id": "I-043",
+      "round": 2,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-002"
+      ],
+      "title": "Directory memory paths need structured fail-closed errors",
+      "unit_id": "U-002"
+    },
+    {
+      "agent_id": "round-2-R-U-002",
+      "created_at": "2026-07-14 20:03:37",
+      "evidence": "two symlink tests skip when privilege unavailable; strict T-002 evidence remains incomplete",
+      "fix_id": "F-044",
+      "issue_id": "I-044",
+      "round": 2,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-002"
+      ],
+      "title": "Windows symlink boundary needs executable evidence",
+      "unit_id": "U-002"
+    },
+    {
+      "agent_id": "round-2-R-U-002",
+      "created_at": "2026-07-14 20:03:39",
+      "evidence": "tests cover helper rejection but not successful ignored local mutation or forced Git failure",
+      "fix_id": "F-045",
+      "issue_id": "I-045",
+      "round": 2,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-002"
+      ],
+      "title": "Public local success and Git failure branches need regression coverage",
+      "unit_id": "U-002"
+    },
+    {
+      "agent_id": "round-2-R-U-003",
+      "created_at": "2026-07-14 20:03:40",
+      "evidence": "separate ETag read and os.replace can be intercepted so remember overwrites an external rewrite; round-2 U-003 probe",
+      "fix_id": "F-046",
+      "issue_id": "I-046",
+      "round": 2,
+      "severity": "P1",
+      "status": "fixed",
+      "task_ids": [
+        "T-003"
+      ],
+      "title": "Final CAS must prevent external rewrite overwrite race",
+      "unit_id": "U-003"
+    },
+    {
+      "agent_id": "round-2-R-U-003",
+      "created_at": "2026-07-14 20:03:41",
+      "evidence": "current concurrency tests exercise Windows only and no Unix/fcntl harness is committed",
+      "fix_id": "F-047",
+      "issue_id": "I-047",
+      "round": 2,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-003"
+      ],
+      "title": "Unix fcntl lock branch needs execution evidence",
+      "unit_id": "U-003"
+    },
+    {
+      "agent_id": "round-2-R-U-004",
+      "created_at": "2026-07-14 20:03:42",
+      "evidence": "metadata.supersedes creates a new active entry while source remains active; round-2 U-004 probe",
+      "fix_id": "F-048",
+      "issue_id": "I-048",
+      "round": 2,
+      "severity": "P1",
+      "status": "fixed",
+      "task_ids": [
+        "T-004"
+      ],
+      "title": "remember supersedes must transition referenced active entries",
+      "unit_id": "U-004"
+    },
+    {
+      "agent_id": "round-2-R-U-004",
+      "created_at": "2026-07-14 20:03:43",
+      "evidence": "memory.md#nm_uuid emitted locator returns not_found/no recall; round-2 U-004 probe",
+      "fix_id": "F-049",
+      "issue_id": "I-049",
+      "round": 2,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-004"
+      ],
+      "title": "Stable memory locators must be consumable by show and recall",
+      "unit_id": "U-004"
+    },
+    {
+      "agent_id": "round-2-R-U-004",
+      "created_at": "2026-07-14 20:03:44",
+      "evidence": "server dispatch exists but test source has no real supersede call",
+      "fix_id": "F-050",
+      "issue_id": "I-050",
+      "round": 2,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-004"
+      ],
+      "title": "MCP supersede needs real JSON-RPC regression coverage",
+      "unit_id": "U-004"
+    },
+    {
+      "agent_id": "round-2-R-U-005",
+      "created_at": "2026-07-14 20:03:45",
+      "evidence": "13th active entry is legal but check returns max_entries error, conflicting with AC-006.1",
+      "fix_id": "F-051",
+      "issue_id": "I-051",
+      "round": 2,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-005"
+      ],
+      "title": "Soft active budget must not make check fail",
+      "unit_id": "U-005"
+    },
+    {
+      "agent_id": "round-2-R-U-005",
+      "created_at": "2026-07-14 20:03:47",
+      "evidence": "source_ids_required guard exists but no test asserts singleton plan/apply rejection",
+      "fix_id": "F-052",
+      "issue_id": "I-052",
+      "round": 2,
+      "severity": "P3",
+      "status": "fixed",
+      "task_ids": [
+        "T-005"
+      ],
+      "title": "Singleton consolidate guard needs direct regression coverage",
+      "unit_id": "U-005"
+    },
+    {
+      "agent_id": "round-2-R-U-005",
+      "created_at": "2026-07-14 20:03:48",
+      "evidence": "SOFT_ACTIVE_BYTES and hard-budget consolidate_apply branches are untested",
+      "fix_id": "F-053",
+      "issue_id": "I-053",
+      "round": 2,
+      "severity": "P3",
+      "status": "fixed",
+      "task_ids": [
+        "T-005"
+      ],
+      "title": "Byte-soft and consolidate hard-budget branches need regression coverage",
+      "unit_id": "U-005"
+    },
+    {
+      "agent_id": "round-2-R-U-006",
+      "created_at": "2026-07-14 20:03:49",
+      "evidence": "schema-v1 stable-ID touch omits deprecated warning required for old shim",
+      "fix_id": "F-054",
+      "issue_id": "I-054",
+      "round": 2,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-006"
+      ],
+      "title": "Stable touch must return deprecated compatibility fields",
+      "unit_id": "U-006"
+    },
+    {
+      "agent_id": "round-2-R-U-007",
+      "created_at": "2026-07-14 20:03:50",
+      "evidence": "filters.requires_live_verification is ignored and true records are returned for false filter",
+      "fix_id": "F-055",
+      "issue_id": "I-055",
+      "round": 2,
+      "severity": "P1",
+      "status": "fixed",
+      "task_ids": [
+        "T-007"
+      ],
+      "title": "Recall must filter requires_live_verification",
+      "unit_id": "U-007"
+    },
+    {
+      "agent_id": "round-2-R-U-007",
+      "created_at": "2026-07-14 20:03:51",
+      "evidence": "command_memory_list and MCP schema lack scope/local dispatch and return shared for scope=local",
+      "fix_id": "F-056",
+      "issue_id": "I-056",
+      "round": 2,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-007"
+      ],
+      "title": "List must expose explicit local scope",
+      "unit_id": "U-007"
+    },
+    {
+      "agent_id": "round-2-R-U-008",
+      "created_at": "2026-07-14 20:03:52",
+      "evidence": "collision rejection returns directly without _migration_failure context",
+      "fix_id": "F-057",
+      "issue_id": "I-057",
+      "round": 2,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-008"
+      ],
+      "title": "Migration collision errors need project scope and ETag context",
+      "unit_id": "U-008"
+    },
+    {
+      "agent_id": "round-2-R-U-008",
+      "created_at": "2026-07-14 20:03:54",
+      "evidence": "schema requires only project_root/scope while non-all runtime requires workflow_dir",
+      "fix_id": "F-058",
+      "issue_id": "I-058",
+      "round": 2,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-008"
+      ],
+      "title": "Migration MCP schema must encode workflow conditional",
+      "unit_id": "U-008"
+    },
+    {
+      "agent_id": "round-2-R-U-008",
+      "created_at": "2026-07-14 20:03:55",
+      "evidence": "test source never calls nature_memory_migrate",
+      "fix_id": "F-059",
+      "issue_id": "I-059",
+      "round": 2,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-008"
+      ],
+      "title": "MCP migrate needs committed real JSON-RPC coverage",
+      "unit_id": "U-008"
+    },
+    {
+      "agent_id": "round-2-R-U-008",
+      "created_at": "2026-07-14 20:03:56",
+      "evidence": "no later-failure partial result, restore, or parser revalidation test",
+      "fix_id": "F-060",
+      "issue_id": "I-060",
+      "round": 2,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-008"
+      ],
+      "title": "Per-workflow migration failure recovery needs regression coverage",
+      "unit_id": "U-008"
+    },
+    {
+      "agent_id": "round-2-R-U-009",
+      "created_at": "2026-07-14 20:03:57",
+      "evidence": "nature_context review maps candidates/diagnostics but drops context.error",
+      "fix_id": "F-061",
+      "issue_id": "I-061",
+      "round": 2,
+      "severity": "P1",
+      "status": "fixed",
+      "task_ids": [
+        "T-009"
+      ],
+      "title": "Complete/block review must preserve structured memory error",
+      "unit_id": "U-009"
+    },
+    {
+      "agent_id": "round-2-R-U-009",
+      "created_at": "2026-07-14 20:03:58",
+      "evidence": "MCP schema/dispatch allow latest workflow selection for complete/block facade",
+      "fix_id": "F-062",
+      "issue_id": "I-062",
+      "round": 2,
+      "severity": "P1",
+      "status": "fixed",
+      "task_ids": [
+        "T-009"
+      ],
+      "title": "Facade mutation must require explicit workflow_dir",
+      "unit_id": "U-009"
+    },
+    {
+      "agent_id": "round-2-R-U-009",
+      "created_at": "2026-07-14 20:03:59",
+      "evidence": "no JSON-RPC resume/complete/block/check/touch/index/list or response-loss recovery calls",
+      "fix_id": "F-063",
+      "issue_id": "I-063",
+      "round": 2,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-009"
+      ],
+      "title": "Facade and legacy shim recovery need real JSON-RPC coverage",
+      "unit_id": "U-009"
+    },
+    {
+      "agent_id": "round-2-R-U-010",
+      "created_at": "2026-07-14 20:04:02",
+      "evidence": "fixture has exact relevance-2 positives plus no-hit; slice/level labels are hardcoded only",
+      "fix_id": "F-064",
+      "issue_id": "I-064",
+      "round": 2,
+      "severity": "P1",
+      "status": "fixed",
+      "task_ids": [
+        "T-011"
+      ],
+      "title": "Recall fixture needs real partial/mixed graded cases",
+      "unit_id": "U-010"
+    },
+    {
+      "agent_id": "round-2-R-U-010",
+      "created_at": "2026-07-14 20:04:03",
+      "evidence": "single benchmark is raw 900-record text at 222080 bytes and lacks all-workflow warm/p95/recall",
+      "fix_id": "F-065",
+      "issue_id": "I-065",
+      "round": 2,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-011"
+      ],
+      "title": "Benchmark must match canonical workload and all-workflow statistics",
+      "unit_id": "U-010"
+    },
+    {
+      "agent_id": "round-2-R-U-010",
+      "created_at": "2026-07-14 20:04:04",
+      "evidence": "2 symlink skips and no Unix execution evidence remain in release verification",
+      "fix_id": "F-066",
+      "issue_id": "I-066",
+      "round": 2,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-010"
+      ],
+      "title": "Cross-platform symlink and fcntl evidence remains incomplete",
+      "unit_id": "U-010"
+    },
+    {
+      "agent_id": "round-2-R-U-010",
+      "created_at": "2026-07-14 20:04:05",
+      "evidence": "checked-in JSON-RPC test omits supersede/consolidate/migrate/touch/index/list/facade",
+      "fix_id": "F-067",
+      "issue_id": "I-067",
+      "round": 2,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-012"
+      ],
+      "title": "MCP release smoke must exercise all declared tools",
+      "unit_id": "U-010"
+    },
+    {
+      "agent_id": "round-2-R-U-010",
+      "created_at": "2026-07-14 20:04:06",
+      "evidence": "docs/nature-memory-redesign.md says suspicious formats are rejected while approved design/implementation warn",
+      "fix_id": "F-068",
+      "issue_id": "I-068",
+      "round": 2,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-012"
+      ],
+      "title": "Secret handling documentation must match warning semantics",
+      "unit_id": "U-010"
+    },
+    {
+      "agent_id": "round-2-R-U-010",
+      "created_at": "2026-07-14 20:05:13",
+      "evidence": "agent_case calls remember directly from should_remember and negative cases always skip; round-2 U-010 audit",
+      "fix_id": "F-069",
+      "issue_id": "I-069",
+      "round": 2,
+      "severity": "P1",
+      "status": "fixed",
+      "task_ids": [
+        "T-010",
+        "T-011",
+        "T-012"
+      ],
+      "title": "Agent eval must detect unauthorized writes instead of gold-driving writes",
+      "unit_id": "U-010"
+    },
+    {
+      "agent_id": "round-2-R-U-010",
+      "created_at": "2026-07-14 20:05:14",
+      "evidence": "T-010/T-011/T-012 still point at d6ec024/a337821 and stale connected-eval wording",
+      "fix_id": "F-070",
+      "issue_id": "I-070",
+      "round": 2,
+      "severity": "P1",
+      "status": "fixed",
+      "task_ids": [
+        "T-010",
+        "T-011",
+        "T-012"
+      ],
+      "title": "Current task verification evidence must be refreshed",
+      "unit_id": "U-010"
+    },
+    {
+      "agent_id": "round-2-A-U-002",
+      "created_at": "2026-07-14 20:18:00",
+      "evidence": "Adversarial U-002 repro: _workflow_dirs_with_memory uses is_file and omits a directory-valued memory.md from --all results instead of returning structured malformed-path diagnostics.",
+      "fix_id": "F-071",
+      "issue_id": "I-071",
+      "round": 2,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-002"
+      ],
+      "title": "all-workflows silently skips malformed directory-valued memory paths",
+      "unit_id": "U-002"
     }
   ],
   "max_rounds": 6,
@@ -1659,7 +3106,7 @@
       "last_result": "ACTIONABLE_ISSUES",
       "phase": "阶段 1：Canonical 数据与事务边界",
       "review_status": "issues",
-      "round_started": null,
+      "round_started": 2,
       "status": "issues",
       "task_ids": [
         "T-001"
@@ -1671,7 +3118,7 @@
       "last_result": "ACTIONABLE_ISSUES",
       "phase": "阶段 1：Canonical 数据与事务边界",
       "review_status": "issues",
-      "round_started": null,
+      "round_started": 2,
       "status": "issues",
       "task_ids": [
         "T-002"
@@ -1683,7 +3130,7 @@
       "last_result": "ACTIONABLE_ISSUES",
       "phase": "阶段 1：Canonical 数据与事务边界",
       "review_status": "issues",
-      "round_started": null,
+      "round_started": 2,
       "status": "issues",
       "task_ids": [
         "T-003"
@@ -1695,7 +3142,7 @@
       "last_result": "ACTIONABLE_ISSUES",
       "phase": "阶段 1：Canonical 数据与事务边界",
       "review_status": "issues",
-      "round_started": null,
+      "round_started": 2,
       "status": "issues",
       "task_ids": [
         "T-004"
@@ -1707,7 +3154,7 @@
       "last_result": "ACTIONABLE_ISSUES",
       "phase": "阶段 1：Canonical 数据与事务边界",
       "review_status": "issues",
-      "round_started": null,
+      "round_started": 2,
       "status": "issues",
       "task_ids": [
         "T-005"
@@ -1719,7 +3166,7 @@
       "last_result": "ACTIONABLE_ISSUES",
       "phase": "阶段 2：发现、召回、迁移与工作流接入",
       "review_status": "issues",
-      "round_started": null,
+      "round_started": 2,
       "status": "issues",
       "task_ids": [
         "T-006"
@@ -1731,7 +3178,7 @@
       "last_result": "ACTIONABLE_ISSUES",
       "phase": "阶段 2：发现、召回、迁移与工作流接入",
       "review_status": "issues",
-      "round_started": null,
+      "round_started": 2,
       "status": "issues",
       "task_ids": [
         "T-007"
@@ -1743,7 +3190,7 @@
       "last_result": "ACTIONABLE_ISSUES",
       "phase": "阶段 2：发现、召回、迁移与工作流接入",
       "review_status": "issues",
-      "round_started": null,
+      "round_started": 2,
       "status": "issues",
       "task_ids": [
         "T-008"
@@ -1755,7 +3202,7 @@
       "last_result": "ACTIONABLE_ISSUES",
       "phase": "阶段 2：发现、召回、迁移与工作流接入",
       "review_status": "issues",
-      "round_started": null,
+      "round_started": 2,
       "status": "issues",
       "task_ids": [
         "T-009"
@@ -1767,7 +3214,7 @@
       "last_result": "ACTIONABLE_ISSUES",
       "phase": "阶段 3：对抗验证、Agent Eval 与发布收尾",
       "review_status": "issues",
-      "round_started": null,
+      "round_started": 2,
       "status": "issues",
       "task_ids": [
         "T-010",
@@ -1777,10 +3224,10 @@
       "unit_id": "U-010"
     }
   ],
-  "round": 1,
+  "round": 2,
   "schema_version": 1,
   "status": "fixes-complete",
   "task_count": 12,
-  "updated_at": "2026-07-14 19:32:31",
+  "updated_at": "2026-07-14 20:58:37",
   "workflow": "design-first"
 }

@@ -12,6 +12,7 @@ import unittest
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
+from unittest.mock import patch
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -742,6 +743,9 @@ class NatureMemoryTests(unittest.TestCase):
             applied = nature_memory.command_memory_migrate(repo, workflow, "shared")
             self.assertFalse(applied["ok"])
             self.assertEqual(applied["error"]["code"], "ambiguous_legacy_ref")
+            self.assertEqual(applied["error"]["collisions"][0]["alias"], "M1")
+            self.assertEqual(applied["error"]["scope"], "shared")
+            self.assertIn("current_file_etag", applied["error"])
             self.assertEqual(path.read_bytes(), before)
 
     def test_local_migration_protects_backup_path(self) -> None:
@@ -832,10 +836,10 @@ class NatureMemoryTests(unittest.TestCase):
     def test_check_warns_body_over_line_limit(self) -> None:
         self.assert_warns(valid_entry(body="1\n2\n3\n4\n5"), "body_lines")
 
-    def test_check_errors_entry_count_over_limit(self) -> None:
+    def test_check_warns_entry_count_over_limit_without_rejecting_active_entry(self) -> None:
         text = "\n".join(valid_entry(f"标题{index}") for index in range(1, 14))
 
-        self.assert_errors(text, "max_entries")
+        self.assert_warns(text, "max_entries")
 
     def test_check_warns_title_over_limit(self) -> None:
         self.assert_warns(valid_entry(title="一" * 41), "title_length")
@@ -904,8 +908,10 @@ class NatureMemoryTests(unittest.TestCase):
             lines = (workflow / "memory.md").read_text(encoding="utf-8").splitlines()
             self.assertTrue(result["ok"], result)
             self.assertTrue(lines[1].startswith(nature_memory.MEMORY_METADATA_PREFIX))
-            self.assertTrue(lines[2].startswith("<!-- updated:"))
-            self.assertEqual(nature_memory.parse_memory("\n".join(lines) + "\n")[0].entry_id, created["entry_id"])
+            parsed = nature_memory.parse_memory("\n".join(lines) + "\n")[0]
+            self.assertEqual(parsed.entry_id, created["entry_id"])
+            self.assertEqual(parsed.metadata["updated_at"], result["updated"])
+            self.assertTrue(result["deprecated"])
 
     def test_show_legacy_alias_returns_legacy_ref_without_fabricated_locator(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -1013,7 +1019,7 @@ class NatureMemoryTests(unittest.TestCase):
             with self.assertRaises(nature_memory.NatureProgressError):
                 nature_memory.command_memory_check(workflow=str(repo / ".." / "outside"), base=repo)
 
-    def test_cli_check_all_returns_two_for_hard_cap(self) -> None:
+    def test_cli_check_all_returns_zero_for_soft_active_budget(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp)
             workflow = make_workflow(repo)
@@ -1025,8 +1031,8 @@ class NatureMemoryTests(unittest.TestCase):
             result = run_memory("check", "--all", "docs/nature-workflows", cwd=repo)
             payload = json.loads(result.stdout)
 
-            self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
-            self.assertFalse(payload["ok"])
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertTrue(payload["ok"])
             self.assertIn("max_entries", {v["rule"] for v in payload["violations"]})
 
     def test_cli_check_all_returns_zero_for_warnings(self) -> None:
@@ -1223,6 +1229,202 @@ class NatureMemoryTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertTrue(payload["ok"], payload)
             self.assertEqual(payload["checked"][0]["entries"], 1)
+
+    def test_alias_and_title_collision_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            workflow = make_workflow(repo)
+            (workflow / "memory.md").write_text(
+                legacy_entry(3, "旧决策") + "\n" + valid_entry("M3"), encoding="utf-8"
+            )
+            result = nature_memory.command_memory_show(repo, workflow, "shared", "M3")
+            self.assertFalse(result["ok"], result)
+            self.assertEqual(result["error"]["code"], "ambiguous_legacy_ref")
+
+    def test_show_ignores_unrelated_unknown_schema_for_valid_entry(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            workflow = make_workflow(repo)
+            valid = nature_memory.command_memory_remember(
+                repo, workflow, "shared", "valid", "body", {"kind": "decision"}
+            )
+            future = nature_memory.serialize_entry("future", "body", schema_v1_metadata(schema=2))
+            (workflow / "memory.md").write_text(
+                (workflow / "memory.md").read_text(encoding="utf-8") + future,
+                encoding="utf-8",
+            )
+            result = nature_memory.command_memory_show(repo, workflow, "shared", valid["entry_id"])
+            self.assertTrue(result["ok"], result)
+            self.assertEqual(result["entry"]["id"], valid["entry_id"])
+            self.assertTrue(any(item["code"] == "unknown_schema" for item in result["diagnostics"]))
+
+    def test_local_migration_rejects_existing_external_hardlink_backup(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            workflow = make_workflow(repo)
+            subprocess.run(["git", "init", str(repo)], capture_output=True, check=True)
+            (repo / ".gitignore").write_text(
+                "docs/nature-workflows/*/memory.local.md*\n", encoding="utf-8"
+            )
+            path = workflow / "memory.local.md"
+            path.write_text(legacy_entry(1, "local"), encoding="utf-8")
+            external = Path(tmp) / "external-backup-target"
+            external.write_text("must remain unchanged", encoding="utf-8")
+            backup = path.with_name(path.name + nature_memory.AGENTS_BACKUP_SUFFIX)
+            try:
+                os.link(external, backup)
+            except OSError as exc:
+                self.skipTest(f"hardlink unavailable: {exc}")
+            result = nature_memory.command_memory_migrate(repo, workflow, "local")
+            self.assertFalse(result["ok"], result)
+            self.assertEqual(result["error"]["code"], "local_backup_exists")
+            self.assertEqual(external.read_text(encoding="utf-8"), "must remain unchanged")
+
+    def test_directory_memory_path_returns_structured_error(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            workflow = make_workflow(repo)
+            (workflow / "memory.md").mkdir()
+            result = nature_memory.command_memory_check(base=repo)
+            self.assertFalse(result["ok"], result)
+            self.assertEqual(result["error"]["code"], "memory_path_not_regular_file")
+
+    def test_local_scope_success_and_git_failure_are_observable(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            workflow = make_workflow(repo)
+            subprocess.run(["git", "init", str(repo)], capture_output=True, check=True)
+            (repo / ".gitignore").write_text(
+                "docs/nature-workflows/*/memory.local.md\n", encoding="utf-8"
+            )
+            success = nature_memory.command_memory_remember(
+                repo, workflow, "local", "private", "private body", {"kind": "decision"}
+            )
+            self.assertTrue(success["ok"], success)
+            self.assertTrue((workflow / "memory.local.md").exists())
+            self.assertFalse((workflow / "memory.md").exists())
+
+            failure_repo = Path(tmp) / "failure"
+            failure_workflow = make_workflow(failure_repo)
+            failed_process = subprocess.CompletedProcess([], 2, "", "forced git failure")
+            with patch.object(nature_memory.subprocess, "run", return_value=failed_process):
+                failure = nature_memory.command_memory_remember(
+                    failure_repo, failure_workflow, "local", "private", "body", {"kind": "decision"}
+                )
+            self.assertFalse(failure["ok"], failure)
+            self.assertEqual(failure["error"]["code"], "local_scope_git_failed")
+            self.assertFalse((failure_workflow / "memory.local.md").exists())
+
+    def test_final_cas_preserves_external_rewrite(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            workflow = make_workflow(repo)
+            created = nature_memory.command_memory_remember(
+                repo, workflow, "shared", "same", "before", {"kind": "decision"}
+            )
+            original_read = nature_memory._read_snapshot
+            calls = 0
+            path = workflow / "memory.md"
+
+            def raced_read(target: Path):
+                nonlocal calls
+                calls += 1
+                if calls == 2:
+                    path.write_text("## external\nexternal rewrite\n", encoding="utf-8")
+                return original_read(target)
+
+            with patch.object(nature_memory, "_read_snapshot", side_effect=raced_read):
+                result = nature_memory.command_memory_remember(
+                    repo,
+                    workflow,
+                    "shared",
+                    "updated",
+                    "must not overwrite external",
+                    {"kind": "decision"},
+                    entry_id=created["entry_id"],
+                    expected_etag=created["etag"],
+                )
+            self.assertFalse(result["ok"], result)
+            self.assertEqual(result["error"]["code"], "file_changed_outside_lock")
+            self.assertIn("external rewrite", path.read_text(encoding="utf-8"))
+
+    def test_remember_supersedes_transitions_sources(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            workflow = make_workflow(repo)
+            source = nature_memory.command_memory_remember(
+                repo, workflow, "shared", "source", "body", {"kind": "decision"}
+            )
+            result = nature_memory.command_memory_remember(
+                repo,
+                workflow,
+                "shared",
+                "successor",
+                "new body",
+                {"kind": "decision", "supersedes": [source["entry_id"]]},
+            )
+            self.assertTrue(result["ok"], result)
+            entries = nature_memory.parse_memory((workflow / "memory.md").read_text(encoding="utf-8"))
+            self.assertEqual(
+                next(entry for entry in entries if entry.entry_id == source["entry_id"]).metadata["lifecycle"],
+                "superseded",
+            )
+            self.assertEqual(result["source_ids"], [source["entry_id"]])
+
+    def test_locator_is_consumable_by_show_and_recall(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            workflow = make_workflow(repo)
+            created = nature_memory.command_memory_remember(
+                repo, workflow, "shared", "locator title", "locator body", {"kind": "decision"}
+            )
+            shown = nature_memory.command_memory_show(repo, workflow, "shared", created["locator"])
+            recalled = nature_memory.command_memory_recall(repo, workflow, "shared", created["locator"])
+            self.assertTrue(shown["ok"], shown)
+            self.assertTrue(recalled["ok"], recalled)
+            self.assertEqual(recalled["results"][0]["id"], created["entry_id"])
+
+    def test_consolidate_rejects_singleton_and_hard_budget_apply(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            workflow = make_workflow(repo)
+            one = nature_memory.command_memory_remember(
+                repo, workflow, "shared", "one", "body", {"kind": "decision"}
+            )
+            singleton = nature_memory.command_memory_consolidate_plan(repo, workflow, "shared", [one["entry_id"]])
+            self.assertFalse(singleton["ok"], singleton)
+            self.assertEqual(singleton["error"]["code"], "source_ids_required")
+
+            first = nature_memory.serialize_entry("first", "x" * 140000, schema_v1_metadata())
+            second_id = "nm_1234567890ab4cde8f0123456789abcd"
+            second = nature_memory.serialize_entry("second", "y" * 140000, schema_v1_metadata(second_id))
+            (workflow / "memory.md").write_text(first + second, encoding="utf-8")
+            plan = nature_memory.command_memory_consolidate_plan(
+                repo, workflow, "shared", [STABLE_ID, second_id]
+            )
+            self.assertTrue(plan["ok"], plan)
+            applied = nature_memory.command_memory_consolidate_apply(
+                repo, workflow, "shared", plan["plan_id"], plan["source_ids"], plan["source_etags"],
+                "combined", "body", {"kind": "decision"}
+            )
+            self.assertFalse(applied["ok"], applied)
+            self.assertEqual(applied["error"]["code"], "hard_file_budget")
+
+    def test_list_local_scope_and_all_workflows_directory_error(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            workflow = make_workflow(repo)
+            (workflow / "memory.local.md").write_text(valid_entry("local"), encoding="utf-8")
+            local = nature_memory.command_memory_list(base=repo, scope="local")
+            self.assertTrue(local["ok"], local)
+            self.assertEqual(local["scope"], "local")
+            self.assertEqual(local["workflows"][0]["scope"], "local")
+
+            malformed = make_workflow(repo, "malformed")
+            (malformed / "memory.md").mkdir()
+            listed = nature_memory.command_memory_list(base=repo, all_workflows=True)
+            self.assertFalse(listed["ok"], listed)
+            self.assertEqual(listed["error"]["code"], "memory_path_not_regular_file")
 
 
 if __name__ == "__main__":

@@ -42,6 +42,15 @@ def _memory_failure(error: dict[str, Any] | None = None) -> dict[str, Any]:
     }
 
 
+def _exception_error(exc: Exception) -> dict[str, Any]:
+    return {
+        "code": getattr(exc, "code", "memory_review_unavailable"),
+        "detail": getattr(exc, "detail", str(exc)),
+        "retryable": bool(getattr(exc, "retryable", False)),
+        **dict(getattr(exc, "context", {}) or {}),
+    }
+
+
 def _load_memory_context(
     root: Path,
     workflow_dir: str | Path,
@@ -100,7 +109,7 @@ def resume_with_memory(
             max_bytes=max_bytes,
         )
     except progress.NatureProgressError as exc:
-        context = _memory_failure({"code": "memory_context_unavailable", "detail": str(exc), "retryable": False})
+        context = _memory_failure(_exception_error(exc))
     except Exception:
         context = _memory_failure()
     return {
@@ -134,9 +143,10 @@ def _review_after_progress(
             "query": query,
             "candidates": context.get("results", []),
             "diagnostics": context.get("diagnostics", []),
+            "error": context.get("error"),
         }
     except progress.NatureProgressError as exc:
-        return _memory_failure({"code": "memory_review_unavailable", "detail": str(exc), "retryable": False})
+        return _memory_failure(_exception_error(exc))
     except Exception:
         return _memory_failure()
 
@@ -153,6 +163,8 @@ def complete_with_memory_review(
     top_k: int = memory.RECALL_DEFAULT_TOP_K,
     max_bytes: int = memory.RECALL_MAX_BYTES,
 ) -> dict[str, Any]:
+    if workflow_dir is None or not str(workflow_dir).strip():
+        raise progress.NatureProgressError("workflow_dir is required for mutation review")
     root = _project_root(project_root)
     progress_result = progress.command_complete(
         workflow_root,
@@ -190,6 +202,8 @@ def block_with_memory_review(
     top_k: int = memory.RECALL_DEFAULT_TOP_K,
     max_bytes: int = memory.RECALL_MAX_BYTES,
 ) -> dict[str, Any]:
+    if workflow_dir is None or not str(workflow_dir).strip():
+        raise progress.NatureProgressError("workflow_dir is required for mutation review")
     root = _project_root(project_root)
     progress_result = progress.command_block(
         workflow_root,

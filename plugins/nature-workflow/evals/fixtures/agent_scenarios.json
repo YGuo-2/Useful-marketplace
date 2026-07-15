@@ -5,6 +5,7 @@
   "plugin_version": "0.2.0",
   "allowed_tools": ["nature_new_workflow", "nature_memory_remember", "nature_resume_with_memory", "nature_memory_recall", "nature_memory_show"],
   "scenario_contract": ["new", "remember", "fresh_resume", "recall", "cite"],
+  "agent_actions": {"A01": "remember", "A02": "remember", "A03": "remember", "A04": "remember", "A05": "remember", "A06": "remember", "A07": "remember", "A08": "remember", "A09": "remember", "A10": "remember", "A11": "skip", "A12": "skip", "A13": "skip", "A14": "skip", "A15": "skip", "A16": "skip", "A17": "skip", "A18": "skip", "A19": "skip", "A20": "skip"},
   "scenarios": [
     {"id": "A01", "title": "remember decision 01", "body": "durable fact 01", "should_remember": true, "must_not_write": []},
     {"id": "A02", "title": "remember decision 02", "body": "durable fact 02", "should_remember": true, "must_not_write": []},

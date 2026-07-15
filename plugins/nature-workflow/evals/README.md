@@ -11,7 +11,7 @@ Run the deterministic scorer:
 python plugins/nature-workflow/evals/nature_memory_eval.py --mode deterministic
 ```
 
-It reports Recall@3, MRR, nDCG@3, no-hit FPR, a single-workflow benchmark, and a 1000-workflow / 12000-record parsing benchmark. The thresholds are the approved design thresholds: Recall@3 >= 0.95, MRR >= 0.90, nDCG@3 >= 0.85, and no-hit FPR <= 0.10.
+It reports Recall@3, MRR, nDCG@3, no-hit FPR, exact/partial/mixed/no-hit query slices with graded relevance, a 256 KiB single-workflow benchmark, and a 1000-workflow / 12000-record benchmark with warm/p95 parsing and all-workflow recall timings. The thresholds are the approved design thresholds: Recall@3 >= 0.95, MRR >= 0.90, nDCG@3 >= 0.85, and no-hit FPR <= 0.10.
 
 Run the fresh-process contract harness:
 
@@ -19,4 +19,4 @@ Run the fresh-process contract harness:
 python plugins/nature-workflow/evals/nature_memory_eval.py --mode agent --runs 3
 ```
 
-This is an offline deterministic fixture harness, not a connected model evaluation. Each case launches a new Python process and creates a fresh temporary project. It checks durable write precision/recall, locator validity, must-not-write boundaries, and zero security/privacy failures. Connected model results must carry their own model, tool, prompt, project snapshot, and reviewer evidence.
+This is an offline deterministic fixture harness, not a connected model evaluation. Each case launches a new Python process and creates a fresh temporary project. The fixture provides an independent agent action trace (`remember` or `skip`); the harness compares the resulting write against the scenario expectation and counts unauthorized writes explicitly. It checks durable write precision/recall, locator validity, must-not-write boundaries, and zero security/privacy failures. Connected model results must carry their own model, tool, prompt, project snapshot, and reviewer evidence.

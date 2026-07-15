@@ -185,10 +185,10 @@ TOOLS = [
     },
     {
         "name": "nature_memory_check",
-        "description": "Lint a Nature workflow memory.md (advisory: warnings plus one hard entry-count cap).",
+        "description": "Lint a Nature workflow memory file; entry count and byte thresholds are advisory signals.",
         "inputSchema": {
             "type": "object",
-            "properties": WORKFLOW_INPUTS,
+            "properties": {**WORKFLOW_INPUTS, "scope": {"type": "string", "enum": ["shared", "local"]}, "all_workflows": {"type": "boolean"}},
         },
     },
     {
@@ -216,7 +216,7 @@ TOOLS = [
         "description": "List memory.md entry summaries for a Nature workflow.",
         "inputSchema": {
             "type": "object",
-            "properties": WORKFLOW_INPUTS,
+            "properties": {**WORKFLOW_INPUTS, "scope": {"type": "string", "enum": ["shared", "local"]}, "all_workflows": {"type": "boolean"}},
         },
     },
 ]
@@ -356,6 +356,13 @@ TOOLS.extend(
                     "all_workflows": {"type": "boolean"},
                 },
                 "required": ["project_root", "scope"],
+                "allOf": [
+                    {
+                        "if": {"properties": {"all_workflows": {"const": True}}},
+                        "then": {"not": {"required": ["workflow_dir"]}},
+                        "else": {"required": ["workflow_dir"]},
+                    }
+                ],
             },
         },
         {
@@ -391,7 +398,7 @@ TOOLS.extend(
                     "top_k": {"type": "integer"},
                     "max_bytes": {"type": "integer"},
                 },
-                "required": ["project_root", "scope", "task_id", "evidence"],
+                "required": ["project_root", "workflow_dir", "scope", "task_id", "evidence"],
             },
         },
         {
@@ -409,7 +416,7 @@ TOOLS.extend(
                     "top_k": {"type": "integer"},
                     "max_bytes": {"type": "integer"},
                 },
-                "required": ["project_root", "scope", "task_id", "reason"],
+                "required": ["project_root", "workflow_dir", "scope", "task_id", "reason"],
             },
         },
     ]
@@ -542,13 +549,27 @@ def call_tool(name: str, args: dict[str, Any]) -> Any:
             base=base,
         )
     if name == "nature_memory_check":
-        return command_memory_check(_root(args), _workflow(args), base=base)
+        workflow_dir = _workflow(args)
+        return command_memory_check(
+            _root(args),
+            workflow_dir,
+            base=base,
+            all_workflows=bool(args.get("all_workflows", False)) or workflow_dir is None,
+            scope=args.get("scope", "shared"),
+        )
     if name == "nature_memory_touch":
         return command_memory_touch(_root(args), _workflow(args), _required_string(args, "entry_id"), base=base)
     if name == "nature_memory_index":
         return command_memory_index(_root(args), _workflow(args), base=base, all_workflows=_workflow(args) is None)
     if name == "nature_memory_list":
-        return command_memory_list(_root(args), _workflow(args), base=base)
+        workflow_dir = _workflow(args)
+        return command_memory_list(
+            _root(args),
+            workflow_dir,
+            base=base,
+            all_workflows=bool(args.get("all_workflows", False)) or workflow_dir is None,
+            scope=args.get("scope", "shared"),
+        )
     if name == "nature_memory_remember":
         return command_memory_remember(
             _project_root_required(args),
@@ -657,7 +678,7 @@ def call_tool(name: str, args: dict[str, Any]) -> Any:
     if name == "nature_complete_with_memory_review":
         return complete_with_memory_review(
             _root(args),
-            _workflow(args),
+            _required_string(args, "workflow_dir"),
             _required_string(args, "task_id"),
             _required_string(args, "evidence"),
             args.get("notes", "") if isinstance(args.get("notes", ""), str) else "",
@@ -669,7 +690,7 @@ def call_tool(name: str, args: dict[str, Any]) -> Any:
     if name == "nature_block_with_memory_review":
         return block_with_memory_review(
             _root(args),
-            _workflow(args),
+            _required_string(args, "workflow_dir"),
             _required_string(args, "task_id"),
             _required_string(args, "reason"),
             project_root=_project_root_required(args),

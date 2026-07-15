@@ -8,6 +8,8 @@ import tempfile
 import unittest
 from concurrent.futures import ThreadPoolExecutor
 import multiprocessing
+from types import SimpleNamespace
+from unittest.mock import patch
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -48,6 +50,26 @@ def process_update(root_text: str, workflow_text: str, entry_id: str, etag: str,
 
 
 class MemoryConcurrencyTests(unittest.TestCase):
+    def test_fcntl_lock_backend_is_executable(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            wf = workflow(root, "fcntl")
+            calls: list[tuple[int, int]] = []
+
+            def fake_flock(fd: int, operation: int) -> None:
+                calls.append((fd, operation))
+
+            fake_fcntl = SimpleNamespace(
+                LOCK_EX=1,
+                LOCK_NB=2,
+                LOCK_UN=4,
+                flock=fake_flock,
+            )
+            with patch.object(memory, "_uses_windows_lock_backend", return_value=False), patch.dict(sys.modules, {"fcntl": fake_fcntl}):
+                with memory.workflow_memory_lock(wf):
+                    pass
+            self.assertEqual([operation for _, operation in calls], [3, 4])
+
     def test_different_entry_updates_do_not_lose_each_other(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

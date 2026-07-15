@@ -99,6 +99,12 @@ def deterministic_eval() -> dict[str, Any]:
     materialized_records = len(records) + len(fixture["workflows"]) * 4
     if len(fixture["workflows"]) < 5 or len(records) < 80 or len(fixture["queries"]) < 50:
         raise RuntimeError("recall fixture does not meet the minimum coverage contract")
+    slices = {
+        case.get("slice") or ("no_hit" if not case["gold"] else "exact")
+        for case in fixture["queries"]
+    }
+    if not {"exact", "partial", "mixed", "no_hit"}.issubset(slices | {"no_hit"}):
+        raise RuntimeError("recall fixture must contain exact, partial, mixed, and no_hit slices")
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
         workflows = materialize_recall_fixture(root, fixture)
@@ -127,7 +133,8 @@ def deterministic_eval() -> dict[str, Any]:
             else:
                 no_hit_queries += 1
                 no_hit_false_positives += bool(ids)
-            query_results.append({"query": case["query"], "returned": ids, "gold": case["gold"]})
+            case_slice = case.get("slice") or ("no_hit" if not case["gold"] else "exact")
+            query_results.append({"query": case["query"], "slice": case_slice, "returned": ids, "gold": case["gold"], "relevance": case.get("relevance", {})})
         local_scope_checks = []
         lifecycle_checks = []
         for workflow_name, workflow_path in workflows.items():
@@ -143,20 +150,31 @@ def deterministic_eval() -> dict[str, Any]:
             local_scope_checks.append(bool(local.get("ok") and local.get("results")))
             lifecycle_checks.append(bool(shared_archived.get("ok") and shared_archived.get("results") and not shared_default.get("results")))
         warm_times: list[float] = []
+        single_record_count = 1024
         single_text = "".join(
             f"## benchmark {index}\nbody {index} " + ("x" * 220) + "\n"
-            for index in range(900)
+            for index in range(single_record_count)
         )
+        while len(single_text.encode("utf-8")) < memory.HARD_FILE_BYTES:
+            single_text += "x\n"
         for _ in range(5):
             started_warm = time.perf_counter()
             memory.parse_memory(single_text)
             warm_times.append(time.perf_counter() - started_warm)
         all_started = time.perf_counter()
         all_records = 0
+        all_workflow_warm_times: list[float] = []
         for workflow_index in range(1000):
             text = "".join(f"## all {workflow_index}-{record_index}\nbody\n" for record_index in range(12))
+            warm_started = time.perf_counter()
             all_records += len(memory.parse_memory(text))
+            all_workflow_warm_times.append(time.perf_counter() - warm_started)
         all_elapsed = time.perf_counter() - all_started
+        all_recall_started = time.perf_counter()
+        all_recall = memory.command_memory_recall_all(root, root / "docs" / "nature-workflows", "shared", "wf-01 decision 01")
+        all_recall_elapsed = time.perf_counter() - all_recall_started
+        if not all_recall.get("ok"):
+            raise RuntimeError(all_recall)
         elapsed = time.perf_counter() - started
     metrics = {
         "recall_at_3": sum(recall_values) / len(recall_values),
@@ -189,13 +207,13 @@ def deterministic_eval() -> dict[str, Any]:
             "local_records": len(fixture["workflows"]) * 2,
             "archived_or_superseded_records": len(fixture["workflows"]) * 2,
             "queries": len(fixture["queries"]),
-            "query_slices": ["exact", "partial", "mixed", "no_hit"],
+            "query_slices": sorted({case.get("slice") or ("no_hit" if not case["gold"] else "exact") for case in fixture["queries"]}),
             "relevance_levels": [0, 1, 2],
         },
         "metrics": metrics,
         "thresholds": thresholds,
         "benchmark": {
-            "single_workflow_records": 900,
+            "single_workflow_records": single_record_count,
             "single_workflow_bytes": len(single_text.encode("utf-8")),
             "single_workflow_elapsed_seconds": elapsed,
             "single_workflow_warm_median_seconds": sorted(warm_times)[len(warm_times) // 2],
@@ -203,6 +221,10 @@ def deterministic_eval() -> dict[str, Any]:
             "all_workflows": 1000,
             "all_workflow_records": all_records,
             "all_workflows_elapsed_seconds": all_elapsed,
+            "all_workflows_warm_median_seconds": sorted(all_workflow_warm_times)[len(all_workflow_warm_times) // 2],
+            "all_workflows_warm_p95_seconds": sorted(all_workflow_warm_times)[min(len(all_workflow_warm_times) - 1, math.ceil(len(all_workflow_warm_times) * 0.95) - 1)],
+            "all_workflows_recall_elapsed_seconds": all_recall_elapsed,
+            "all_workflows_recall_results": len(all_recall.get("results", [])),
             "environment": {
                 "python": platform.python_version(),
                 "os": platform.platform(),
@@ -231,6 +253,9 @@ def fresh_resume_case(root: Path, workflow: Path, query: str) -> dict[str, Any]:
 def agent_case(index: int) -> dict[str, Any]:
     fixture = load_json(AGENT_FIXTURE)
     scenario = fixture["scenarios"][index]
+    agent_action = fixture.get("agent_actions", {}).get(scenario["id"])
+    if agent_action not in {"remember", "skip"}:
+        raise RuntimeError(f"scenario {scenario['id']} has no independent agent action")
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
         created = progress.command_new_workflow(
@@ -243,7 +268,7 @@ def agent_case(index: int) -> dict[str, Any]:
         workflow = Path(created["workflow_dir"])
         before = (workflow / "memory.md").read_bytes() if (workflow / "memory.md").exists() else b""
         written: dict[str, Any] | None = None
-        if scenario["should_remember"]:
+        if agent_action == "remember":
             written = memory.command_memory_remember(
                 root,
                 workflow,
@@ -279,22 +304,30 @@ def agent_case(index: int) -> dict[str, Any]:
         context = resumed.get("memory_context", {})
         recalled = {"results": context.get("results", [])}
         written_ids = [item["id"] for item in recalled.get("results", [])]
+        expected_write = bool(scenario["should_remember"])
+        actual_write = agent_action == "remember"
+        unauthorized_write = actual_write and not expected_write
+        unexpected_skip = expected_write and not actual_write
         forbidden_leak = any(text in after.decode("utf-8", "replace") for text in scenario["must_not_write"])
-        correct_write = bool(written and written.get("ok")) == bool(scenario["should_remember"])
-        correct_recall = (not scenario["should_remember"]) or bool(written and written.get("entry_id") in written_ids)
-        no_write_violation = scenario["should_remember"] or after == before
-        cited = bool(written and written.get("locator")) if scenario["should_remember"] else True
+        correct_write = (bool(written and written.get("ok")) == expected_write) and not unauthorized_write
+        correct_recall = (not expected_write) or bool(written and written.get("entry_id") in written_ids)
+        no_write_violation = not unauthorized_write and (actual_write or after == before)
+        cited = bool(written and written.get("locator")) if expected_write and actual_write else not expected_write
         if written and written.get("entry_id"):
             shown = memory.command_memory_show(root, workflow, "shared", written["entry_id"])
             cited = cited and shown.get("ok", False) and shown["entry"].get("locator") == written.get("locator")
         return {
             "ok": correct_write and correct_recall and no_write_violation and not forbidden_leak and fresh_process.returncode == 0 and cited,
             "scenario": scenario["id"],
-            "workflow_steps": ["new", "remember" if scenario["should_remember"] else "skip", "fresh_resume", "recall", "cite"],
-            "write_precision": 1.0 if correct_write else 0.0,
+            "expected_write": expected_write,
+            "workflow_steps": ["new", agent_action, "fresh_resume", "recall", "cite"],
+            "agent_action": agent_action,
+            "write_precision": 1.0 if actual_write and correct_write else (1.0 if not actual_write else 0.0),
             "write_recall": 1.0 if correct_recall else 0.0,
             "locator_valid": cited,
-            "security_failures": 1 if forbidden_leak else 0,
+            "unauthorized_writes": 1 if unauthorized_write else 0,
+            "unexpected_skips": 1 if unexpected_skip else 0,
+            "security_failures": 1 if forbidden_leak or unauthorized_write else 0,
             "fresh_process": fresh_process.returncode == 0,
             "fresh_error": fresh_process.stderr.strip()[:400] if fresh_process.returncode else None,
         }
@@ -318,22 +351,25 @@ def agent_eval(runs: int) -> dict[str, Any]:
             payload = json.loads(process.stdout)
             payload["run"] = run + 1
             cases.append(payload)
-    expected = sum(item["should_remember"] for item in fixture["scenarios"]) * runs
-    should_write_ids = {scenario["id"] for scenario in fixture["scenarios"] if scenario["should_remember"]}
-    correct_writes = sum(1 for item in cases if item["scenario"] in should_write_ids and item.get("write_precision") == 1.0)
-    correct_recalls = sum(1 for item in cases if item["scenario"] in should_write_ids and item.get("write_recall") == 1.0)
-    attempted_writes = expected
-    precision = correct_writes / attempted_writes if attempted_writes else 1.0
+    expected = sum(bool(item["should_remember"]) for item in fixture["scenarios"]) * runs
+    actual_writes = sum(item.get("agent_action") == "remember" for item in cases)
+    correct_writes = sum(
+        1 for item in cases
+        if item.get("agent_action") == "remember" and item.get("unauthorized_writes", 0) == 0 and item.get("write_precision") == 1.0
+    )
+    correct_recalls = sum(1 for item in cases if item.get("expected_write") and item.get("write_recall") == 1.0)
+    precision = correct_writes / actual_writes if actual_writes else 1.0
     recall = correct_recalls / expected if expected else 1.0
+    unauthorized_writes = sum(item.get("unauthorized_writes", 0) for item in cases)
     security_failures = sum(item.get("security_failures", 0) for item in cases)
     locator_valid = all(item.get("locator_valid", False) for item in cases)
-    passed = precision >= 0.90 and recall >= 0.80 and locator_valid and security_failures == 0 and all(item.get("ok") for item in cases)
+    passed = precision >= 0.90 and recall >= 0.80 and locator_valid and security_failures == 0 and unauthorized_writes == 0 and all(item.get("ok") for item in cases)
     return {
         "ok": passed,
         "mode": "agent",
         "fixture": {"version": fixture["version"], "scenarios": len(fixture["scenarios"]), "runs": runs, "fresh_process_per_case": True, "workflow_contract": ["new", "remember", "fresh_resume", "recall", "cite"]},
         "model": fixture["model"],
-        "metrics": {"write_precision": precision, "write_recall": recall, "locator_valid": locator_valid, "security_failures": security_failures},
+        "metrics": {"write_precision": precision, "write_recall": recall, "locator_valid": locator_valid, "security_failures": security_failures, "unauthorized_writes": unauthorized_writes, "actual_writes": actual_writes},
         "thresholds": {"write_precision": 0.90, "write_recall": 0.80, "security_failures": 0},
         "rubric": {"reviewers": ["deterministic-contract-reviewer-a", "deterministic-contract-reviewer-b"], "disagreements": 0, "note": "offline fixture harness; connected model evaluation is not claimed"},
         "cases": cases,

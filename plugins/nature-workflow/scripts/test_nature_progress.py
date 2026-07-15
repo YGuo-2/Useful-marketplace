@@ -285,6 +285,31 @@ class StateEngineTests(unittest.TestCase):
         self.assertEqual(blocked["memory_review"]["status"], "unavailable")
         self.assertEqual(read_state(block_wf)["tasks"][0]["status"], "blocked")
 
+    def test_complete_review_preserves_structured_memory_error_context(self) -> None:
+        wf = self.make(["T1: complete"])
+        np.command_start(None, wf, "T1", base=self.base)
+        with patch.object(
+            nature_memory,
+            "command_memory_recall",
+            return_value={
+                "ok": False,
+                "error": {
+                    "code": "invalid_utf8",
+                    "detail": "memory file must be valid UTF-8",
+                    "retryable": True,
+                    "memory_path": "memory.md",
+                    "current_file_etag": "etag-current",
+                },
+            },
+        ):
+            result = nc.complete_with_memory_review(
+                None, wf, "T1", "progress evidence", project_root=self.base
+            )
+        self.assertTrue(result["progress_committed"], result)
+        self.assertEqual(result["memory_review"]["status"], "unavailable")
+        self.assertEqual(result["memory_review"]["error"]["code"], "invalid_utf8")
+        self.assertEqual(result["memory_review"]["error"]["current_file_etag"], "etag-current")
+
 
 if __name__ == "__main__":
     unittest.main()

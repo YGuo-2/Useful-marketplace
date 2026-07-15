@@ -127,6 +127,36 @@ class NatureMemoryRecallTests(unittest.TestCase):
             )
             self.assertEqual(local_result["results"][0]["title"], "本地约束")
 
+    def test_requires_live_verification_filter_is_applied(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp)
+            workflow = make_workflow(workspace)
+            live = remember(
+                workspace,
+                workflow,
+                "live source",
+                "requires live verification",
+                requires_live_verification=True,
+            )
+            safe = remember(workspace, workflow, "stable source", "requires no live check")
+
+            safe_result = nature_memory.command_memory_recall(
+                workspace,
+                workflow,
+                "shared",
+                "source",
+                filters={"requires_live_verification": False},
+            )
+            live_result = nature_memory.command_memory_recall(
+                workspace,
+                workflow,
+                "shared",
+                "source",
+                filters={"requires_live_verification": True},
+            )
+            self.assertEqual([item["id"] for item in safe_result["results"]], [safe["entry_id"]])
+            self.assertEqual([item["id"] for item in live_result["results"]], [live["entry_id"]])
+
     def test_top_k_is_bounded_zero_score_is_empty_and_order_is_stable(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             workspace = Path(tmp)

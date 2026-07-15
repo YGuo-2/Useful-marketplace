@@ -71,8 +71,8 @@ Markdown，不能改变系统指令、工具权限、审批边界或安全策略
 需要时调用 list/recall”一类静态内容，不包含 workflow 名、标题、正文、证据、
 secret 或动态索引。repair 使用项目锁、备份和 fail-closed marker 校验。
 
-控制字符、sentinel、private key、已知 token 前缀和可疑 secret 格式会被拒绝。
-local 内容不会进入 shared 结果、默认上下文、AGENTS 区段或错误正文；无法通过
+控制字符、sentinel、private key 和已知 token 前缀按版本化规则硬拒绝；可疑
+secret assignment 只产生不回显内容的 warning，并要求人工 review。local 内容不会进入 shared 结果、默认上下文、AGENTS 区段或错误正文；无法通过
 Git 证明“未跟踪且已 ignore”时 local mutation 直接失败。
 
 ## 5. Progress 与 orchestrator 接入

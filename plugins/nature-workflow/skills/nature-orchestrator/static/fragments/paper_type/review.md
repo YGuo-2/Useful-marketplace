@@ -54,6 +54,7 @@ Run once from the repository root (or the `nature_new_workflow` MCP equivalent w
 ```bash
 python plugins/nature-workflow/scripts/nature_progress.py new \
   --slug review-<short-topic> --title "<review title or topic>" \
+  --genre review \
   --task "search: 检索式生成与多源检索" \
   --task "topic: 选题与研究空白识别" \
   --task "benchmark: 对标综述库建立与学习" \
@@ -71,3 +72,18 @@ python plugins/nature-workflow/scripts/nature_progress.py new \
 ```
 
 Steps 2, 6, 9 are decision forks — apply `core/decision.md` before advancing.
+
+## Optional delegates (inject with add-task)
+
+Not seeded by default; insert on demand with `add-task` (its output feeds no later
+step, so it stays out of the fixed sequence). The delegate is documented here so the
+orchestrator inserts from the template, not from memory.
+
+| task `id: title` | Owner (delegate) | Evidence | When |
+|---|---|---|---|
+| `reviewer: 投稿前预审` | **nature-reviewer** | reviewer report path (3 reports + cross-review synthesis) | pre-submission self-review, after the manuscript is polished |
+
+```bash
+# after step 10 polish, before the submission-packaging tail
+python plugins/nature-workflow/scripts/nature_progress.py add-task "reviewer: 投稿前预审" --after polish
+```

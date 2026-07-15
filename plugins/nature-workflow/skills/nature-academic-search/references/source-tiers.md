@@ -20,12 +20,13 @@ Every academic data source is classified by reliability tier to guide automated 
 | CrossRef | REST API (JSON) | 50 req/s (no key needed) | Cross-disciplinary, citation counts |
 | arXiv | OAI-PMH Atom XML | 1 req/3s | Preprints: physics, math, CS, biology |
 | OpenAlex | REST API (JSON) | ~10 req/s (polite pool with mailto) | Cross-disciplinary, ~250M works + citations/venues/institutions; free, no key; open Web of Science / Scopus substitute for discovery |
+| Europe PMC | REST API (JSON) | Generous, no key | Life sciences + biomedical; PubMed/PMC full text + bioRxiv/medRxiv preprints; abstracts + citation counts. **Implemented** (opt-in: `sources=["europepmc"]`) |
 
 ### T2 — API-backed, Limited
 
 | Source | API | Rate Limit | Notes |
 |--------|-----|------------|-------|
-| Semantic Scholar | REST API (JSON) | 1 req/s (100 with API key) | Citation graph, field-of-study filters |
+| Semantic Scholar | REST API (JSON) | 1 req/s (100 with API key) | Citation graph, field-of-study filters. **Implemented** (opt-in: `sources=["semanticscholar"]`) |
 | bioRxiv | API | Limited metadata | Biology preprints only |
 | medRxiv | API | Limited metadata | Medical preprints only |
 
@@ -61,7 +62,7 @@ For every literature search or citation verification:
 
 | Domain | T1 | T2 | T3 (if needed) |
 |--------|-----|-----|-----------------|
-| Medical / clinical | PubMed | Semantic Scholar | Google Scholar |
+| Medical / clinical | PubMed + Europe PMC | Semantic Scholar | Google Scholar |
 | Cross-disciplinary | CrossRef | Semantic Scholar | Scopus |
 | Preprints / CS / physics | arXiv | bioRxiv / medRxiv | Google Scholar |
 | Exhaustive review | PubMed + CrossRef + arXiv + OpenAlex | Semantic Scholar + bioRxiv/medRxiv | WoS / Scopus |

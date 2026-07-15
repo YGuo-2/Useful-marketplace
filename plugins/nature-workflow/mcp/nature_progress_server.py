@@ -18,11 +18,14 @@ from nature_progress import (  # noqa: E402
     DEFAULT_ROOT,
     NatureProgressError,
     base_dir,
+    command_add_task,
     command_block,
     command_complete,
     command_discover,
+    command_genre,
     command_log_note,
     command_new_workflow,
+    command_remove_task,
     command_resume,
     command_spec,
     command_start,
@@ -97,6 +100,7 @@ TOOLS = [
                 "slug": {"type": "string"},
                 "title": {"type": "string"},
                 "tasks": {"type": "array", "items": {"type": "string"}},
+                "genre": {"type": "string"},
             },
         },
     },
@@ -209,6 +213,49 @@ TOOLS = [
                 "path": {"type": "string"},
             },
             "required": ["status"],
+        },
+    },
+    {
+        "name": "nature_genre",
+        "description": "Set the paper-type genre (free-form slug) for a Nature workflow.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "workflow_root": {"type": "string"},
+                "project_root": {"type": "string"},
+                "workflow_dir": {"type": "string"},
+                "genre": {"type": "string"},
+            },
+            "required": ["genre"],
+        },
+    },
+    {
+        "name": "nature_add_task",
+        "description": "Insert a task ('id: title', or plain title to auto-number) into an existing workflow.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "workflow_root": {"type": "string"},
+                "project_root": {"type": "string"},
+                "workflow_dir": {"type": "string"},
+                "task": {"type": "string"},
+                "after": {"type": "string"},
+            },
+            "required": ["task"],
+        },
+    },
+    {
+        "name": "nature_remove_task",
+        "description": "Remove a pending or blocked task from a workflow (active/completed refused).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "workflow_root": {"type": "string"},
+                "project_root": {"type": "string"},
+                "workflow_dir": {"type": "string"},
+                "task_id": {"type": "string"},
+            },
+            "required": ["task_id"],
         },
     },
     {
@@ -598,7 +645,9 @@ def _required_string_list(args: dict[str, Any], name: str) -> list[str]:
 def call_tool(name: str, args: dict[str, Any]) -> Any:
     base = _base(args)
     if name == "nature_new_workflow":
-        return command_new_workflow(_root(args), args.get("slug"), args.get("title"), _tasks(args), base=base)
+        return command_new_workflow(
+            _root(args), args.get("slug"), args.get("title"), _tasks(args), args.get("genre"), base=base
+        )
     if name == "nature_discover_workflows":
         return command_discover(_root(args), base=base)
     if name == "nature_status":
@@ -635,6 +684,14 @@ def call_tool(name: str, args: dict[str, Any]) -> Any:
             args.get("path") or None,
             base=base,
         )
+    if name == "nature_genre":
+        return command_genre(_root(args), _workflow(args), _required_string(args, "genre"), base=base)
+    if name == "nature_add_task":
+        return command_add_task(
+            _root(args), _workflow(args), _required_string(args, "task"), args.get("after") or None, base=base
+        )
+    if name == "nature_remove_task":
+        return command_remove_task(_root(args), _workflow(args), _required_string(args, "task_id"), base=base)
     if name == "nature_memory_check":
         workflow_dir, all_workflows = _workflow_selection(args)
         return command_memory_check(

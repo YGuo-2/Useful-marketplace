@@ -1,6 +1,6 @@
 # 统一学术搜索 MCP 服务器
 
-这是统一的学术搜索 MCP 服务器，整合 CrossRef、PubMed、arXiv、OpenAlex、Scopus、ScienceDirect 检索源，以及 Unpaywall 开放获取查询。
+这是统一的学术搜索 MCP 服务器，整合 CrossRef、PubMed、arXiv、OpenAlex、Europe PMC、Semantic Scholar、Scopus、ScienceDirect 检索源，以及 Unpaywall 开放获取查询。
 
 ## 工具
 
@@ -29,7 +29,7 @@
 - `NCBI_API_KEY`：可选，用于提升速率限制。
 - Elsevier / Scopus / ScienceDirect：复用 `pybliometrics` 配置文件，默认位置为 `~/.config/pybliometrics.cfg`。
 
-`search_papers` 默认检索 CrossRef、PubMed、arXiv 和 OpenAlex。Scopus / ScienceDirect 是可选 provider：只有在 `sources` 显式传入 `scopus` / `sciencedirect`，或调用专用 Scopus / ScienceDirect 工具时，才会访问 Elsevier API。
+`search_papers` 默认检索 CrossRef、PubMed、arXiv 和 OpenAlex。Europe PMC 和 Semantic Scholar 是可选的免费 provider：在 `sources` 显式传入 `europepmc` / `semanticscholar` 即可启用（Semantic Scholar 若设置 `SEMANTIC_SCHOLAR_API_KEY` 会自动提速）。Scopus / ScienceDirect 是可选 provider：只有在 `sources` 显式传入 `scopus` / `sciencedirect`，或调用专用 Scopus / ScienceDirect 工具时，才会访问 Elsevier API。
 
 这样可以避免默认搜索无意消耗 Elsevier API 配额；若本机缺少 `pybliometrics` 配置，会在返回 JSON 的 `errors` 字段中给出对应数据源错误。
 

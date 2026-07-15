@@ -35,7 +35,10 @@ to it:
 - MCP server: `plugins/nature-workflow/mcp/nature_progress_server.py`
 
 Supported actions are `new`, `discover`, `status`, `start`, `complete`, `block`,
-`resume`, `log`, and `spec`. Each workflow directory contains `nature.yml`,
+`resume`, `log`, `add-task`, `remove-task`, `genre`, and `spec`. The orchestrator
+seeds the task sequence from a genre template at `new`; `add-task`/`remove-task`
+adjust it mid-flow (e.g. injecting a reviewer pre-check) and `genre` persists the
+detected paper type. Each workflow directory contains `nature.yml`,
 `progress.md`, and `tasks.md`, plus an optional `spec.md` format contract (see
 the Spec gate below). The `nature.yml` file keeps its historical name for
 compatibility; its contents are JSON.

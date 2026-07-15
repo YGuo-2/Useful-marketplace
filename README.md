@@ -157,6 +157,8 @@ Generated artifacts live in an isolated workflow directory under `docs/specs/<ru
 7. Implementation proceeds through Spec Progress CLI/MCP task updates, one safe task wave at a time.
 8. When no unchecked tasks remain, local pre-acceptance runs before strict final multi-agent acceptance.
 
+Task plans must meet a quality bar before approval: each task declares `接口` fields (consumed and produced signatures, `无` when empty) so a context-free executor can run it alone, placeholder text like `TBD` or `类似 T-xxx` counts as a plan failure, and the plan is self-reviewed for requirement coverage and cross-task interface consistency. During implementation, each task must pass a two-phase review — spec compliance plus code quality, preferably by a fresh review subagent that sees only the task, spec excerpts, and diff — before `complete`. The Bugfix branch additionally enforces a root-cause investigation discipline: no fix proposals before evidence-backed root-cause analysis, one written hypothesis per self-healing loop, and a hard stop with human escalation after three failed loops.
+
 The preferred implementation approval phrase for every branch is:
 
 ```text
@@ -171,6 +173,10 @@ Legacy phrases remain valid for compatibility:
 ```
 
 Passing validation is not approval. The human approval phrase plus the `approve` command are required before writing business source code.
+
+## Git Delivery Chain
+
+When a workflow runs inside a git repository, `spec-workflow` wraps it in a branch-and-PR delivery chain anchored at the workflow level. It creates an isolated `git worktree` on a `spec/<run-id>` branch so the main working tree stays clean, opens a draft PR after approval whose checklist mirrors `tasks.md`, and commits each completed task (business code plus progress files) so the PR reads as a live review board. After final acceptance the draft is marked ready for review, and the agent only prints the suggested merge and `git worktree remove` commands for a human to run — it never merges autonomously. The chain degrades gracefully: no `git worktree` falls back to `git switch -c`, no remote or `gh` keeps everything local and skips the PR steps, and a non-git repository behaves exactly as before. Tracking issues are created only on request, with the PR linked via `Closes #N`.
 
 ## Kiro Compatibility
 

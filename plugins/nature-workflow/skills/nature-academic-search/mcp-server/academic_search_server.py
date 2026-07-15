@@ -1,7 +1,8 @@
 """Academic search MCP server.
 
 Unified entry point exposing multi-source search and source-specific tools for
-CrossRef, PubMed, arXiv, OpenAlex, Scopus, ScienceDirect, and Unpaywall.
+CrossRef, PubMed, arXiv, OpenAlex, Europe PMC, Semantic Scholar, Scopus,
+ScienceDirect, and Unpaywall.
 """
 
 from __future__ import annotations
@@ -16,10 +17,12 @@ from mcp.server import FastMCP
 from sources import (
     ArxivSource,
     CrossRefSource,
+    EuropePmcSource,
     OpenAlexSource,
     PubMedSource,
     ScienceDirectSource,
     ScopusSource,
+    SemanticScholarSource,
     UnpaywallSource,
 )
 from utils import AcademicSearchError, DataSourceError, setup_logging
@@ -35,6 +38,8 @@ _scopus = ScopusSource()
 _sciencedirect = ScienceDirectSource()
 _openalex = OpenAlexSource()
 _unpaywall = UnpaywallSource()
+_europepmc = EuropePmcSource()
+_semanticscholar = SemanticScholarSource()
 
 
 # ---------------------------------------------------------------------------
@@ -112,6 +117,14 @@ async def _search_openalex(query: str, rows: int) -> dict:
     return await asyncio.to_thread(_openalex.search, query, rows)
 
 
+async def _search_europepmc(query: str, rows: int) -> dict:
+    return await asyncio.to_thread(_europepmc.search, query, rows)
+
+
+async def _search_semanticscholar(query: str, rows: int) -> dict:
+    return await asyncio.to_thread(_semanticscholar.search, query, rows)
+
+
 async def _search_all(
     query: str,
     sources: list[str],
@@ -140,6 +153,12 @@ async def _search_all(
     if "openalex" in sources:
         tasks.append(asyncio.create_task(_search_openalex(query, rows)))
         source_order.append("openalex")
+    if "europepmc" in sources:
+        tasks.append(asyncio.create_task(_search_europepmc(query, rows)))
+        source_order.append("europepmc")
+    if "semanticscholar" in sources:
+        tasks.append(asyncio.create_task(_search_semanticscholar(query, rows)))
+        source_order.append("semanticscholar")
 
     if not tasks:
         return {"total": 0, "results": [], "errors": []}
@@ -199,7 +218,10 @@ async def search_papers(
         sources = ["crossref", "pubmed", "arxiv", "openalex"]
 
     # Validate source names
-    valid_sources = {"crossref", "pubmed", "arxiv", "scopus", "sciencedirect", "openalex"}
+    valid_sources = {
+        "crossref", "pubmed", "arxiv", "scopus", "sciencedirect", "openalex",
+        "europepmc", "semanticscholar",
+    }
     invalid = [s for s in sources if s not in valid_sources]
     if invalid:
         return _json_error(f"Invalid sources: {invalid}. Valid: {sorted(valid_sources)}")

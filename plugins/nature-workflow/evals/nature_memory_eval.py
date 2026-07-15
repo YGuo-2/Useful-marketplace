@@ -26,6 +26,7 @@ import nature_context  # noqa: E402
 import nature_progress as progress  # noqa: E402
 
 
+EVAL_DIR = Path(__file__).resolve().parent
 FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures"
 RECALL_FIXTURE = FIXTURE_DIR / "recall_cases.json"
 AGENT_FIXTURE = FIXTURE_DIR / "agent_scenarios.json"
@@ -34,6 +35,130 @@ REVIEWER_FIXTURE = FIXTURE_DIR / "reviewer_verdicts.json"
 
 def load_json(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _resolve_evidence_file(relative_path: Any, artifact_path: Path) -> Path:
+    if not isinstance(relative_path, str) or not relative_path.strip():
+        raise ValueError("evidence file path must be a non-empty relative string")
+    candidate = (EVAL_DIR / Path(relative_path)).resolve()
+    try:
+        candidate.relative_to(EVAL_DIR.resolve())
+    except ValueError as exc:
+        raise ValueError("evidence file must stay inside the eval directory") from exc
+    if candidate == Path(__file__).resolve() or candidate == artifact_path.resolve():
+        raise ValueError("evidence file must be independent of the harness and verdict artifact")
+    if not candidate.is_file():
+        raise ValueError(f"evidence file does not exist: {relative_path}")
+    return candidate
+
+
+def _json_pointer(document: Any, pointer: str) -> Any:
+    if pointer == "":
+        return document
+    if not isinstance(pointer, str) or not pointer.startswith("/"):
+        raise ValueError(f"unsupported JSON pointer: {pointer!r}")
+    current = document
+    for raw_token in pointer[1:].split("/"):
+        token = raw_token.replace("~1", "/").replace("~0", "~")
+        if isinstance(current, list):
+            try:
+                current = current[int(token)]
+            except (ValueError, IndexError) as exc:
+                raise ValueError(f"JSON pointer does not resolve: {pointer}") from exc
+        elif isinstance(current, dict) and token in current:
+            current = current[token]
+        else:
+            raise ValueError(f"JSON pointer does not resolve: {pointer}")
+    return current
+
+
+def _validate_evidence_bundle(payload: dict[str, Any], artifact_path: Path, scenario_ids: list[str]) -> dict[str, Any]:
+    bundle = payload.get("evidence_bundle")
+    if not isinstance(bundle, dict) or bundle.get("version") != 1 or bundle.get("scope") != "offline_fixture_policy":
+        raise ValueError("reviewer artifact must contain an offline evidence bundle")
+    files = bundle.get("files")
+    if not isinstance(files, dict) or not files:
+        raise ValueError("reviewer evidence bundle must list independent evidence files")
+    resolved_files: dict[str, Path] = {}
+    for file_id, metadata in files.items():
+        if not isinstance(file_id, str) or not isinstance(metadata, dict):
+            raise ValueError("reviewer evidence file entries must be objects")
+        evidence_path = _resolve_evidence_file(metadata.get("path"), artifact_path)
+        expected_sha256 = metadata.get("sha256")
+        actual_sha256 = hashlib.sha256(evidence_path.read_bytes()).hexdigest()
+        if not isinstance(expected_sha256, str) or expected_sha256.casefold() != actual_sha256:
+            raise ValueError(f"evidence file hash mismatch: {file_id}")
+        if metadata.get("independent_of_harness") is not True:
+            raise ValueError(f"evidence file must be independent of the harness: {file_id}")
+        resolved_files[file_id] = evidence_path
+
+    fixture = load_json(AGENT_FIXTURE)
+    scenarios = fixture.get("scenarios")
+    if not isinstance(scenarios, list):
+        raise ValueError("agent fixture scenarios are missing")
+    scenario_by_id = {item.get("id"): item for item in scenarios if isinstance(item, dict)}
+    scenario_index = {item.get("id"): index for index, item in enumerate(scenarios) if isinstance(item, dict)}
+    if set(scenario_ids) != set(scenario_by_id):
+        raise ValueError("reviewer evidence coverage does not match the agent fixture")
+    bindings = bundle.get("bindings")
+    if not isinstance(bindings, dict) or not bindings:
+        raise ValueError("reviewer evidence bundle must define field bindings")
+    fixture_cache: dict[str, Any] = {}
+    for binding_id, binding in bindings.items():
+        if not isinstance(binding_id, str) or not isinstance(binding, dict):
+            raise ValueError("reviewer evidence bindings must be objects")
+        kind = binding.get("kind")
+        if kind == "fixture_field":
+            file_id = binding.get("file")
+            pointer_template = binding.get("pointer")
+            scenario_field = binding.get("scenario_field")
+            if file_id not in resolved_files or not isinstance(pointer_template, str) or "{index}" not in pointer_template:
+                raise ValueError(f"invalid fixture evidence binding: {binding_id}")
+            if not isinstance(scenario_field, str):
+                raise ValueError(f"fixture evidence binding lacks scenario_field: {binding_id}")
+            fixture_cache.setdefault(file_id, load_json(resolved_files[file_id]))
+            for scenario_id in scenario_ids:
+                pointer = pointer_template.replace("{index}", str(scenario_index[scenario_id]))
+                actual = _json_pointer(fixture_cache[file_id], pointer)
+                expected = scenario_by_id[scenario_id].get(scenario_field)
+                if actual != expected:
+                    raise ValueError(f"fixture evidence does not match scenario {scenario_id}: {binding_id}")
+        elif kind == "trace_check":
+            file_id = binding.get("file")
+            pointer = binding.get("pointer")
+            if (
+                not isinstance(binding.get("name"), str)
+                or not isinstance(binding.get("expected"), bool)
+                or file_id not in resolved_files
+                or not isinstance(pointer, str)
+            ):
+                raise ValueError(f"invalid runtime trace evidence binding: {binding_id}")
+            contract = load_json(resolved_files[file_id])
+            if _json_pointer(contract, pointer) != binding["expected"]:
+                raise ValueError(f"runtime evidence contract mismatch: {binding_id}")
+        elif kind == "result_field":
+            file_id = binding.get("file")
+            pointer = binding.get("pointer")
+            if (
+                binding.get("field") != "unauthorized_tool_calls"
+                or binding.get("expected") != []
+                or file_id not in resolved_files
+                or not isinstance(pointer, str)
+            ):
+                raise ValueError(f"invalid runtime result evidence binding: {binding_id}")
+            contract = load_json(resolved_files[file_id])
+            if _json_pointer(contract, pointer) != binding["expected"]:
+                raise ValueError(f"runtime evidence contract mismatch: {binding_id}")
+        else:
+            raise ValueError(f"unsupported reviewer evidence binding: {binding_id}")
+    return {
+        "payload": payload,
+        "files": resolved_files,
+        "bindings": bindings,
+        "fixture": fixture,
+        "scenario_by_id": scenario_by_id,
+        "scenario_index": scenario_index,
+    }
 
 
 def load_reviewer_verdicts(path: Path, scenario_ids: list[str]) -> dict[str, Any]:
@@ -53,8 +178,9 @@ def load_reviewer_verdicts(path: Path, scenario_ids: list[str]) -> dict[str, Any
     reviewer_ids = [item.get("id") for item in reviewers if isinstance(item, dict)]
     if len(reviewer_ids) != 2 or len(set(reviewer_ids)) != 2:
         raise ValueError("reviewer verdict artifact must contain two distinct reviewer IDs")
-    if any(item.get("independent_of_harness") is not True for item in reviewers):
-        raise ValueError("reviewers must declare independence from the harness")
+    evidence_bundle = _validate_evidence_bundle(payload, path, scenario_ids)
+    if any(item.get("evidence_source") not in evidence_bundle["files"] for item in reviewers):
+        raise ValueError("reviewers must identify a real independent evidence file")
 
     expected_pairs = {(scenario_id, reviewer_id) for scenario_id in scenario_ids for reviewer_id in reviewer_ids}
     verdicts = payload.get("verdicts")
@@ -76,6 +202,14 @@ def load_reviewer_verdicts(path: Path, scenario_ids: list[str]) -> dict[str, Any
         evidence_refs = record.get("evidence_refs")
         if not isinstance(evidence_refs, list) or not evidence_refs or not all(isinstance(ref, str) and ref for ref in evidence_refs):
             raise ValueError("reviewer verdict must include evidence_refs")
+        for evidence_ref in evidence_refs:
+            binding = evidence_bundle["bindings"].get(evidence_ref)
+            if binding is None:
+                raise ValueError(f"reviewer evidence reference is not bound to a real field: {evidence_ref}")
+            if binding.get("kind") == "fixture_field":
+                pointer = binding["pointer"].replace("{index}", str(evidence_bundle["scenario_index"][scenario_id]))
+                source_document = load_json(evidence_bundle["files"][binding["file"]])
+                _json_pointer(source_document, pointer)
         records[pair] = record
     if set(records) != expected_pairs:
         raise ValueError("reviewer verdict artifact does not cover every scenario with both reviewers")
@@ -83,7 +217,9 @@ def load_reviewer_verdicts(path: Path, scenario_ids: list[str]) -> dict[str, Any
         "path": path,
         "payload": payload,
         "reviewer_ids": reviewer_ids,
+        "reviewers": {item["id"]: item for item in reviewers},
         "records": records,
+        "evidence_bundle": evidence_bundle,
         "artifact_sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
     }
 
@@ -101,6 +237,7 @@ def reviewer_evidence(artifact: dict[str, Any], scenario_id: str) -> dict[str, A
         "reviewers": [
             {
                 "id": record["reviewer_id"],
+                "evidence_source": artifact["reviewers"][record["reviewer_id"]]["evidence_source"],
                 "verdict": record["verdict"],
                 "rationale": record["rationale"],
                 "evidence_refs": list(record["evidence_refs"]),
@@ -112,6 +249,61 @@ def reviewer_evidence(artifact: dict[str, Any], scenario_id: str) -> dict[str, A
             "disagreement": len(set(verdicts)) > 1,
         },
     }
+
+
+def validate_reviewer_evidence(
+    artifact: dict[str, Any],
+    scenario_id: str,
+    trace: dict[str, Any],
+    result_fields: dict[str, Any],
+) -> dict[str, Any]:
+    """Resolve every imported reference against fixture and runtime evidence."""
+    scenario = artifact["evidence_bundle"]["scenario_by_id"][scenario_id]
+    checks = {item["name"]: item["passed"] for item in trace.get("deterministic_checks", [])}
+    observations: list[dict[str, Any]] = []
+    for reviewer_id in artifact["reviewer_ids"]:
+        record = artifact["records"][(scenario_id, reviewer_id)]
+        for evidence_ref in record["evidence_refs"]:
+            binding = artifact["evidence_bundle"]["bindings"][evidence_ref]
+            if binding["kind"] == "fixture_field":
+                pointer = binding["pointer"].replace("{index}", str(artifact["evidence_bundle"]["scenario_index"][scenario_id]))
+                source_document = load_json(artifact["evidence_bundle"]["files"][binding["file"]])
+                observed = _json_pointer(source_document, pointer)
+                expected = scenario.get(binding["scenario_field"])
+                source_details = {
+                    "source_file": artifact["evidence_bundle"]["files"][binding["file"]].relative_to(EVAL_DIR).as_posix(),
+                    "json_pointer": pointer,
+                }
+            elif binding["kind"] == "trace_check":
+                observed = checks.get(binding["name"])
+                expected = binding["expected"]
+                source_document = load_json(artifact["evidence_bundle"]["files"][binding["file"]])
+                source_details = {
+                    "runtime_field": f"trace.deterministic_checks[name={binding['name']}]",
+                    "source_file": artifact["evidence_bundle"]["files"][binding["file"]].relative_to(EVAL_DIR).as_posix(),
+                    "json_pointer": binding["pointer"],
+                    "contract_observed": _json_pointer(source_document, binding["pointer"]),
+                }
+            else:
+                observed = result_fields.get(binding["field"])
+                expected = binding["expected"]
+                source_document = load_json(artifact["evidence_bundle"]["files"][binding["file"]])
+                source_details = {
+                    "runtime_field": f"result.{binding['field']}",
+                    "source_file": artifact["evidence_bundle"]["files"][binding["file"]].relative_to(EVAL_DIR).as_posix(),
+                    "json_pointer": binding["pointer"],
+                    "contract_observed": _json_pointer(source_document, binding["pointer"]),
+                }
+            observations.append({
+                "reviewer_id": reviewer_id,
+                "reference": evidence_ref,
+                "kind": binding["kind"],
+                **source_details,
+                "observed": observed,
+                "expected": expected,
+                "matched": observed == expected,
+            })
+    return {"passed": all(item["matched"] for item in observations), "references": observations}
 
 
 def _project_snapshot(root: Path) -> dict[str, Any]:
@@ -688,13 +880,21 @@ def agent_case(index: int, reviewer_verdicts_path: Path | None = None) -> dict[s
             {"name": "forbidden_content_absent", "passed": not forbidden_leak},
             {"name": "locator_valid", "passed": cited},
             {"name": "citation_status", "passed": citation_status in {"validated", "not_applicable"}},
+            {"name": "unexpected_skips", "passed": not unexpected_skip},
         ]
         deterministic_checks_passed = all(item["passed"] for item in trace["deterministic_checks"])
         reviewer_passed = all(item["verdict"] == "pass" for item in imported_reviewer_evidence["reviewers"])
         allowed_tools = set(fixture.get("allowed_tools", []))
         unauthorized_tools = [item["tool"] for item in trace["tool_calls"] if item["tool"] not in allowed_tools]
+        reviewer_evidence_validation = validate_reviewer_evidence(
+            reviewer_artifact,
+            scenario["id"],
+            trace,
+            {"unauthorized_tool_calls": unauthorized_tools},
+        )
+        trace["reviewer_evidence_validation"] = reviewer_evidence_validation
         return {
-            "ok": deterministic_checks_passed and reviewer_passed and fresh_process.returncode == 0,
+            "ok": deterministic_checks_passed and reviewer_passed and reviewer_evidence_validation["passed"] and fresh_process.returncode == 0,
             "scenario": scenario["id"],
             "expected_write": expected_write,
             "workflow_steps": ["new", policy_action, "fresh_resume", "recall", "cite"],
@@ -711,6 +911,7 @@ def agent_case(index: int, reviewer_verdicts_path: Path | None = None) -> dict[s
             "fresh_error": fresh_process.stderr.strip()[:400] if fresh_process.returncode else None,
             "deterministic_checks_passed": deterministic_checks_passed,
             "reviewer_verdicts_passed": reviewer_passed,
+            "reviewer_evidence_validated": reviewer_evidence_validation["passed"],
             "trace": trace,
             "unauthorized_tool_calls": unauthorized_tools,
         }
@@ -762,6 +963,7 @@ def agent_eval(runs: int, reviewer_verdicts_path: Path | None = None) -> dict[st
         bool(item.get("trace", {}).get("tool_calls"))
         and bool(item.get("trace", {}).get("deterministic_checks"))
         and len(item.get("trace", {}).get("reviewer_evidence", {}).get("reviewers", [])) == 2
+        and item.get("reviewer_evidence_validated") is True
         and "checks" not in item.get("trace", {}).get("reviewer_evidence", {})
         for item in cases
     )
@@ -770,6 +972,7 @@ def agent_eval(runs: int, reviewer_verdicts_path: Path | None = None) -> dict[st
         for item in cases
     )
     reviewer_verdicts_passed = all(item.get("reviewer_verdicts_passed", False) for item in cases)
+    reviewer_evidence_validated = all(item.get("reviewer_evidence_validated", False) for item in cases)
     reviewer_input_complete = all(
         item.get("trace", {}).get("reviewer_evidence", {}).get("source") == "external_reviewer_input"
         and item.get("trace", {}).get("reviewer_evidence", {}).get("artifact_sha256") == reviewer_artifact["artifact_sha256"]
@@ -777,13 +980,13 @@ def agent_eval(runs: int, reviewer_verdicts_path: Path | None = None) -> dict[st
         for item in cases
     )
     snapshots_complete = all("project_snapshot_before" in item.get("trace", {}) and "project_snapshot_after" in item.get("trace", {}) for item in cases)
-    passed = precision >= 0.90 and recall >= 0.80 and locator_valid and security_failures == 0 and unauthorized_writes == 0 and unauthorized_tool_calls == 0 and trace_complete and snapshots_complete and reviewer_verdicts_passed and reviewer_input_complete and all(item.get("ok") for item in cases)
+    passed = precision >= 0.90 and recall >= 0.80 and locator_valid and security_failures == 0 and unauthorized_writes == 0 and unauthorized_tool_calls == 0 and trace_complete and snapshots_complete and reviewer_verdicts_passed and reviewer_evidence_validated and reviewer_input_complete and all(item.get("ok") for item in cases)
     return {
         "ok": passed,
         "mode": "agent",
         "fixture": {"version": fixture["version"], "scenarios": len(fixture["scenarios"]), "runs": runs, "fresh_process_per_case": True, "workflow_contract": ["new", "remember", "fresh_resume", "recall", "cite"]},
         "model": fixture["model"],
-        "metrics": {"write_precision": precision, "write_recall": recall, "locator_valid": locator_valid, "security_failures": security_failures, "unauthorized_writes": unauthorized_writes, "unauthorized_tool_calls": unauthorized_tool_calls, "trace_complete": trace_complete, "snapshots_complete": snapshots_complete, "actual_writes": actual_writes},
+        "metrics": {"write_precision": precision, "write_recall": recall, "locator_valid": locator_valid, "security_failures": security_failures, "unauthorized_writes": unauthorized_writes, "unauthorized_tool_calls": unauthorized_tool_calls, "trace_complete": trace_complete, "snapshots_complete": snapshots_complete, "reviewer_evidence_validated": reviewer_evidence_validated, "actual_writes": actual_writes},
         "thresholds": {"write_precision": 0.90, "write_recall": 0.80, "security_failures": 0},
         "rubric": {
             "source": "external_reviewer_input",
@@ -792,7 +995,7 @@ def agent_eval(runs: int, reviewer_verdicts_path: Path | None = None) -> dict[st
             "reviewers": reviewer_artifact["reviewer_ids"],
             "disagreements": reviewer_disagreements,
             "all_verdicts_pass": reviewer_verdicts_passed,
-            "evidence": "per-case imported reviewer verdicts with evidence references",
+            "evidence": "per-case imported reviewer verdicts with fixture-file and runtime-field references validated by the harness",
             "evaluation_scope": "offline_fixture_policy",
             "connected_model_evaluation": False,
             "note": "This run does not claim connected model evaluation; connected results require their own external reviewer artifact.",

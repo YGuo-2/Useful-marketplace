@@ -171,19 +171,19 @@
 | F-160 | I-165 | P2 | U-003 | done | CAS restore failures include current/expected ETag context and preserve auditable zero-write behavior; focused concurrency/safety tests pass. |
 | F-161 | I-166 | P1 | U-008 | done | all-workflows migration converts replacement OSError to structured per-workflow failure, cleans operation backup, preserves bytes, and permits retry; migration regressions pass. |
 | F-162 | I-167 | P1 | U-010 | done | Updated tasks.md through the Spec Progress script's allowed completion-log/top-summary fields with current checkpoint 6bb7d9a. T-011/T-012 now record independent reviewer_verdicts.json evidence, offline-only eval scope, 171 Windows script tests, 19 WSL safety/concurrency tests, 10 MCP tests, compile/JSON/spec/resume/diff checks; no design/requirements/task structure changed. |
-| F-163 | I-168 | P2 | U-001 | pending | pending |
-| F-164 | I-169 | P1 | U-002 | pending | pending |
-| F-165 | I-170 | P2 | U-002 | pending | pending |
-| F-166 | I-171 | P2 | U-002 | pending | pending |
-| F-167 | I-172 | P1 | U-003 | pending | pending |
-| F-168 | I-173 | P1 | U-003 | pending | pending |
-| F-169 | I-174 | P2 | U-003 | pending | pending |
-| F-170 | I-175 | P2 | U-006 | pending | pending |
-| F-171 | I-176 | P1 | U-008 | pending | pending |
-| F-172 | I-177 | P2 | U-009 | pending | pending |
-| F-173 | I-178 | P2 | U-009 | pending | pending |
-| F-174 | I-179 | P1 | U-010 | pending | pending |
-| F-175 | I-180 | P2 | U-010 | pending | pending |
+| F-163 | I-168 | P2 | U-001 | done | Exact UUID-shaped nm_ title remains resolvable; `test_nm_prefixed_unique_title_remains_resolvable` passed. |
+| F-164 | I-169 | P1 | U-002 | done | `_read_snapshot` now rechecks opened inode identity and link count; hardlink race regression plus Windows/WSL safety suites passed. |
+| F-165 | I-170 | P2 | U-002 | done | Missing workflow-root probes for check/list/recall-all/migrate-all/index/touch return structured workflow_root_not_found; targeted tests passed. |
+| F-166 | I-171 | P2 | U-002 | done | Long-path response budget regression and minimum-budget diagnostics remain <=256 bytes on WSL; full suite passed. |
+| F-167 | I-172 | P1 | U-003 | done | POSIX CAS restore failure preserves canonical candidate and recovery temporary file; `test_posix_restore_failure_preserves_recovery_file` passed on WSL. |
+| F-168 | I-173 | P1 | U-003 | done | POSIX CAS tests use valid fact metadata with evidence and confidence; WSL suite passed without missing_evidence/KeyError. |
+| F-169 | I-174 | P2 | U-003 | done | CAS failures include project_root/workflow_dir/scope/entry_id/ETag/repair context; POSIX regression and WSL suite passed. |
+| F-170 | I-175 | P2 | U-006 | done | AGENTS bytes are read without newline translation; CRLF preservation regression passed on Windows and WSL. |
+| F-171 | I-176 | P1 | U-008 | done | Raw backup cleanup OSError is converted to migration_backup_cleanup_failed and later workflows continue; isolation regression passed. |
+| F-172 | I-177 | P2 | U-009 | done | Facade query/notes optional values reject non-string types; direct facade regression passed. |
+| F-173 | I-178 | P2 | U-009 | done | Block post-commit review failure returns JSON-RPC success with structured memory review error and progress_committed=true; MCP suite 13 passed. |
+| F-174 | I-179 | P1 | U-010 | done | T-012/tasks/progress/eval evidence now explicitly says offline fixture Agent eval and connected_model_evaluation=false; spec validation 42/42 and resume ready. |
+| F-175 | I-180 | P2 | U-010 | done | Runtime reviewer refs are pinned to reviewer_runtime_contract.json SHA-256 and JSON pointers; agent eval evidence_validated=true and JSON/eval tests passed. |
 
 ## Deferred Issues
 

@@ -16,9 +16,15 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 SERVER = Path(__file__).resolve().parents[1] / "mcp" / "nature_progress_server.py"
+MCP_DIR = SERVER.parent
+if str(MCP_DIR) not in sys.path:
+    sys.path.insert(0, str(MCP_DIR))
+import nature_progress_server as server  # noqa: E402
+import nature_context as server_context  # noqa: E402
 
 
 def _rpc(obj: dict) -> str:
@@ -58,6 +64,36 @@ def _legacy_memory(alias: int, title: str, body: str = "legacy body") -> str:
 
 
 class ServerEncodingSmokeTest(unittest.TestCase):
+    def test_block_json_rpc_keeps_response_after_post_commit_review_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            created = server.command_new_workflow(
+                "docs/nature-workflows",
+                "block-rpc",
+                "Block RPC",
+                ["T1: block"],
+                base=root,
+            )
+            workflow = created["workflow_dir"]
+            with patch.object(server_context, "_review_after_progress", side_effect=KeyError("review unavailable")):
+                reply = server.handle(
+                    _tool_call(
+                        1,
+                        "nature_block_with_memory_review",
+                        {
+                            "project_root": str(root),
+                            "workflow_dir": workflow,
+                            "scope": "shared",
+                            "task_id": "T1",
+                            "reason": "waiting for source",
+                        },
+                    )
+                )
+            self.assertNotIn("error", reply, reply)
+            payload = json.loads(reply["result"]["content"][0]["text"])
+            self.assertTrue(payload["ok"], payload)
+            self.assertTrue(payload["progress_committed"], payload)
+            self.assertEqual(payload["memory_review"]["error"]["code"], "memory_review_internal_error")
     def test_chinese_task_survives_narrow_child_codec(self) -> None:
         requests = "\n".join(
             [
@@ -323,6 +359,33 @@ class ServerEncodingSmokeTest(unittest.TestCase):
                 self.assertIn("detail", reply["error"]["data"], reply)
                 self.assertFalse(reply["error"]["data"]["retryable"], reply)
 
+    def test_optional_query_and_notes_types_fail_closed_over_json_rpc(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = {"project_root": tmp, "workflow_dir": "docs/nature-workflows/wf", "scope": "shared"}
+            cases = [
+                ("nature_resume_with_memory", {**base, "query": 7}, "invalid_query"),
+                ("nature_resume_with_memory", {**base, "query": None}, "invalid_query"),
+                (
+                    "nature_complete_with_memory_review",
+                    {**base, "task_id": "T1", "evidence": "evidence", "notes": 7},
+                    "invalid_notes",
+                ),
+                (
+                    "nature_complete_task",
+                    {**base, "task_id": "T1", "evidence": "evidence", "notes": 7},
+                    "invalid_notes",
+                ),
+            ]
+            replies = _run_rpc(
+                [_tool_call(index, name, arguments) for index, (name, arguments, _) in enumerate(cases, start=1)]
+            )
+            for request_id, (_, _, expected_code) in enumerate(cases, start=1):
+                reply = replies[request_id]
+                self.assertEqual(reply["error"]["code"], -32602, reply)
+                self.assertEqual(reply["error"]["data"]["code"], expected_code, reply)
+                self.assertEqual(reply["error"]["data"]["field"], expected_code.removeprefix("invalid_"), reply)
+                self.assertFalse(reply["error"]["data"]["retryable"], reply)
+
     def test_new_memory_tools_round_trip_real_json_rpc_calls(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             create_requests = "\n".join(
@@ -535,8 +598,10 @@ class ServerEncodingSmokeTest(unittest.TestCase):
                 if reply.get("id") == 1:
                     continue
                 if reply.get("id") == 23:
-                    self.assertIn("error", reply, reply)
-                    self.assertEqual(reply["error"]["data"]["code"], "invalid_lifecycle_transition", reply)
+                    self.assertNotIn("error", reply, reply)
+                    payload = json.loads(reply["result"]["content"][0]["text"])
+                    self.assertFalse(payload.get("ok"), payload)
+                    self.assertEqual(payload["error"]["code"], "invalid_lifecycle_transition", payload)
                     continue
                 self.assertNotIn("error", reply, reply)
                 payload = json.loads(reply["result"]["content"][0]["text"])
@@ -684,6 +749,94 @@ class ServerEncodingSmokeTest(unittest.TestCase):
             self.assertEqual(status_payload["status"], "completed", status_payload)
             self.assertEqual(status_payload["task_counts"]["completed"], 1, status_payload)
             self.assertEqual(resume_payload["resume_state"], "completed", resume_payload)
+
+            block_failure_workflow = create_workflow("block-post-commit-failure")
+            block_memory_path = Path(block_failure_workflow) / "memory.md"
+            block_memory_path.mkdir()
+            block = _run_rpc(
+                [
+                    _tool_call(9, "nature_start_task", {
+                        "project_root": tmp, "workflow_dir": block_failure_workflow, "task_id": "T1",
+                    }),
+                    _tool_call(10, "nature_block_with_memory_review", {
+                        "project_root": tmp,
+                        "workflow_dir": block_failure_workflow,
+                        "scope": "shared",
+                        "task_id": "T1",
+                        "reason": "blocked before memory review",
+                        "max_bytes": 256,
+                    }),
+                ]
+            )[10]
+            self.assertNotIn("error", block, block)
+            block_payload = json.loads(block["result"]["content"][0]["text"])
+            self.assertTrue(block_payload["progress_committed"], block_payload)
+            self.assertEqual(block_payload["memory_review"]["status"], "unavailable", block_payload)
+            self.assertEqual(
+                block_payload["memory_review"]["error"]["code"],
+                "memory_path_not_regular_file",
+                block_payload,
+            )
+
+            block_recovery = _run_rpc(
+                [
+                    _tool_call(11, "nature_status", {
+                        "project_root": tmp, "workflow_dir": block_failure_workflow,
+                    }),
+                    _tool_call(12, "nature_resume", {
+                        "project_root": tmp, "workflow_dir": block_failure_workflow,
+                    }),
+                ]
+            )
+            block_status_payload = json.loads(block_recovery[11]["result"]["content"][0]["text"])
+            block_resume_payload = json.loads(block_recovery[12]["result"]["content"][0]["text"])
+            self.assertEqual(block_status_payload["status"], "blocked", block_status_payload)
+            self.assertEqual(block_status_payload["task_counts"]["blocked"], 1, block_status_payload)
+            self.assertEqual(block_resume_payload["resume_state"], "blocked", block_resume_payload)
+
+            lost_block_workflow = create_workflow("block-response-loss")
+            lost_memory_path = Path(lost_block_workflow) / "memory.md"
+            lost_memory_path.mkdir()
+            lost_response = subprocess.run(
+                [sys.executable, str(SERVER)],
+                input="\n".join(
+                    _rpc(request)
+                    for request in [
+                        {"jsonrpc": "2.0", "id": 1, "method": "initialize"},
+                        _tool_call(2, "nature_start_task", {
+                            "project_root": tmp, "workflow_dir": lost_block_workflow, "task_id": "T1",
+                        }),
+                        _tool_call(3, "nature_block_with_memory_review", {
+                            "project_root": tmp,
+                            "workflow_dir": lost_block_workflow,
+                            "scope": "shared",
+                            "task_id": "T1",
+                            "reason": "response was lost after block commit",
+                        }),
+                    ]
+                ) + "\n",
+                text=True,
+                capture_output=True,
+                timeout=30,
+            )
+            self.assertEqual(lost_response.returncode, 0, lost_response.stderr)
+            self.assertTrue(lost_response.stdout.strip(), lost_response.stderr)
+
+            lost_block_recovery = _run_rpc(
+                [
+                    _tool_call(4, "nature_status", {
+                        "project_root": tmp, "workflow_dir": lost_block_workflow,
+                    }),
+                    _tool_call(5, "nature_resume", {
+                        "project_root": tmp, "workflow_dir": lost_block_workflow,
+                    }),
+                ]
+            )
+            lost_status_payload = json.loads(lost_block_recovery[4]["result"]["content"][0]["text"])
+            lost_resume_payload = json.loads(lost_block_recovery[5]["result"]["content"][0]["text"])
+            self.assertEqual(lost_status_payload["status"], "blocked", lost_status_payload)
+            self.assertEqual(lost_status_payload["task_counts"]["blocked"], 1, lost_status_payload)
+            self.assertEqual(lost_resume_payload["resume_state"], "blocked", lost_resume_payload)
 
 
 if __name__ == "__main__":

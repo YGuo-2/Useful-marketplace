@@ -174,17 +174,17 @@
   - 验证标准: 版本化 fixture 固定至少 5 个 workflow、80 条记录、50 个 query、gold IDs 和相关性等级；按规范口径达到 Recall@3、MRR、nDCG@3 与 no-hit FPR 门槛；记录单 workflow 与 12k all-workflows benchmark；20 场景各 3 次使用新进程/干净副本，write precision、write recall、locator 和零泄漏门槛全部满足并保存模型、工具调用、确定性断言和双人 rubric 证据。
 
 - [x] **T-012:** 同步文档、hook、manifest 并执行发布前全量验证
+  - 验证命令: 依次运行 Nature 全量 unittest、py_compile、新旧 MCP JSON-RPC smoke、deterministic 与 offline fixture Agent eval（connected model evaluation=false）、三个 JSON 文件的 `python -m json.tool`、`python plugins/spec-workflow/scripts/validate_spec.py docs/specs/20260714-001540-nature-memory-redesign --workflow design-first`、`python plugins/spec-workflow/scripts/validate_spec.py docs/specs/20260714-001540-nature-memory-redesign --resume` 和 `git diff --check`
+  - 验证标准: README、skill、orchestrator、hook、CLI/MCP schema、动态事实、隐私与已知限制完全一致；plugin/MCP/marketplace 版本和路径一致；所有测试、eval、JSON、编译、MCP smoke、spec validator、resume 与 whitespace 检查退出 0；只记录本任务声明路径的实现和发布证据，再进入 pre-acceptance/final acceptance。
   - 状态: done
   - 验证证据: 99 Nature unittest passed (2 Windows symlink skips); compileall passed; deterministic eval 5 workflows/80 records/50 queries Recall@3=1.0 MRR=1.0 nDCG@3=1.0 no-hit FPR=0.0; agent eval 20 scenarios x 3 fresh processes write precision=1.0 write recall=1.0 locator=100% security failures=0; MCP JSON-RPC smoke passed; fixture and manifest JSON validation passed; spec validator/resume and git diff --check run
   - 完成时间: 2026-07-14 09:36:21
   - 备注: 同步 README、docs/nature-memory-redesign.md、Nature skill、orchestrator、hook、MCP version/config、plugin manifest 和 marketplace 到 schema-v1 / 0.2.0；离线 fixture eval 不声明 connected model evaluation。
   - 涉及文件: `README.md`, `docs/nature-memory-redesign.md`, `plugins/nature-workflow/skills/nature-workflow/SKILL.md`, `plugins/nature-workflow/skills/nature-orchestrator/static/core/workflow.md`, `plugins/nature-workflow/assets/hooks/pre-commit-nature-memory`, `plugins/nature-workflow/.mcp.json`, `plugins/nature-workflow/.codex-plugin/plugin.json`, `.agents/plugins/marketplace.json`
-  - 验证命令: 依次运行 Nature 全量 unittest、py_compile、新旧 MCP JSON-RPC smoke、deterministic 与 connected Agent eval、三个 JSON 文件的 `python -m json.tool`、`python plugins/spec-workflow/scripts/validate_spec.py docs/specs/20260714-001540-nature-memory-redesign --workflow design-first`、`python plugins/spec-workflow/scripts/validate_spec.py docs/specs/20260714-001540-nature-memory-redesign --resume` 和 `git diff --check`
   - 依赖: T-010, T-011
   - 风险: medium
   - 覆盖: REQ-008, REQ-009, REQ-010, NFR-006, NFR-009, NFR-010, NFR-012
   - 可并行: 否
-  - 验证标准: README、skill、orchestrator、hook、CLI/MCP schema、动态事实、隐私与已知限制完全一致；plugin/MCP/marketplace 版本和路径一致；所有测试、eval、JSON、编译、MCP smoke、spec validator、resume 与 whitespace 检查退出 0；只记录本任务声明路径的实现和发布证据，再进入 pre-acceptance/final acceptance。
 
 ---
 

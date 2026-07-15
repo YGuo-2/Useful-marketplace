@@ -387,9 +387,15 @@ class NatureMemoryTests(unittest.TestCase):
             path = workflow / "memory.md"
             original = nature_memory._replace_if_snapshot_matches
 
-            def tamper_then_replace(target: Path, text: str, snapshot_etag: str) -> None:
+            def tamper_then_replace(
+                target: Path,
+                text: str,
+                snapshot_etag: str,
+                *,
+                mutation_context: dict | None = None,
+            ) -> None:
                 target.write_text("external complete file\n", encoding="utf-8")
-                original(target, text, snapshot_etag)
+                original(target, text, snapshot_etag, mutation_context=mutation_context)
 
             nature_memory._replace_if_snapshot_matches = tamper_then_replace
             try:
@@ -932,8 +938,9 @@ class NatureMemoryTests(unittest.TestCase):
             workflow = make_workflow(repo)
             (workflow / "memory.md").write_text(valid_entry(), encoding="utf-8")
 
-            with self.assertRaises(nature_memory.NatureProgressError):
-                nature_memory.command_memory_touch(None, None, "不存在", base=repo)
+            result = nature_memory.command_memory_touch(None, None, "不存在", base=repo)
+            self.assertFalse(result["ok"], result)
+            self.assertEqual(result["error"]["code"], "not_found")
 
     def test_index_rewrites_sentinel_and_preserves_outer_content(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -1278,7 +1285,7 @@ class NatureMemoryTests(unittest.TestCase):
                 self.skipTest(f"hardlink unavailable: {exc}")
             result = nature_memory.command_memory_migrate(repo, workflow, "local")
             self.assertFalse(result["ok"], result)
-            self.assertEqual(result["error"]["code"], "local_backup_exists")
+            self.assertEqual(result["error"]["code"], "path_hardlink_escape")
             self.assertEqual(external.read_text(encoding="utf-8"), "must remain unchanged")
 
     def test_directory_memory_path_returns_structured_error(self) -> None:
@@ -1718,6 +1725,26 @@ class NatureMemoryTests(unittest.TestCase):
             self.assertEqual(result["error"]["diagnostics"][0]["code"], "memory_path_not_regular_file")
             self.assertLessEqual(len(encoded), nature_memory.RECALL_MIN_BYTES)
 
+    @unittest.skipUnless(os.name != "nt", "long-path budget boundary")
+    def test_minimum_recall_budget_drops_long_diagnostic_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            workflow = repo / "docs" / "nature-workflows" / ("w" * 220)
+            workflow.mkdir(parents=True)
+            (workflow / "nature.yml").write_text('{"schema_version":1}\n', encoding="utf-8")
+            (workflow / "memory.md").mkdir()
+            result = nature_memory.command_memory_recall_all(
+                repo,
+                repo / "docs" / "nature-workflows",
+                "shared",
+                "query",
+                max_bytes=nature_memory.RECALL_MIN_BYTES,
+            )
+            encoded = json.dumps(result, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+            self.assertFalse(result["ok"], result)
+            self.assertEqual(result["error"]["code"], "response_budget")
+            self.assertLessEqual(len(encoded), nature_memory.RECALL_MIN_BYTES)
+
     def test_recall_scope_low_trust_and_sentinel_regressions_are_structured(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp)
@@ -1833,21 +1860,21 @@ class NatureMemoryTests(unittest.TestCase):
             nature_memory.command_memory_remember(
                 repo, second, "shared", "other target", "body", {"kind": "decision"}
             )
-            with self.assertRaises(nature_memory.MemoryBoundaryError) as mismatch:
-                nature_memory.command_memory_touch(
-                    "docs/nature-workflows", "second", created["locator"], base=repo
-                )
-            self.assertEqual(mismatch.exception.code, "locator_workflow_mismatch")
+            mismatch = nature_memory.command_memory_touch(
+                "docs/nature-workflows", "second", created["locator"], base=repo
+            )
+            self.assertFalse(mismatch["ok"], mismatch)
+            self.assertEqual(mismatch["error"]["code"], "locator_workflow_mismatch")
 
             archived = nature_memory.command_memory_forget(
                 repo, first, "shared", created["entry_id"], created["etag"], "done"
             )
             before = (first / "memory.md").read_bytes()
-            with self.assertRaises(nature_memory.MemoryBoundaryError) as terminal:
-                nature_memory.command_memory_touch(
-                    "docs/nature-workflows", "first", created["entry_id"], base=repo
-                )
-            self.assertEqual(terminal.exception.code, "invalid_lifecycle_transition")
+            terminal = nature_memory.command_memory_touch(
+                "docs/nature-workflows", "first", created["entry_id"], base=repo
+            )
+            self.assertFalse(terminal["ok"], terminal)
+            self.assertEqual(terminal["error"]["code"], "invalid_lifecycle_transition")
             self.assertEqual((first / "memory.md").read_bytes(), before)
             self.assertTrue(archived["ok"])
             self.assertTrue(second.is_dir())
@@ -1856,12 +1883,13 @@ class NatureMemoryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp)
             workflow = make_workflow(repo)
-            (workflow / "memory.md").write_text("## nm_human_title\nbody\n", encoding="utf-8")
+            title = "nm_f47ac10b58cc4372a5670e02b2c3d479"
+            (workflow / "memory.md").write_text(f"## {title}\nbody\n", encoding="utf-8")
 
-            result = nature_memory.command_memory_touch(None, None, "nm_human_title", base=repo)
+            result = nature_memory.command_memory_touch(None, None, title, base=repo)
 
             self.assertTrue(result["ok"], result)
-            self.assertEqual(result["entry"], "nm_human_title")
+            self.assertEqual(result["entry"], title)
 
     def test_agents_parent_symlink_fails_closed_and_crlf_layout_is_preserved(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -1891,6 +1919,25 @@ class NatureMemoryTests(unittest.TestCase):
             repaired = nature_memory.command_memory_index(base=repo)
             after = agents.read_bytes()
             self.assertTrue(repaired["ok"], repaired)
+            self.assertIn(b"before  \r\n\r\n", after)
+            self.assertIn(b"after  \r\n", after)
+            self.assertNotIn(b"\n", after.replace(b"\r\n", b""))
+
+    def test_index_preserves_crlf_without_requiring_symlink_support(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            make_workflow(repo)
+            agents = repo / "AGENTS.md"
+            agents.write_bytes(
+                b"before  \r\n\r\n"
+                + nature_memory.SENTINEL_START.encode()
+                + b"\r\nold\r\n"
+                + nature_memory.SENTINEL_END.encode()
+                + b"\r\nafter  \r\n"
+            )
+            result = nature_memory.command_memory_index(base=repo)
+            after = agents.read_bytes()
+            self.assertTrue(result["ok"], result)
             self.assertIn(b"before  \r\n\r\n", after)
             self.assertIn(b"after  \r\n", after)
             self.assertNotIn(b"\n", after.replace(b"\r\n", b""))
@@ -1942,7 +1989,12 @@ class NatureMemoryTests(unittest.TestCase):
 
             with patch.object(nature_memory.os, "link", side_effect=appear_then_fail):
                 result = nature_memory.command_memory_remember(
-                    repo, workflow, "shared", "race", "body", {"kind": "fact"}
+                    repo,
+                    workflow,
+                    "shared",
+                    "race",
+                    "body",
+                    {"kind": "fact", "evidence": ["fixture://race"], "confidence": "confirmed"},
                 )
 
             self.assertFalse(result["ok"], result)
@@ -1955,7 +2007,12 @@ class NatureMemoryTests(unittest.TestCase):
             repo = Path(tmp)
             workflow = make_workflow(repo)
             created = nature_memory.command_memory_remember(
-                repo, workflow, "shared", "cas", "body", {"kind": "fact"}
+                repo,
+                workflow,
+                "shared",
+                "cas",
+                "body",
+                {"kind": "fact", "evidence": ["fixture://cas"], "confidence": "confirmed"},
             )
 
             class FailingRename:
@@ -1975,7 +2032,7 @@ class NatureMemoryTests(unittest.TestCase):
                     "shared",
                     "cas updated",
                     "body",
-                    {"kind": "fact"},
+                    {"kind": "fact", "evidence": ["fixture://cas"], "confidence": "confirmed"},
                     entry_id=created["entry_id"],
                     expected_etag=created["etag"],
                 )
@@ -1984,6 +2041,64 @@ class NatureMemoryTests(unittest.TestCase):
             self.assertEqual(result["error"]["code"], "cas_replace_failed")
             self.assertIn("current_file_etag", result["error"])
             self.assertEqual(result["error"]["expected_file_etag"], created["file_etag"])
+
+            for field in ("project_root", "workflow_dir", "scope", "entry_id", "repair"):
+                self.assertIn(field, result["error"], result)
+
+    @unittest.skipUnless(os.name != "nt", "POSIX CAS restore boundary")
+    def test_posix_restore_failure_preserves_recovery_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "memory.md"
+            original = b"original\n"
+            path.write_bytes(original)
+            candidate = b"candidate\n"
+            candidate_path = Path(tmp) / "candidate.tmp"
+            candidate_path.write_bytes(candidate)
+            calls = 0
+
+            class ExchangingRename:
+                argtypes = None
+                restype = None
+
+                def __call__(self, _src_dir: int, source: bytes, _dst_dir: int, destination: bytes, _flags: int) -> int:
+                    nonlocal calls
+                    calls += 1
+                    source_path = Path(os.fsdecode(source))
+                    destination_path = Path(os.fsdecode(destination))
+                    if calls == 1:
+                        swap_path = source_path.with_name(source_path.name + ".swap")
+                        os.rename(destination_path, swap_path)
+                        os.rename(source_path, destination_path)
+                        os.rename(swap_path, source_path)
+                        return 0
+                    ctypes.set_errno(errno.EIO)
+                    return -1
+
+            import ctypes
+
+            with patch.object(
+                nature_memory.ctypes,
+                "CDLL",
+                return_value=type("LibC", (), {"renameat2": ExchangingRename()})(),
+            ), patch.object(nature_memory.os, "replace", side_effect=OSError(errno.EIO, "rollback failed")):
+                with self.assertRaises(nature_memory.MemoryBoundaryError) as error:
+                    nature_memory._conditional_replace_posix(
+                        str(candidate_path),
+                        path,
+                        "0" * 64,
+                        context={
+                            "project_root": str(Path(tmp)),
+                            "workflow_dir": str(Path(tmp)),
+                            "scope": "shared",
+                            "entry_id": "nm_f47ac10b58cc4372a5670e02b2c3d479",
+                        },
+                    )
+            self.assertEqual(error.exception.code, "cas_restore_failed", error.exception.context)
+            recovery = Path(error.exception.context["recovery_path"])
+            self.assertTrue(error.exception.context["preserve_temporary"])
+            self.assertEqual(path.read_bytes(), candidate)
+            self.assertEqual(recovery.read_bytes(), original)
+            recovery.unlink()
 
     def test_all_workflow_migration_replacement_failure_cleans_backup_and_allows_retry(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -1994,10 +2109,16 @@ class NatureMemoryTests(unittest.TestCase):
             (second / "memory.md").write_text(legacy_entry(2, "second"), encoding="utf-8")
             real_replace = nature_memory._replace_if_snapshot_matches
 
-            def fail_first(path: Path, text: str, etag: str) -> None:
+            def fail_first(
+                path: Path,
+                text: str,
+                etag: str,
+                *,
+                mutation_context: dict | None = None,
+            ) -> None:
                 if path.parent.name == "first":
                     raise PermissionError("forced replacement failure")
-                real_replace(path, text, etag)
+                real_replace(path, text, etag, mutation_context=mutation_context)
 
             before = (first / "memory.md").read_bytes()
             with patch.object(nature_memory, "_replace_if_snapshot_matches", side_effect=fail_first):
@@ -2014,6 +2135,32 @@ class NatureMemoryTests(unittest.TestCase):
             self.assertEqual(by_workflow["second"]["operation"], "migrated")
             retried = nature_memory.command_memory_migrate(repo, first, "shared")
             self.assertTrue(retried["ok"], retried)
+
+    def test_all_workflow_migration_cleanup_oserror_isolated(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            first = make_workflow(repo, "first")
+            second = make_workflow(repo, "second")
+            (first / "memory.md").write_text(legacy_entry(1, "first"), encoding="utf-8")
+            (second / "memory.md").write_text(legacy_entry(2, "second"), encoding="utf-8")
+            real_replace = nature_memory._replace_if_snapshot_matches
+
+            def fail_first(path: Path, text: str, etag: str, *, mutation_context: dict | None = None) -> None:
+                if path.parent.name == "first":
+                    raise PermissionError("forced replacement failure")
+                real_replace(path, text, etag, mutation_context=mutation_context)
+
+            with patch.object(nature_memory, "_replace_if_snapshot_matches", side_effect=fail_first), patch.object(
+                nature_memory, "_cleanup_migration_backup", side_effect=PermissionError("cleanup denied")
+            ):
+                result = nature_memory.command_memory_migrate(repo, scope="shared", all_workflows=True)
+            by_workflow = {
+                Path(item.get("workflow_dir") or item["error"]["workflow_dir"]).name: item
+                for item in result["results"]
+            }
+            self.assertFalse(result["ok"], result)
+            self.assertEqual(by_workflow["first"]["error"]["code"], "migration_backup_cleanup_failed")
+            self.assertEqual(by_workflow["second"]["operation"], "migrated")
 
 
 if __name__ == "__main__":

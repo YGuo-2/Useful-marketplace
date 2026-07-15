@@ -511,6 +511,19 @@ def _required_string(args: dict[str, Any], name: str) -> str:
     return raw
 
 
+def _optional_string(args: dict[str, Any], name: str, default: str | None = None) -> str | None:
+    if name not in args:
+        return default
+    raw = args[name]
+    if not isinstance(raw, str):
+        raise _validation_error(
+            f"invalid_{name}",
+            f"{name} must be a string when provided",
+            context={"field": name},
+        )
+    return raw
+
+
 def _all_workflows(args: dict[str, Any]) -> bool:
     raw = args.get("all_workflows", False)
     if not isinstance(raw, bool):
@@ -600,7 +613,7 @@ def call_tool(name: str, args: dict[str, Any]) -> Any:
             _workflow(args),
             _required_string(args, "task_id"),
             _required_string(args, "evidence"),
-            args.get("notes", "") if isinstance(args.get("notes", ""), str) else "",
+            _optional_string(args, "notes", ""),
             base=base,
         )
     if name == "nature_block_task":
@@ -745,7 +758,7 @@ def call_tool(name: str, args: dict[str, Any]) -> Any:
             _workflow(args),
             project_root=_project_root_required(args),
             scope=_required_scope(args),
-            query=args.get("query") if isinstance(args.get("query"), str) else None,
+            query=_optional_string(args, "query"),
             top_k=top_k,
             max_bytes=max_bytes,
         )
@@ -756,7 +769,7 @@ def call_tool(name: str, args: dict[str, Any]) -> Any:
             _required_string(args, "workflow_dir"),
             _required_string(args, "task_id"),
             _required_string(args, "evidence"),
-            args.get("notes", "") if isinstance(args.get("notes", ""), str) else "",
+            _optional_string(args, "notes", ""),
             project_root=_project_root_required(args),
             scope=_required_scope(args),
             top_k=top_k,

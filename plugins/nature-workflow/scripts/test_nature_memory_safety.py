@@ -174,6 +174,32 @@ class MemorySafetyTests(unittest.TestCase):
                 memory.resolve_memory_path(root, wf, "shared")
             self.assertEqual(error.exception.code, "path_hardlink_escape")
 
+    @unittest.skipUnless(os.name != "nt", "opened-file replacement boundary")
+    def test_read_rejects_hardlink_created_after_path_resolution(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            wf = workflow(root)
+            memory_path = wf / "memory.md"
+            memory_path.write_text("## internal\ninternal body\n", encoding="utf-8")
+            outside = root / "outside.md"
+            outside.write_text("## external\nexternal body\n", encoding="utf-8")
+            original = memory._reject_unsafe_regular_file
+            calls = 0
+
+            def swap_after_open(path: Path, *, label: str) -> None:
+                nonlocal calls
+                original(path, label=label)
+                calls += 1
+                if calls == 1:
+                    path.unlink()
+                    os.link(outside, path)
+
+            with patch.object(memory, "_reject_unsafe_regular_file", side_effect=swap_after_open):
+                with self.assertRaises(memory.MemoryBoundaryError) as error:
+                    memory._read_snapshot(memory_path)
+            self.assertEqual(error.exception.code, "path_hardlink_escape")
+            self.assertEqual(outside.read_text(encoding="utf-8"), "## external\nexternal body\n")
+
     def test_agents_backup_uses_exclusive_create_and_does_not_follow_external_hardlink(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "repo"

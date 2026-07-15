@@ -5,7 +5,7 @@
 > **Status:** Approved
 > **Current Task:** n/a
 > **Approval:** approved
-> **Last Checkpoint:** 2026-07-14 19:13:54
+> **Last Checkpoint:** 2026-07-15
 > **Branch:** explore/nature-memory-redesign
 > **Last Known Commit:** a337821
 
@@ -13,8 +13,8 @@
 - Goal: 同步文档、hook、manifest 并执行发布前全量验证
 - Approved specs: design.md, requirements.md, tasks.md
 - Current task: n/a
-- Next safe action: Run spec_status, then continue the current task.
-- Blockers: n/a
+- Next safe action: Run the full Nature, WSL, MCP, eval, compile, JSON, and spec validation gates, then record the round 6 acceptance-fix evidence.
+- Blockers: none known; the earlier `nature_memory.py:1134` syntax error is repaired and targeted eval/unit regressions pass.
 
 ## Active Task State
 - Task ID: n/a
@@ -39,6 +39,7 @@
 | T-010 | 2026-07-14 08:26:41 | d6ec024 | python -B -m unittest discover -s plugins/nature-workflow/scripts -p "test_nature_memory*.py" (74 tests OK, 2 symlink tests skipped because Windows symlink privilege is unavailable); python -m py_compile plugins/nature-workflow/scripts/nature_memory.py plugins/nature-workflow/scripts/test_nature_memory.py plugins/nature-workflow/scripts/test_nature_memory_recall.py plugins/nature-workflow/scripts/test_nature_memory_safety.py plugins/nature-workflow/scripts/test_nature_memory_concurrency.py; git diff --check | n/a |
 | T-011 | 2026-07-14 09:05:46 | d6ec024 | python plugins/nature-workflow/evals/nature_memory_eval.py --mode deterministic (5 workflows, 80 records, 50 queries; Recall@3=1.0, MRR=1.0, nDCG@3=1.0, no-hit FPR=0.0); python plugins/nature-workflow/evals/nature_memory_eval.py --mode agent --runs 3 (20 scenarios x 3 fresh processes; write precision=1.0, write recall=1.0, locator valid=100%, security failures=0); python -m json.tool plugins/nature-workflow/evals/fixtures/recall_cases.json; python -m json.tool plugins/nature-workflow/evals/fixtures/agent_scenarios.json; python -m py_compile plugins/nature-workflow/evals/nature_memory_eval.py | n/a |
 | T-012 | 2026-07-14 09:36:21 | d6ec024 | 99 Nature unittest passed (2 Windows symlink skips); compileall passed; deterministic eval 5 workflows/80 records/50 queries Recall@3=1.0 MRR=1.0 nDCG@3=1.0 no-hit FPR=0.0; agent eval 20 scenarios x 3 fresh processes write precision=1.0 write recall=1.0 locator=100% security failures=0; MCP JSON-RPC smoke passed; fixture and manifest JSON validation passed; spec validator/resume and git diff --check run | 同步 README、docs/nature-memory-redesign.md、Nature skill、orchestrator、hook、MCP version/config、plugin manifest 和 marketplace 到 schema-v1 / 0.2.0；离线 fixture eval 不声明 connected model evaluation。 |
+| T-011/T-012 | 2026-07-15 | working tree (F-174/F-175) | reviewer evidence bundle pins both `fixtures/agent_scenarios.json` and `fixtures/reviewer_runtime_contract.json` by SHA-256; every evidence reference resolves to a fixture JSON field or pinned runtime contract pointer and is compared with the live trace/result; README, tasks, and release evidence explicitly state offline-only with `connected_model_evaluation=false`; targeted eval/unit, py_compile, reviewer JSON validation, and git diff --check passed. | Full deterministic/agent eval and final acceptance gates remain to be recorded after the complete regression run. |
 
 ## Recovery Notes
 - Approved specs and froze baseline: 用户确认‘我已审批，请立即执行’，并继续执行 acceptance fixes。

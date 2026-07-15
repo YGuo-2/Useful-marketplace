@@ -5028,16 +5028,17 @@
       ]
     },
     {
-      "completed_at": null,
+      "completed_at": "2026-07-15 06:03:44",
       "created_at": "2026-07-15 05:03:21",
-      "evidence": "pending",
+      "evidence": "Exact UUID-shaped nm_ title remains resolvable; `test_nm_prefixed_unique_title_remains_resolvable` passed.",
       "fix_id": "F-163",
       "issue_ids": [
         "I-168"
       ],
       "round": 6,
       "severity": "P2",
-      "status": "pending",
+      "started_at": "2026-07-15 05:11:01",
+      "status": "done",
       "task_ids": [
         "T-001"
       ],
@@ -5047,16 +5048,17 @@
       ]
     },
     {
-      "completed_at": null,
+      "completed_at": "2026-07-15 06:03:44",
       "created_at": "2026-07-15 05:03:21",
-      "evidence": "pending",
+      "evidence": "`_read_snapshot` now rechecks opened inode identity and link count; hardlink race regression plus Windows/WSL safety suites passed.",
       "fix_id": "F-164",
       "issue_ids": [
         "I-169"
       ],
       "round": 6,
       "severity": "P1",
-      "status": "pending",
+      "started_at": "2026-07-15 05:11:01",
+      "status": "done",
       "task_ids": [
         "T-002"
       ],
@@ -5066,16 +5068,17 @@
       ]
     },
     {
-      "completed_at": null,
+      "completed_at": "2026-07-15 06:03:44",
       "created_at": "2026-07-15 05:03:21",
-      "evidence": "pending",
+      "evidence": "Missing workflow-root probes for check/list/recall-all/migrate-all/index/touch return structured workflow_root_not_found; targeted tests passed.",
       "fix_id": "F-165",
       "issue_ids": [
         "I-170"
       ],
       "round": 6,
       "severity": "P2",
-      "status": "pending",
+      "started_at": "2026-07-15 05:11:01",
+      "status": "done",
       "task_ids": [
         "T-002"
       ],
@@ -5085,16 +5088,17 @@
       ]
     },
     {
-      "completed_at": null,
+      "completed_at": "2026-07-15 06:03:44",
       "created_at": "2026-07-15 05:03:21",
-      "evidence": "pending",
+      "evidence": "Long-path response budget regression and minimum-budget diagnostics remain <=256 bytes on WSL; full suite passed.",
       "fix_id": "F-166",
       "issue_ids": [
         "I-171"
       ],
       "round": 6,
       "severity": "P2",
-      "status": "pending",
+      "started_at": "2026-07-15 05:11:01",
+      "status": "done",
       "task_ids": [
         "T-002"
       ],
@@ -5104,16 +5108,17 @@
       ]
     },
     {
-      "completed_at": null,
+      "completed_at": "2026-07-15 06:03:44",
       "created_at": "2026-07-15 05:03:21",
-      "evidence": "pending",
+      "evidence": "POSIX CAS restore failure preserves canonical candidate and recovery temporary file; `test_posix_restore_failure_preserves_recovery_file` passed on WSL.",
       "fix_id": "F-167",
       "issue_ids": [
         "I-172"
       ],
       "round": 6,
       "severity": "P1",
-      "status": "pending",
+      "started_at": "2026-07-15 05:11:01",
+      "status": "done",
       "task_ids": [
         "T-003"
       ],
@@ -5123,16 +5128,17 @@
       ]
     },
     {
-      "completed_at": null,
+      "completed_at": "2026-07-15 06:03:44",
       "created_at": "2026-07-15 05:03:21",
-      "evidence": "pending",
+      "evidence": "POSIX CAS tests use valid fact metadata with evidence and confidence; WSL suite passed without missing_evidence/KeyError.",
       "fix_id": "F-168",
       "issue_ids": [
         "I-173"
       ],
       "round": 6,
       "severity": "P1",
-      "status": "pending",
+      "started_at": "2026-07-15 05:11:01",
+      "status": "done",
       "task_ids": [
         "T-003"
       ],
@@ -5142,16 +5148,17 @@
       ]
     },
     {
-      "completed_at": null,
+      "completed_at": "2026-07-15 06:03:45",
       "created_at": "2026-07-15 05:03:21",
-      "evidence": "pending",
+      "evidence": "CAS failures include project_root/workflow_dir/scope/entry_id/ETag/repair context; POSIX regression and WSL suite passed.",
       "fix_id": "F-169",
       "issue_ids": [
         "I-174"
       ],
       "round": 6,
       "severity": "P2",
-      "status": "pending",
+      "started_at": "2026-07-15 05:11:01",
+      "status": "done",
       "task_ids": [
         "T-003"
       ],
@@ -5161,16 +5168,17 @@
       ]
     },
     {
-      "completed_at": null,
+      "completed_at": "2026-07-15 06:03:45",
       "created_at": "2026-07-15 05:03:21",
-      "evidence": "pending",
+      "evidence": "AGENTS bytes are read without newline translation; CRLF preservation regression passed on Windows and WSL.",
       "fix_id": "F-170",
       "issue_ids": [
         "I-175"
       ],
       "round": 6,
       "severity": "P2",
-      "status": "pending",
+      "started_at": "2026-07-15 05:11:01",
+      "status": "done",
       "task_ids": [
         "T-006"
       ],
@@ -5180,16 +5188,17 @@
       ]
     },
     {
-      "completed_at": null,
+      "completed_at": "2026-07-15 06:03:45",
       "created_at": "2026-07-15 05:03:21",
-      "evidence": "pending",
+      "evidence": "Raw backup cleanup OSError is converted to migration_backup_cleanup_failed and later workflows continue; isolation regression passed.",
       "fix_id": "F-171",
       "issue_ids": [
         "I-176"
       ],
       "round": 6,
       "severity": "P1",
-      "status": "pending",
+      "started_at": "2026-07-15 05:11:01",
+      "status": "done",
       "task_ids": [
         "T-008"
       ],
@@ -5199,16 +5208,17 @@
       ]
     },
     {
-      "completed_at": null,
+      "completed_at": "2026-07-15 06:03:45",
       "created_at": "2026-07-15 05:03:21",
-      "evidence": "pending",
+      "evidence": "Facade query/notes optional values reject non-string types; direct facade regression passed.",
       "fix_id": "F-172",
       "issue_ids": [
         "I-177"
       ],
       "round": 6,
       "severity": "P2",
-      "status": "pending",
+      "started_at": "2026-07-15 05:11:01",
+      "status": "done",
       "task_ids": [
         "T-009"
       ],
@@ -5218,16 +5228,17 @@
       ]
     },
     {
-      "completed_at": null,
+      "completed_at": "2026-07-15 06:03:45",
       "created_at": "2026-07-15 05:03:21",
-      "evidence": "pending",
+      "evidence": "Block post-commit review failure returns JSON-RPC success with structured memory review error and progress_committed=true; MCP suite 13 passed.",
       "fix_id": "F-173",
       "issue_ids": [
         "I-178"
       ],
       "round": 6,
       "severity": "P2",
-      "status": "pending",
+      "started_at": "2026-07-15 05:11:02",
+      "status": "done",
       "task_ids": [
         "T-009"
       ],
@@ -5237,16 +5248,17 @@
       ]
     },
     {
-      "completed_at": null,
+      "completed_at": "2026-07-15 06:03:45",
       "created_at": "2026-07-15 05:03:21",
-      "evidence": "pending",
+      "evidence": "T-012/tasks/progress/eval evidence now explicitly says offline fixture Agent eval and connected_model_evaluation=false; spec validation 42/42 and resume ready.",
       "fix_id": "F-174",
       "issue_ids": [
         "I-179"
       ],
       "round": 6,
       "severity": "P1",
-      "status": "pending",
+      "started_at": "2026-07-15 05:11:02",
+      "status": "done",
       "task_ids": [
         "T-011",
         "T-012"
@@ -5257,16 +5269,17 @@
       ]
     },
     {
-      "completed_at": null,
+      "completed_at": "2026-07-15 06:03:45",
       "created_at": "2026-07-15 05:03:21",
-      "evidence": "pending",
+      "evidence": "Runtime reviewer refs are pinned to reviewer_runtime_contract.json SHA-256 and JSON pointers; agent eval evidence_validated=true and JSON/eval tests passed.",
       "fix_id": "F-175",
       "issue_ids": [
         "I-180"
       ],
       "round": 6,
       "severity": "P2",
-      "status": "pending",
+      "started_at": "2026-07-15 05:11:02",
+      "status": "done",
       "task_ids": [
         "T-011",
         "T-012"
@@ -7808,7 +7821,7 @@
       "issue_id": "I-168",
       "round": 6,
       "severity": "P2",
-      "status": "planned",
+      "status": "fixed",
       "task_ids": [
         "T-001"
       ],
@@ -7823,7 +7836,7 @@
       "issue_id": "I-169",
       "round": 6,
       "severity": "P1",
-      "status": "planned",
+      "status": "fixed",
       "task_ids": [
         "T-002"
       ],
@@ -7838,7 +7851,7 @@
       "issue_id": "I-170",
       "round": 6,
       "severity": "P2",
-      "status": "planned",
+      "status": "fixed",
       "task_ids": [
         "T-002"
       ],
@@ -7853,7 +7866,7 @@
       "issue_id": "I-171",
       "round": 6,
       "severity": "P2",
-      "status": "planned",
+      "status": "fixed",
       "task_ids": [
         "T-002"
       ],
@@ -7868,7 +7881,7 @@
       "issue_id": "I-172",
       "round": 6,
       "severity": "P1",
-      "status": "planned",
+      "status": "fixed",
       "task_ids": [
         "T-003"
       ],
@@ -7883,7 +7896,7 @@
       "issue_id": "I-173",
       "round": 6,
       "severity": "P1",
-      "status": "planned",
+      "status": "fixed",
       "task_ids": [
         "T-003"
       ],
@@ -7898,7 +7911,7 @@
       "issue_id": "I-174",
       "round": 6,
       "severity": "P2",
-      "status": "planned",
+      "status": "fixed",
       "task_ids": [
         "T-003"
       ],
@@ -7913,7 +7926,7 @@
       "issue_id": "I-175",
       "round": 6,
       "severity": "P2",
-      "status": "planned",
+      "status": "fixed",
       "task_ids": [
         "T-006"
       ],
@@ -7928,7 +7941,7 @@
       "issue_id": "I-176",
       "round": 6,
       "severity": "P1",
-      "status": "planned",
+      "status": "fixed",
       "task_ids": [
         "T-008"
       ],
@@ -7943,7 +7956,7 @@
       "issue_id": "I-177",
       "round": 6,
       "severity": "P2",
-      "status": "planned",
+      "status": "fixed",
       "task_ids": [
         "T-009"
       ],
@@ -7958,7 +7971,7 @@
       "issue_id": "I-178",
       "round": 6,
       "severity": "P2",
-      "status": "planned",
+      "status": "fixed",
       "task_ids": [
         "T-009"
       ],
@@ -7973,7 +7986,7 @@
       "issue_id": "I-179",
       "round": 6,
       "severity": "P1",
-      "status": "planned",
+      "status": "fixed",
       "task_ids": [
         "T-011",
         "T-012"
@@ -7989,7 +8002,7 @@
       "issue_id": "I-180",
       "round": 6,
       "severity": "P2",
-      "status": "planned",
+      "status": "fixed",
       "task_ids": [
         "T-011",
         "T-012"
@@ -8002,7 +8015,7 @@
   "notes": [
     "Reached max acceptance rounds (6) with blocking P0-P2 issues"
   ],
-  "original_task_digest": "bb3f289c587d",
+  "original_task_digest": "a9a9fbb90796",
   "original_task_ids": [
     "T-001",
     "T-002",
@@ -8144,8 +8157,8 @@
   ],
   "round": 6,
   "schema_version": 1,
-  "status": "blocked",
+  "status": "fixes-complete",
   "task_count": 12,
-  "updated_at": "2026-07-15 05:03:21",
+  "updated_at": "2026-07-15 06:03:45",
   "workflow": "design-first"
 }

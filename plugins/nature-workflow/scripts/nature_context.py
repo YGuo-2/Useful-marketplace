@@ -29,6 +29,18 @@ def _project_root(project_root: str | Path | None) -> Path:
     return root
 
 
+def _optional_string(value: Any, name: str, default: str | None = None) -> str | None:
+    if value is None:
+        return default
+    if not isinstance(value, str):
+        raise progress.NatureProgressError(
+            f"{name} must be a string when provided",
+            code=f"invalid_{name}",
+            context={"field": name},
+        )
+    return value
+
+
 def _query_from_progress(summary: dict[str, Any], fallback: str = "nature workflow") -> str:
     parts: list[str] = []
     next_task = summary.get("next_task")
@@ -172,6 +184,7 @@ def resume_with_memory(
     max_bytes: int = memory.RECALL_MAX_BYTES,
 ) -> dict[str, Any]:
     root = _project_root(project_root)
+    query = _optional_string(query, "query")
     progress_result = progress.command_resume(workflow_root, workflow_dir, base=root)
     derived_query = query or _query_from_progress(progress_result)
     try:
@@ -241,6 +254,7 @@ def complete_with_memory_review(
     if workflow_dir is None or not str(workflow_dir).strip():
         raise progress.NatureProgressError("workflow_dir is required for mutation review")
     root = _project_root(project_root)
+    notes = _optional_string(notes, "notes", "") or ""
     progress_result = progress.command_complete(
         workflow_root,
         workflow_dir,
@@ -249,14 +263,17 @@ def complete_with_memory_review(
         notes,
         base=root,
     )
-    review = _review_after_progress(
-        root,
-        progress_result,
-        scope,
-        evidence.strip() or task_id,
-        top_k=top_k,
-        max_bytes=max_bytes,
-    )
+    try:
+        review = _review_after_progress(
+            root,
+            progress_result,
+            scope,
+            evidence.strip() or task_id,
+            top_k=top_k,
+            max_bytes=max_bytes,
+        )
+    except Exception as exc:
+        review = _bounded_payload(_memory_failure(_exception_error(exc)), max_bytes)
     return {
         "ok": True,
         "action": "complete_with_memory_review",
@@ -287,14 +304,17 @@ def block_with_memory_review(
         reason,
         base=root,
     )
-    review = _review_after_progress(
-        root,
-        progress_result,
-        scope,
-        reason.strip() or task_id,
-        top_k=top_k,
-        max_bytes=max_bytes,
-    )
+    try:
+        review = _review_after_progress(
+            root,
+            progress_result,
+            scope,
+            reason.strip() or task_id,
+            top_k=top_k,
+            max_bytes=max_bytes,
+        )
+    except Exception as exc:
+        review = _bounded_payload(_memory_failure(_exception_error(exc)), max_bytes)
     return {
         "ok": True,
         "action": "block_with_memory_review",

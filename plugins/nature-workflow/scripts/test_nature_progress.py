@@ -82,19 +82,17 @@ class StateEngineTests(unittest.TestCase):
         )
 
         for operation in operations:
-            with self.assertRaises(np.NatureProgressError) as raised:
-                operation()
-            error = raised.exception
-            self.assertEqual(error.code, "workflow_root_not_found")
-            self.assertEqual(error.context["workflow_root"], str(missing))
+            result = operation()
+            self.assertFalse(result["ok"], result)
+            self.assertEqual(result["error"]["code"], "workflow_root_not_found")
+            self.assertEqual(result["error"]["workflow_root"], str(missing))
 
     def test_memory_migrate_all_fails_closed_on_missing_default_workflow_root(self) -> None:
-        with self.assertRaises(np.NatureProgressError) as raised:
-            nature_memory.command_memory_migrate(self.base, scope="shared", all_workflows=True)
-        error = raised.exception
-        self.assertEqual(error.code, "workflow_root_not_found")
+        result = nature_memory.command_memory_migrate(self.base, scope="shared", all_workflows=True)
+        self.assertFalse(result["ok"], result)
+        self.assertEqual(result["error"]["code"], "workflow_root_not_found")
         self.assertEqual(
-            error.context["workflow_root"],
+            result["error"]["workflow_root"],
             str(self.base / "docs" / "nature-workflows"),
         )
 
@@ -419,6 +417,38 @@ class StateEngineTests(unittest.TestCase):
         self.assertEqual(result["memory_review"]["status"], "unavailable")
         self.assertEqual(result["memory_review"]["error"]["code"], "invalid_utf8")
         self.assertEqual(result["memory_review"]["error"]["current_file_etag"], "etag-current")
+
+    def test_facade_rejects_non_string_optional_arguments(self) -> None:
+        wf = self.make(["T1: collect evidence"])
+        with self.assertRaises(np.NatureProgressError) as query_error:
+            nc.resume_with_memory(project_root=self.base, workflow_dir=wf, query=123)  # type: ignore[arg-type]
+        self.assertEqual(query_error.exception.code, "invalid_query")
+
+        with self.assertRaises(np.NatureProgressError) as notes_error:
+            nc.complete_with_memory_review(
+                None,
+                wf,
+                "T1",
+                "evidence",
+                notes=123,  # type: ignore[arg-type]
+                project_root=self.base,
+            )
+        self.assertEqual(notes_error.exception.code, "invalid_notes")
+
+    def test_block_review_keeps_json_safe_response_after_unexpected_review_failure(self) -> None:
+        wf = self.make(["T1: block"])
+        with patch.object(nc, "_review_after_progress", side_effect=KeyError("review unavailable")):
+            result = nc.block_with_memory_review(
+                None,
+                wf,
+                "T1",
+                "waiting for source",
+                project_root=self.base,
+            )
+        self.assertTrue(result["ok"], result)
+        self.assertTrue(result["progress_committed"])
+        self.assertEqual(result["memory_review"]["error"]["code"], "memory_review_internal_error")
+        self.assertEqual(read_state(wf)["tasks"][0]["status"], "blocked")
 
 
 if __name__ == "__main__":

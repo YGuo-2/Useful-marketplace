@@ -154,6 +154,41 @@ class MemoryBoundaryError(NatureProgressError):
         self.context = dict(context or {})
 
 
+def _as_memory_boundary_error(error: NatureProgressError) -> MemoryBoundaryError:
+    """Normalize progress-layer boundary errors for memory API responses."""
+    if isinstance(error, MemoryBoundaryError):
+        return error
+    return MemoryBoundaryError(
+        getattr(error, "code", None) or "nature_progress_error",
+        str(error),
+        retryable=bool(getattr(error, "retryable", False)),
+        context=dict(getattr(error, "context", {}) or {}),
+    )
+
+
+def _checked_workflow_root(raw: str | Path | None, *, base: Path) -> Path:
+    try:
+        return checked_root(str(raw) if raw is not None else None, base=base)
+    except NatureProgressError as exc:
+        raise _as_memory_boundary_error(exc) from exc
+
+
+def _checked_workflow_dir(
+    workflow: str | Path | None,
+    workflow_root: str | Path | None,
+    *,
+    base: Path,
+) -> Path:
+    try:
+        return checked_workflow_dir(
+            str(workflow) if workflow is not None else None,
+            str(workflow_root) if workflow_root is not None else None,
+            base=base,
+        )
+    except NatureProgressError as exc:
+        raise _as_memory_boundary_error(exc) from exc
+
+
 def _normalize_title(title: str) -> str:
     """Display identity: NFC, stripped, internal whitespace collapsed."""
     return re.sub(r"\s+", " ", unicodedata.normalize("NFC", title)).strip()
@@ -892,6 +927,33 @@ def _read_snapshot(path: Path) -> tuple[str, str]:
                 _reject_unsafe_regular_file(path, label="memory file")
             except FileNotFoundError:
                 raise MemoryBoundaryError("file_changed_outside_lock", "memory file disappeared while it was being read", retryable=True)
+            try:
+                current_info = path.stat()
+            except FileNotFoundError as exc:
+                raise MemoryBoundaryError(
+                    "file_changed_outside_lock",
+                    "memory file changed while it was being read",
+                    retryable=True,
+                ) from exc
+            try:
+                _reject_unsafe_regular_file(path, label="memory file")
+            except FileNotFoundError as exc:
+                raise MemoryBoundaryError(
+                    "file_changed_outside_lock",
+                    "memory file disappeared before its opened snapshot could be read",
+                    retryable=True,
+                ) from exc
+            if (
+                getattr(current_info, "st_dev", None) != getattr(info, "st_dev", None)
+                or getattr(current_info, "st_ino", None) != getattr(info, "st_ino", None)
+                or getattr(current_info, "st_nlink", 1) != getattr(info, "st_nlink", 1)
+            ):
+                raise MemoryBoundaryError(
+                    "file_changed_outside_lock",
+                    "memory file changed before its opened snapshot could be read",
+                    retryable=True,
+                    context={"memory_path": str(path)},
+                )
             raw = handle.read()
     except MemoryBoundaryError:
         raise
@@ -1042,7 +1104,24 @@ def project_memory_lock(project_root: str | Path, timeout: float = 5.0):
         yield acquired
 
 
-def _atomic_replace_text(path: Path, text: str, *, expected_etag: str | None = None) -> None:
+def _cas_context(path: Path, extra: dict[str, Any] | None = None) -> dict[str, Any]:
+    context: dict[str, Any] = {
+        "workflow_dir": str(path.parent),
+        "memory_path": str(path),
+        "repair": "Re-read workflow, scope, entry, and file ETags, then retry with current values.",
+    }
+    if extra:
+        context.update(extra)
+    return context
+
+
+def _atomic_replace_text(
+    path: Path,
+    text: str,
+    *,
+    expected_etag: str | None = None,
+    mutation_context: dict[str, Any] | None = None,
+) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary_name: str | None = None
     try:
@@ -1067,11 +1146,11 @@ def _atomic_replace_text(path: Path, text: str, *, expected_etag: str | None = N
                     "file_changed_outside_lock",
                     "memory file changed before atomic replace; no write was performed",
                     retryable=True,
-                    context={
+                    context=_cas_context(path, {
                         "current_file_etag": current_etag,
                         "expected_file_etag": expected_etag,
                         "current_file_bytes": len(current_text.encode("utf-8")),
-                    },
+                    } | (mutation_context or {})),
                 )
         if expected_etag is not None and os.name == "nt":
             if not path.exists() and expected_etag == _file_etag(b""):
@@ -1083,18 +1162,23 @@ def _atomic_replace_text(path: Path, text: str, *, expected_etag: str | None = N
                         "file_changed_outside_lock",
                         "memory file appeared before atomic create; no write was performed",
                         retryable=True,
-                        context={
+                        context=_cas_context(path, {
                             "current_file_etag": current_etag,
                             "expected_file_etag": expected_etag,
-                            "memory_path": str(path),
-                        },
+                        } | (mutation_context or {})),
                     ) from exc
                 except OSError as exc:
                     raise MemoryBoundaryError(
                         "cas_unavailable",
                         "Windows compare-and-swap create could not be completed safely; no write was performed",
                         retryable=True,
-                        context={"memory_path": str(path), "expected_file_etag": expected_etag},
+                        context=_cas_context(
+                            path,
+                            {
+                                "expected_file_etag": expected_etag,
+                                **(mutation_context or {}),
+                            },
+                        ),
                     ) from exc
                 os.unlink(temporary_name)
                 temporary_name = None
@@ -1107,11 +1191,11 @@ def _atomic_replace_text(path: Path, text: str, *, expected_etag: str | None = N
                             "file_changed_outside_lock",
                             "memory file changed before atomic replace; no write was performed",
                             retryable=True,
-                            context={
+                            context=_cas_context(path, {
                                 "current_file_etag": current_etag,
                                 "expected_file_etag": expected_etag,
                                 "current_file_bytes": len(current_raw),
-                            },
+                            } | (mutation_context or {})),
                         )
                     try:
                         _windows_atomic_replace(temporary_name, path)
@@ -1120,23 +1204,32 @@ def _atomic_replace_text(path: Path, text: str, *, expected_etag: str | None = N
                             "replace_failed",
                             "memory file could not be atomically replaced; no write was confirmed",
                             retryable=True,
-                            context={
-                                "memory_path": str(path),
+                            context=_cas_context(path, {
                                 "current_file_etag": current_etag,
                                 "expected_file_etag": expected_etag,
-                            },
+                            } | (mutation_context or {})),
                         ) from exc
                     temporary_name = None
         elif expected_etag is not None and os.name != "nt":
-            if _conditional_replace_posix(temporary_name, path, expected_etag):
-                temporary_name = None
-            else:
-                raise MemoryBoundaryError(
-                    "cas_unavailable",
-                    "POSIX compare-and-swap could not be completed safely; no write was performed",
-                    retryable=True,
-                    context={"memory_path": str(path)},
-                )
+            try:
+                if _conditional_replace_posix(
+                    temporary_name,
+                    path,
+                    expected_etag,
+                    context=mutation_context,
+                ):
+                    temporary_name = None
+                else:
+                    raise MemoryBoundaryError(
+                        "cas_unavailable",
+                        "POSIX compare-and-swap could not be completed safely; no write was performed",
+                        retryable=True,
+                        context=_cas_context(path, mutation_context),
+                    )
+            except MemoryBoundaryError as exc:
+                if exc.context.get("preserve_temporary"):
+                    temporary_name = None
+                raise
         else:
             try:
                 os.replace(temporary_name, path)
@@ -1145,7 +1238,7 @@ def _atomic_replace_text(path: Path, text: str, *, expected_etag: str | None = N
                     "replace_failed",
                     "memory file could not be atomically replaced; no write was confirmed",
                     retryable=True,
-                    context={"memory_path": str(path)},
+                    context=_cas_context(path, mutation_context),
                 ) from exc
             temporary_name = None
     finally:
@@ -1156,10 +1249,21 @@ def _atomic_replace_text(path: Path, text: str, *, expected_etag: str | None = N
                 pass
 
 
-def _replace_if_snapshot_matches(path: Path, text: str, snapshot_etag: str) -> None:
+def _replace_if_snapshot_matches(
+    path: Path,
+    text: str,
+    snapshot_etag: str,
+    *,
+    mutation_context: dict[str, Any] | None = None,
+) -> None:
     # The final CAS check belongs to _atomic_replace_text so the check cannot
     # be accidentally separated from the replacement by a future caller.
-    _atomic_replace_text(path, text, expected_etag=snapshot_etag)
+    _atomic_replace_text(
+        path,
+        text,
+        expected_etag=snapshot_etag,
+        mutation_context=mutation_context,
+    )
 
 
 def _copy_file_exclusive(source: Path, destination: Path) -> None:
@@ -1186,7 +1290,13 @@ def _copy_file_exclusive(source: Path, destination: Path) -> None:
                 pass
 
 
-def _conditional_replace_posix(temporary_name: str, path: Path, expected_etag: str) -> bool:
+def _conditional_replace_posix(
+    temporary_name: str,
+    path: Path,
+    expected_etag: str,
+    *,
+    context: dict[str, Any] | None = None,
+) -> bool:
     """Use a no-replace create or Linux rename-exchange for POSIX CAS."""
     if os.name == "nt":
         return False
@@ -1199,18 +1309,25 @@ def _conditional_replace_posix(temporary_name: str, path: Path, expected_etag: s
                 "file_changed_outside_lock",
                 "memory file appeared before atomic create; no write was performed",
                 retryable=True,
-                context={
-                    "memory_path": str(path),
+                context=_cas_context(path, {
                     "current_file_etag": current_etag,
                     "expected_file_etag": expected_etag,
-                },
+                } | (context or {})),
             ) from exc
         except OSError as exc:
+            current_etag = ""
+            try:
+                _, current_etag = _read_snapshot(path)
+            except MemoryBoundaryError:
+                pass
             raise MemoryBoundaryError(
                 "cas_unavailable",
                 "POSIX compare-and-swap create could not be completed safely; no write was performed",
                 retryable=True,
-                context={"memory_path": str(path)},
+                context=_cas_context(path, {
+                    "current_file_etag": current_etag,
+                    "expected_file_etag": expected_etag,
+                } | (context or {})),
             ) from exc
         os.unlink(temporary_name)
         return True
@@ -1218,12 +1335,15 @@ def _conditional_replace_posix(temporary_name: str, path: Path, expected_etag: s
         libc = ctypes.CDLL(None, use_errno=True)
         renameat2 = libc.renameat2
     except (AttributeError, OSError):
-        raise MemoryBoundaryError(
-            "cas_unavailable",
-            "renameat2 is unavailable; refusing an unsafe POSIX os.replace fallback",
-            retryable=True,
-            context={"memory_path": str(path)},
-        )
+            raise MemoryBoundaryError(
+                "cas_unavailable",
+                "renameat2 is unavailable; refusing an unsafe POSIX os.replace fallback",
+                retryable=True,
+                context=_cas_context(path, {
+                    "current_file_etag": expected_etag,
+                    "expected_file_etag": expected_etag,
+                } | (context or {})),
+            )
     renameat2.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint]
     renameat2.restype = ctypes.c_int
     exchange = 2  # RENAME_EXCHANGE
@@ -1242,14 +1362,21 @@ def _conditional_replace_posix(temporary_name: str, path: Path, expected_etag: s
                 "cas_unavailable",
                 "renameat2 compare-and-swap is unavailable; refusing an unsafe POSIX os.replace fallback",
                 retryable=True,
-                context={"memory_path": str(path), "errno": error_number},
+                context=_cas_context(path, {
+                    "errno": error_number,
+                    "current_file_etag": expected_etag,
+                    "expected_file_etag": expected_etag,
+                } | (context or {})),
             )
         if error_number == errno.ENOENT:
             raise MemoryBoundaryError(
                 "file_changed_outside_lock",
                 "memory file changed before atomic replace; no write was performed",
                 retryable=True,
-                context={"memory_path": str(path)},
+                context=_cas_context(path, {
+                    "current_file_etag": "",
+                    "expected_file_etag": expected_etag,
+                } | (context or {})),
             )
         try:
             _, current_etag = _read_snapshot(path)
@@ -1259,12 +1386,11 @@ def _conditional_replace_posix(temporary_name: str, path: Path, expected_etag: s
             "cas_replace_failed",
             "POSIX compare-and-swap failed with an unexpected operating-system error",
             retryable=True,
-            context={
-                "memory_path": str(path),
+            context=_cas_context(path, {
                 "errno": error_number,
                 "current_file_etag": current_etag,
                 "expected_file_etag": expected_etag,
-            },
+            } | (context or {})),
         )
     _, previous_etag = _read_snapshot(Path(temporary_name))
     if previous_etag != expected_etag:
@@ -1275,13 +1401,14 @@ def _conditional_replace_posix(temporary_name: str, path: Path, expected_etag: s
                 "cas_restore_failed",
                 "memory file changed before atomic replace and its current state could not be inspected",
                 retryable=True,
-                context={
-                    "memory_path": str(path),
+                context=_cas_context(path, {
                     "current_file_etag": "",
                     "expected_file_etag": expected_etag,
                     "previous_file_etag": previous_etag,
                     "candidate_file_etag": candidate_etag,
-                },
+                    "recovery_path": temporary_name,
+                    "preserve_temporary": True,
+                } | (context or {})),
             ) from exc
         if current_after_exchange != candidate_etag:
             try:
@@ -1292,13 +1419,12 @@ def _conditional_replace_posix(temporary_name: str, path: Path, expected_etag: s
                 "file_changed_outside_lock",
                 "memory file was externally rewritten during compare-and-swap; external content was preserved",
                 retryable=True,
-                context={
-                    "memory_path": str(path),
+                context=_cas_context(path, {
                     "current_file_etag": current_after_exchange,
                     "expected_file_etag": expected_etag,
                     "previous_file_etag": previous_etag,
                     "candidate_file_etag": candidate_etag,
-                },
+                } | (context or {})),
             )
         restore = renameat2(
             -100,
@@ -1309,28 +1435,68 @@ def _conditional_replace_posix(temporary_name: str, path: Path, expected_etag: s
         )
         if restore != 0:
             restore_errno = ctypes.get_errno()
+            try:
+                _, current_after_restore_failure = _read_snapshot(path)
+            except MemoryBoundaryError:
+                current_after_restore_failure = ""
+            if current_after_restore_failure == candidate_etag:
+                # The exchange failed while the canonical path still contains
+                # the candidate. We have already verified that no external
+                # rewrite occurred, so an ordinary replace is a rollback, not
+                # the unsafe forward CAS fallback rejected above.
+                try:
+                    os.replace(temporary_name, path)
+                except OSError as exc:
+                    raise MemoryBoundaryError(
+                        "cas_restore_failed",
+                        "memory file changed before atomic replace and the original file could not be restored",
+                        retryable=True,
+                        context=_cas_context(path, {
+                            "errno": restore_errno,
+                            "rollback_errno": getattr(exc, "errno", None),
+                            "current_file_etag": current_after_restore_failure,
+                            "expected_file_etag": expected_etag,
+                            "previous_file_etag": previous_etag,
+                            "candidate_file_etag": candidate_etag,
+                            "recovery_path": temporary_name,
+                            "preserve_temporary": True,
+                        } | (context or {})),
+                    ) from exc
+                raise MemoryBoundaryError(
+                    "file_changed_outside_lock",
+                    "memory file changed before atomic replace; original content was restored",
+                    retryable=True,
+                    context=_cas_context(path, {
+                        "current_file_etag": previous_etag,
+                        "expected_file_etag": expected_etag,
+                        "previous_file_etag": previous_etag,
+                        "candidate_file_etag": candidate_etag,
+                    } | (context or {})),
+                )
             raise MemoryBoundaryError(
                 "cas_restore_failed",
                 "memory file changed before atomic replace and the original file could not be restored",
                 retryable=True,
-                context={
-                    "memory_path": str(path),
+                context=_cas_context(path, {
                     "errno": restore_errno,
-                    "current_file_etag": candidate_etag,
+                    "current_file_etag": current_after_restore_failure,
                     "expected_file_etag": expected_etag,
                     "previous_file_etag": previous_etag,
-                },
+                    "candidate_file_etag": candidate_etag,
+                    "recovery_path": temporary_name,
+                    "preserve_temporary": True,
+                } | (context or {})),
             )
         raise MemoryBoundaryError(
             "file_changed_outside_lock",
             "memory file changed before atomic replace; no write was performed",
             retryable=True,
-            context={
+            context=_cas_context(path, {
                 "current_file_etag": previous_etag,
                 "expected_file_etag": expected_etag,
                 "previous_file_etag": previous_etag,
                 "candidate_file_etag": candidate_etag,
-            },
+            } | (context or {})),
         )
     os.unlink(temporary_name)
     return True
@@ -1582,6 +1748,11 @@ def _find_entry_reference(document: ParsedMemory, reference: str) -> Entry:
         raise MemoryBoundaryError("entry_reference_required", "entry reference must not be empty")
     if _is_valid_stable_id(reference):
         matches = [entry for entry in document.entries if entry.entry_id == reference]
+        # A display title may itself look like a stable ID. Stable identity wins
+        # when present, but a unique UUID-shaped title remains addressable when
+        # no entry owns that ID.
+        if not matches:
+            matches = [entry for entry in document.entries if _recall_normalize(entry.title) == normalized]
     else:
         if _is_valid_stable_id(locator_fragment):
             matches = [entry for entry in document.entries if entry.entry_id == locator_fragment]
@@ -1923,7 +2094,12 @@ def command_memory_remember(
                 file_etag=snapshot_etag,
                 source_etags=budget_source_etags,
             )
-            _replace_if_snapshot_matches(path, new_text, snapshot_etag)
+            _replace_if_snapshot_matches(
+                path,
+                new_text,
+                snapshot_etag,
+                mutation_context=_path_context(root, path, scope, target_id),
+            )
             written_text, file_etag = _read_snapshot(path)
             written_document = parse_memory_document(written_text, path)
             written_entry = next((item for item in written_document.entries if item.entry_id == target_id), None)
@@ -2041,6 +2217,24 @@ def _migration_preflight(text: str, path: Path) -> ParsedMemory:
     return document
 
 
+def _cleanup_migration_backup(backup: Path, *, original_error: MemoryBoundaryError) -> None:
+    try:
+        backup.unlink()
+    except FileNotFoundError:
+        return
+    except OSError as exc:
+        raise MemoryBoundaryError(
+            "migration_backup_cleanup_failed",
+            "migration failed and its temporary backup could not be removed; retry after the backup is writable",
+            retryable=True,
+            context={
+                "backup_path": str(backup),
+                "original_error_code": original_error.code,
+                "repair": "Restore backup unlink permission, verify the canonical file, then retry migration.",
+            },
+        ) from exc
+
+
 def _migrate_one(
     project_root: Path,
     workflow_dir: str | Path,
@@ -2109,12 +2303,26 @@ def _migrate_one(
             },
         )
         backup = _migration_backup_path(path)
+        backup_created = False
+        backup_reusable = False
         if backup.exists() or backup.is_symlink():
-            raise MemoryBoundaryError(
-                "local_backup_exists",
-                "refusing to overwrite an existing migration backup; review or remove it manually before retrying",
-                context={"backup_path": str(backup)},
-            )
+            _reject_unsafe_regular_file(backup, label="migration backup")
+            try:
+                _, backup_etag = _read_snapshot(backup)
+            except MemoryBoundaryError as exc:
+                raise MemoryBoundaryError(
+                    "migration_backup_unreadable",
+                    "existing migration backup could not be verified; review or remove it manually before retrying",
+                    retryable=True,
+                    context={"backup_path": str(backup), "repair": "Verify the backup bytes and retry migration."},
+                ) from exc
+            if backup_etag != snapshot_etag:
+                raise MemoryBoundaryError(
+                    "local_backup_exists",
+                    "refusing to overwrite an existing migration backup; review or remove it manually before retrying",
+                    context={"backup_path": str(backup)},
+                )
+            backup_reusable = True
         if scope == "local":
             backup_status = check_local_scope(project_root, backup)
             if not backup_status["ok"]:
@@ -2124,7 +2332,7 @@ def _migrate_one(
                     retryable=bool(backup_status.get("retryable", False)),
                     context={"backup_path": str(backup), "repair": backup_status.get("repair")},
                 )
-        if path.exists():
+        if path.exists() and not backup_reusable:
             try:
                 _copy_file_exclusive(path, backup)
             except FileExistsError as exc:
@@ -2140,29 +2348,55 @@ def _migrate_one(
                     retryable=True,
                     context={"backup_path": str(backup)},
                 ) from exc
-        try:
-            _replace_if_snapshot_matches(path, migrated_text, snapshot_etag)
-        except MemoryBoundaryError:
+            backup_created = True
+
+        def cleanup_after_failure(error: MemoryBoundaryError) -> None:
+            if not backup_created:
+                return
             try:
-                backup.unlink()
-            except FileNotFoundError:
-                pass
+                _cleanup_migration_backup(backup, original_error=error)
+            except MemoryBoundaryError as cleanup_error:
+                cleanup_error.context.setdefault("workflow_dir", str(path.parent))
+                cleanup_error.context.setdefault("memory_path", str(path))
+                cleanup_error.context.setdefault("scope", scope)
+                raise cleanup_error from error
+            except OSError as cleanup_error:
+                raise MemoryBoundaryError(
+                    "migration_backup_cleanup_failed",
+                    "migration failed and its temporary backup could not be removed; retry after the backup is writable",
+                    retryable=True,
+                    context={
+                        "backup_path": str(backup),
+                        "original_error_code": error.code,
+                        "workflow_dir": str(path.parent),
+                        "memory_path": str(path),
+                        "scope": scope,
+                        "repair": "Restore backup unlink permission, verify the canonical file, then retry migration.",
+                    },
+                ) from cleanup_error
+
+        try:
+            _replace_if_snapshot_matches(
+                path,
+                migrated_text,
+                snapshot_etag,
+                mutation_context=_path_context(project_root, path, scope),
+            )
+        except MemoryBoundaryError as exc:
+            cleanup_after_failure(exc)
             raise
         except OSError as exc:
-            try:
-                backup.unlink()
-            except FileNotFoundError:
-                pass
-            raise MemoryBoundaryError(
+            failure = MemoryBoundaryError(
                 "replace_failed",
                 "memory migration replacement failed; the original file was preserved and retry is allowed",
                 retryable=True,
-                context={
-                    "memory_path": str(path),
+                context=_path_context(project_root, path, scope) | {
                     "current_file_etag": snapshot_etag,
                     "expected_file_etag": snapshot_etag,
                 },
-            ) from exc
+            )
+            cleanup_after_failure(failure)
+            raise failure from exc
         written_text, file_etag = _read_snapshot(path)
         return {
             "ok": True,
@@ -2200,7 +2434,7 @@ def command_memory_migrate(
             )
         root = _checked_project_root(project_root)
         if all_workflows:
-            workflow_root = checked_root(base=root)
+            workflow_root = _checked_workflow_root(None, base=root)
             scan_diagnostics: list[dict[str, Any]] = []
             workflow_dirs = _workflow_dirs_with_memory(
                 workflow_root, scope=scope, project_root=root, diagnostics=scan_diagnostics
@@ -2266,7 +2500,12 @@ def _commit_entry_mutation(
         file_etag=snapshot_etag,
         source_etags=source_etags,
     )
-    _replace_if_snapshot_matches(path, new_text, snapshot_etag)
+    _replace_if_snapshot_matches(
+        path,
+        new_text,
+        snapshot_etag,
+        mutation_context=_path_context(project_root, path, scope, target_id),
+    )
     written_text, file_etag = _read_snapshot(path)
     written_document = parse_memory_document(written_text, path)
     written_entry = next((item for item in written_document.entries if item.entry_id == target_id), None)
@@ -2698,8 +2937,13 @@ def _response_budget_error(
         compact = {"code": str(first.get("code") or first.get("rule") or "diagnostic")}
         identity = first.get("workflow_dir") or first.get("memory_path")
         if identity:
-            compact["workflow_dir"] = str(identity)
-        error["diagnostics"].append(compact)
+            with_identity = {**compact, "workflow_dir": str(identity)}
+            candidate = {**response, "error": {**error, "diagnostics": [with_identity]}}
+            if len(json.dumps(candidate, ensure_ascii=False, separators=(",", ":")).encode("utf-8")) <= max_bytes:
+                compact = with_identity
+        candidate = {**response, "error": {**error, "diagnostics": [compact]}}
+        if len(json.dumps(candidate, ensure_ascii=False, separators=(",", ":")).encode("utf-8")) <= max_bytes:
+            error["diagnostics"].append(compact)
     return response
 
 
@@ -2847,7 +3091,7 @@ def command_memory_recall_all(
         if not _recall_normalize(query):
             raise MemoryBoundaryError("query_required", "recall query must not be empty")
         _validate_recall_limits(top_k, max_bytes)
-        workflow_base = checked_root(str(workflow_root) if workflow_root else None, base=root)
+        workflow_base = _checked_workflow_root(workflow_root, base=root)
         scan_diagnostics: list[dict[str, Any]] = []
         workflows = _workflow_dirs_with_memory(
             workflow_base, scope=scope, project_root=root, diagnostics=scan_diagnostics
@@ -3226,9 +3470,8 @@ def _workflow_dirs_with_memory(
 
 def _read_memory(workflow_dir: Path, project_root: Path | None = None, scope: str = "shared") -> str:
     path = resolve_memory_path(project_root or workflow_dir, workflow_dir, scope) if project_root else _memory_path(workflow_dir, scope)
-    if not path.exists():
-        return ""
-    return path.read_text(encoding="utf-8")
+    text, _ = _read_snapshot(path)
+    return text
 
 
 def _memory_summary(workflow_dir: Path, project_root: Path, scope: str = "shared") -> dict[str, Any]:
@@ -3274,7 +3517,7 @@ def command_memory_check(
         if scope not in {"shared", "local"}:
             raise MemoryBoundaryError("invalid_scope", "scope must be shared or local")
         if all_workflows:
-            root = checked_root(workflow_root, base=project_root)
+            root = _checked_workflow_root(workflow_root, base=project_root)
             workflow_dirs = _workflow_dirs_with_memory(
                 root, scope=scope, project_root=project_root, diagnostics=scan_diagnostics
             )
@@ -3331,55 +3574,67 @@ def command_memory_touch(
         project_root = _checked_project_root(base or base_dir())
     except MemoryBoundaryError as exc:
         return _mutation_error("memory_touch", exc)
-    workflow_dir = checked_workflow_dir(workflow, workflow_root, base=project_root)
-    path = resolve_memory_path(project_root, workflow_dir, "shared")
-    if not path.exists():
-        raise NatureProgressError(f"Missing {MEMORY_FILE} in {workflow_dir}")
-
-    with workflow_memory_lock(path.parent):
-        text, snapshot_etag = _read_snapshot(path)
-        document = parse_memory_document(text, path)
-        errors = [item for item in document.diagnostics if item["severity"] == SEVERITY_ERROR]
-        if errors:
-            raise MemoryBoundaryError(errors[0]["code"], errors[0]["detail"])
-        _validate_locator_path(project_root, path, entry_id)
-        entry = _find_entry_reference(document, entry_id)
-        if entry.metadata.get("lifecycle", "active") != "active":
+    try:
+        workflow_dir = _checked_workflow_dir(workflow, workflow_root, base=project_root)
+        path = resolve_memory_path(project_root, workflow_dir, "shared")
+        if not path.exists():
             raise MemoryBoundaryError(
-                "invalid_lifecycle_transition",
-                "only active entries can be touched",
+                "memory_file_not_found",
+                f"Missing {MEMORY_FILE} in {workflow_dir}",
+                context=_path_context(project_root, path, "shared"),
             )
-        start, end, raw_lines = _entry_bounds(text, entry)
-        rewritten_lines = list(raw_lines)
-        stamped = now_utc()
-        if entry.entry_id is not None:
-            new_text = _replace_canonical_timestamp(text, entry, path, stamped)
-        else:
-            updated_line = f"<!-- updated: {stamped} -->"
-            if entry.timestamp_line is not None:
-                original_line = rewritten_lines[entry.timestamp_line - 1]
-                ending = "\r\n" if original_line.endswith("\r\n") else "\n" if original_line.endswith("\n") else ""
-                rewritten_lines[entry.timestamp_line - 1] = updated_line + ending
+
+        with workflow_memory_lock(path.parent):
+            text, snapshot_etag = _read_snapshot(path)
+            document = parse_memory_document(text, path)
+            errors = [item for item in document.diagnostics if item["severity"] == SEVERITY_ERROR]
+            if errors:
+                raise MemoryBoundaryError(errors[0]["code"], errors[0]["detail"])
+            _validate_locator_path(project_root, path, entry_id)
+            entry = _find_entry_reference(document, entry_id)
+            if entry.metadata.get("lifecycle", "active") != "active":
+                raise MemoryBoundaryError(
+                    "invalid_lifecycle_transition",
+                    "only active entries can be touched",
+                )
+            start, end, raw_lines = _entry_bounds(text, entry)
+            rewritten_lines = list(raw_lines)
+            stamped = now_utc()
+            if entry.entry_id is not None:
+                new_text = _replace_canonical_timestamp(text, entry, path, stamped)
             else:
-                insert_index = start + 1
-                if insert_index < end and _parse_metadata_line(
+                updated_line = f"<!-- updated: {stamped} -->"
+                if entry.timestamp_line is not None:
+                    original_line = rewritten_lines[entry.timestamp_line - 1]
+                    ending = "\r\n" if original_line.endswith("\r\n") else "\n" if original_line.endswith("\n") else ""
+                    rewritten_lines[entry.timestamp_line - 1] = updated_line + ending
+                else:
+                    insert_index = start + 1
+                    if insert_index < end and _parse_metadata_line(
                     rewritten_lines[insert_index].rstrip("\r\n"),
                     line_number=insert_index + 1,
                     entry_title=entry.title,
                     source_path=path,
-                )[2]:
-                    insert_index += 1
-                if rewritten_lines:
-                    sample = rewritten_lines[min(start, len(rewritten_lines) - 1)]
-                    ending = "\r\n" if sample.endswith("\r\n") else "\n" if sample.endswith("\n") else "\r\n"
-                else:
-                    ending = "\n"
-                rewritten_lines.insert(insert_index, updated_line + ending)
-            new_text = "".join(rewritten_lines)
-        _replace_if_snapshot_matches(path, new_text, snapshot_etag)
-        written_text, file_etag = _read_snapshot(path)
-        written_document = parse_memory_document(written_text, path)
-        written_entry = _find_entry_reference(written_document, entry_id)
+                    )[2]:
+                        insert_index += 1
+                    if rewritten_lines:
+                        sample = rewritten_lines[min(start, len(rewritten_lines) - 1)]
+                        ending = "\r\n" if sample.endswith("\r\n") else "\n" if sample.endswith("\n") else "\r\n"
+                    else:
+                        ending = "\n"
+                    rewritten_lines.insert(insert_index, updated_line + ending)
+                new_text = "".join(rewritten_lines)
+            _replace_if_snapshot_matches(
+            path,
+            new_text,
+            snapshot_etag,
+            mutation_context=_path_context(project_root, path, "shared", entry.entry_id),
+        )
+            written_text, file_etag = _read_snapshot(path)
+            written_document = parse_memory_document(written_text, path)
+            written_entry = _find_entry_reference(written_document, entry_id)
+    except NatureProgressError as exc:
+        return _mutation_error("memory_touch", _as_memory_boundary_error(exc))
     result = {
         "ok": True,
         "action": "memory_touch",
@@ -3522,7 +3777,10 @@ def command_memory_index(
         project_root = _checked_project_root(base or base_dir())
     except MemoryBoundaryError as exc:
         return _mutation_error("memory_index", exc)
-    root = checked_root(workflow_root, base=project_root)
+    try:
+        root = _checked_workflow_root(workflow_root, base=project_root)
+    except MemoryBoundaryError as exc:
+        return _mutation_error("memory_index", exc)
     # `--workflow` remains accepted for old callers, but repair is always global
     # so one paper cannot overwrite the project's discovery section.
     scan_diagnostics: list[dict[str, Any]] = []
@@ -3534,7 +3792,24 @@ def command_memory_index(
     warnings: list[dict[str, Any]] = []
     for workflow_dir in workflow_dirs:
         path = resolve_memory_path(project_root, workflow_dir, "shared")
-        text = path.read_text(encoding="utf-8") if path.exists() else ""
+        try:
+            text, _ = _read_snapshot(path)
+        except MemoryBoundaryError as exc:
+            scan_diagnostics.append(
+                {
+                    "ok": False,
+                    "workflow_dir": str(workflow_dir),
+                    "memory_path": str(path),
+                    "scope": "shared",
+                    "error": {
+                        "code": exc.code,
+                        "detail": exc.detail,
+                        "retryable": exc.retryable,
+                        **exc.context,
+                    },
+                }
+            )
+            continue
         # Non-blocking: never abort the index, but surface entry-like headings that
         # did not make it in (F4: no silent drop) alongside every other lint hit.
         warnings.extend(_check_text(text, path=path))
@@ -3575,7 +3850,7 @@ def command_memory_index(
         backup: Path | None = None
         try:
             try:
-                existing = agents.read_text(encoding="utf-8") if agents.exists() else ""
+                existing = agents.read_bytes().decode("utf-8") if agents.exists() else ""
             except UnicodeDecodeError as exc:
                 raise MemoryBoundaryError(
                     "invalid_utf8",
@@ -3644,7 +3919,7 @@ def command_memory_list(
         project_root = _checked_project_root(base or base_dir())
         scan_diagnostics: list[dict[str, Any]] = []
         if all_workflows:
-            root = checked_root(workflow_root, base=project_root)
+            root = _checked_workflow_root(workflow_root, base=project_root)
             workflows = _workflow_dirs_with_memory(
                 root, scope=scope, project_root=project_root, diagnostics=scan_diagnostics
             )

@@ -45,6 +45,13 @@ class NatureMemoryEvalTests(unittest.TestCase):
             ["write-contract", "privacy-contract"],
         )
         self.assertTrue(all(item["verdict"] == "pass" for item in trace["reviewer_evidence"]["reviewers"]))
+        self.assertTrue(result["reviewer_evidence_validated"], result)
+        validation = trace["reviewer_evidence_validation"]
+        self.assertTrue(validation["passed"], validation)
+        self.assertTrue(any(item["kind"] == "fixture_field" for item in validation["references"]))
+        self.assertTrue(any(item["kind"] == "trace_check" for item in validation["references"]))
+        self.assertTrue(any(item.get("source_file") == "fixtures/agent_scenarios.json" for item in validation["references"]))
+        self.assertTrue(any(item.get("runtime_field", "").startswith("trace.") for item in validation["references"]))
         self.assertEqual(result["unauthorized_tool_calls"], [])
         self.assertEqual(result["citation_status"], "validated")
 
@@ -70,6 +77,33 @@ class NatureMemoryEvalTests(unittest.TestCase):
             reviewer_path.write_text(json.dumps(payload), encoding="utf-8")
             with self.assertRaises(ValueError):
                 evaluation.load_reviewer_verdicts(reviewer_path, [f"A{index:02d}" for index in range(1, 21)])
+
+    def test_reviewer_artifact_rejects_unbound_evidence_reference(self) -> None:
+        payload = evaluation.load_json(evaluation.REVIEWER_FIXTURE)
+        payload["verdicts"][0]["evidence_refs"][0] = "runtime.not_a_real_field"
+        with tempfile.TemporaryDirectory() as tmp:
+            reviewer_path = Path(tmp) / "reviewer_verdicts.json"
+            reviewer_path.write_text(json.dumps(payload), encoding="utf-8")
+            with self.assertRaises(ValueError):
+                evaluation.load_reviewer_verdicts(reviewer_path, [f"A{index:02d}" for index in range(1, 21)])
+
+    def test_reviewer_artifact_rejects_fixture_field_mismatch(self) -> None:
+        payload = evaluation.load_json(evaluation.REVIEWER_FIXTURE)
+        payload["evidence_bundle"]["bindings"]["scenario.should_remember"]["pointer"] = "/scenarios/{index}/body"
+        with tempfile.TemporaryDirectory() as tmp:
+            reviewer_path = Path(tmp) / "reviewer_verdicts.json"
+            reviewer_path.write_text(json.dumps(payload), encoding="utf-8")
+            with self.assertRaises(ValueError):
+                evaluation.load_reviewer_verdicts(reviewer_path, [f"A{index:02d}" for index in range(1, 21)])
+
+    def test_runtime_evidence_value_mismatch_fails_the_case(self) -> None:
+        payload = evaluation.load_json(evaluation.REVIEWER_FIXTURE)
+        payload["evidence_bundle"]["bindings"]["runtime.locator_valid"]["expected"] = False
+        with tempfile.TemporaryDirectory() as tmp:
+            reviewer_path = Path(tmp) / "reviewer_verdicts.json"
+            reviewer_path.write_text(json.dumps(payload), encoding="utf-8")
+            with self.assertRaises(ValueError):
+                evaluation.agent_case(0, reviewer_path)
 
     def test_admission_policy_does_not_read_fixture_action_map(self) -> None:
         scenario = {"title": "remember decision", "body": "durable fact"}

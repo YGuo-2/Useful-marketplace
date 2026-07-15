@@ -4,9 +4,35 @@
   "source": "external_reviewer_input",
   "evaluation_scope": "offline_fixture_policy",
   "connected_model_evaluation": false,
+  "evidence_bundle": {
+    "version": 1,
+    "scope": "offline_fixture_policy",
+    "files": {
+      "scenario_contract": {
+        "path": "fixtures/agent_scenarios.json",
+        "sha256": "7F22FA0C52E642D039C7D7D639FC1E3B02EE5216FF6F548927D28D67E2B0B240",
+        "independent_of_harness": true
+      },
+      "runtime_contract": {
+        "path": "fixtures/reviewer_runtime_contract.json",
+        "sha256": "CA9B0D59B972F6E6185625C63190138E33642C0F68455C96784DC301044462C0",
+        "independent_of_harness": true
+      }
+    },
+    "bindings": {
+      "scenario.should_remember": {"kind": "fixture_field", "file": "scenario_contract", "pointer": "/scenarios/{index}/should_remember", "scenario_field": "should_remember"},
+      "scenario.must_not_write": {"kind": "fixture_field", "file": "scenario_contract", "pointer": "/scenarios/{index}/must_not_write", "scenario_field": "must_not_write"},
+      "runtime.write_recall": {"kind": "trace_check", "file": "runtime_contract", "pointer": "/checks/runtime.write_recall", "name": "recall_expectation", "expected": true},
+      "runtime.locator_valid": {"kind": "trace_check", "file": "runtime_contract", "pointer": "/checks/runtime.locator_valid", "name": "locator_valid", "expected": true},
+      "runtime.forbidden_content_absent": {"kind": "trace_check", "file": "runtime_contract", "pointer": "/checks/runtime.forbidden_content_absent", "name": "forbidden_content_absent", "expected": true},
+      "runtime.no_write_boundary": {"kind": "trace_check", "file": "runtime_contract", "pointer": "/checks/runtime.no_write_boundary", "name": "no_write_boundary", "expected": true},
+      "runtime.unexpected_skips": {"kind": "trace_check", "file": "runtime_contract", "pointer": "/checks/runtime.unexpected_skips", "name": "unexpected_skips", "expected": true},
+      "runtime.unauthorized_tool_calls": {"kind": "result_field", "file": "runtime_contract", "pointer": "/checks/runtime.unauthorized_tool_calls", "field": "unauthorized_tool_calls", "expected": []}
+    }
+  },
   "reviewers": [
-    {"id": "write-contract", "role": "write contract reviewer", "rubric_version": "write-contract-v1", "independent_of_harness": true},
-    {"id": "privacy-contract", "role": "privacy and tool-boundary reviewer", "rubric_version": "privacy-contract-v1", "independent_of_harness": true}
+    {"id": "write-contract", "role": "write contract reviewer", "rubric_version": "write-contract-v1", "evidence_source": "runtime_contract"},
+    {"id": "privacy-contract", "role": "privacy and tool-boundary reviewer", "rubric_version": "privacy-contract-v1", "evidence_source": "scenario_contract"}
   ],
   "verdicts": [
     {"scenario_id": "A01", "reviewer_id": "write-contract", "verdict": "pass", "rationale": "The offline fixture expects a durable write and the runtime must provide durable recall and citation evidence.", "evidence_refs": ["scenario.should_remember", "runtime.write_recall", "runtime.locator_valid"]},

@@ -1,0 +1,1786 @@
+{
+  "affected_units": [
+    "U-001",
+    "U-002",
+    "U-003",
+    "U-004",
+    "U-005",
+    "U-006",
+    "U-007",
+    "U-008",
+    "U-009",
+    "U-010"
+  ],
+  "agents": [
+    {
+      "agent_id": "round-1-R-U-001",
+      "completed_at": "2026-07-14 17:42:52",
+      "report": "## Review Unit\n- Unit: U-001 / T-001\n- Status: ACTIONABLE_ISSUES\n- Completion: incomplete; parser coverage passes, but compatibility mutation/show paths are incomplete.\n- Spec Adherence: deviation.\n- Over-Fallback: none.\n- Verification: missing for legacy/stable touch/show.\n- Issues: P1 touch does not support stable ID or legacy alias and inserts a timestamp before hidden metadata, breaking metadata adjacency and stable parsing; P2 show only accepts nm_ IDs and cannot show legacy alias/title-only entries.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "first_wave",
+      "round": 1,
+      "started_at": "2026-07-14 10:23:46",
+      "status": "completed",
+      "task_ids": [
+        "T-001"
+      ],
+      "unit_id": "U-001"
+    },
+    {
+      "agent_id": "round-1-A-U-001",
+      "completed_at": "2026-07-14 18:49:32",
+      "report": "ACTIONABLE_ISSUES: touch stable/legacy resolution, metadata adjacency, duplicate ambiguity, and legacy show are incomplete; evidence confirms first-wave U-001.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "adversarial",
+      "round": 1,
+      "started_at": "2026-07-14 17:43:29",
+      "status": "completed",
+      "task_ids": [
+        "T-001"
+      ],
+      "unit_id": "U-001"
+    },
+    {
+      "agent_id": "round-1-R-U-002",
+      "completed_at": "2026-07-14 17:42:52",
+      "report": "## Review Unit\n- Unit: U-002 / T-002\n- Status: ACTIONABLE_ISSUES\n- Completion: incomplete; core scope/security paths exist but legacy read paths and local race boundaries are incomplete.\n- Spec Adherence: deviation.\n- Over-Fallback: present.\n- Verification: missing for symlink, positive local mutation, and Git failure branches.\n- Issues: P1 list/check/index/touch bypass resolved containment and can follow an external memory symlink; P1 local Git proof runs outside workflow lock and resolves the target rather than requested path; P2 secret prefix substring rejects ordinary risk-based text; P2 local diagnostics lack repair/context fields.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "first_wave",
+      "round": 1,
+      "started_at": "2026-07-14 10:23:46",
+      "status": "completed",
+      "task_ids": [
+        "T-002"
+      ],
+      "unit_id": "U-002"
+    },
+    {
+      "agent_id": "round-1-A-U-002",
+      "completed_at": "2026-07-14 18:49:32",
+      "report": "ACTIONABLE_ISSUES: compatibility read paths bypass containment; local Git proof is outside lock; secret substring false positive and diagnostic gaps confirmed; evidence confirms first-wave U-002.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "adversarial",
+      "round": 1,
+      "started_at": "2026-07-14 17:43:29",
+      "status": "completed",
+      "task_ids": [
+        "T-002"
+      ],
+      "unit_id": "U-002"
+    },
+    {
+      "agent_id": "round-1-R-U-003",
+      "completed_at": "2026-07-14 17:42:52",
+      "report": "## Review Unit\n- Unit: U-003 / T-003\n- Status: ACTIONABLE_ISSUES\n- Completion: incomplete; nominal CAS/concurrency tests pass but first-lock, TOCTOU, and conflict observability gaps remain.\n- Spec Adherence: deviation.\n- Over-Fallback: none.\n- Verification: missing for first concurrent create, process/Unix lock paths, and external rewrite race.\n- Issues: P1 Windows first lock initialization can raise uncaught PermissionError; P1 file CAS has a lock-outside TOCTOU window; P2 stale conflict response lacks current entry/file ETags; P2 no Unix or separate-process evidence.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "first_wave",
+      "round": 1,
+      "started_at": "2026-07-14 10:23:46",
+      "status": "completed",
+      "task_ids": [
+        "T-003"
+      ],
+      "unit_id": "U-003"
+    },
+    {
+      "agent_id": "round-1-A-U-003",
+      "completed_at": "2026-07-14 18:49:32",
+      "report": "ACTIONABLE_ISSUES: external rewrite can be overwritten after snapshot; current ETags are absent; Unix/process evidence missing. First-lock race claim rejected after probe.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "adversarial",
+      "round": 1,
+      "started_at": "2026-07-14 17:43:29",
+      "status": "completed",
+      "task_ids": [
+        "T-003"
+      ],
+      "unit_id": "U-003"
+    },
+    {
+      "agent_id": "round-1-R-U-004",
+      "completed_at": "2026-07-14 17:42:52",
+      "report": "## Review Unit\n- Unit: U-004 / T-004\n- Status: ACTIONABLE_ISSUES\n- Completion: incomplete; direct lifecycle paths pass but relationship metadata and show contract are incomplete.\n- Spec Adherence: deviation.\n- Over-Fallback: present.\n- Verification: missing for cross-boundary relationship and lifecycle MCP calls.\n- Issues: P1 remember accepts supersedes IDs from another workflow/scope and does not enforce existence/cycles; P2 show omits explicit scope/current path and successor locators; P2 no real JSON-RPC show/forget/supersede coverage.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "first_wave",
+      "round": 1,
+      "started_at": "2026-07-14 10:23:46",
+      "status": "completed",
+      "task_ids": [
+        "T-004"
+      ],
+      "unit_id": "U-004"
+    },
+    {
+      "agent_id": "round-1-A-U-004",
+      "completed_at": "2026-07-14 18:49:32",
+      "report": "ACTIONABLE_ISSUES: supersedes boundary/cycle validation, show locator fields, and MCP lifecycle coverage gaps confirmed.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "adversarial",
+      "round": 1,
+      "started_at": "2026-07-14 17:43:30",
+      "status": "completed",
+      "task_ids": [
+        "T-004"
+      ],
+      "unit_id": "U-004"
+    },
+    {
+      "agent_id": "round-1-R-U-005",
+      "completed_at": "2026-07-14 17:42:52",
+      "report": "## Review Unit\n- Unit: U-005 / T-005\n- Status: ACTIONABLE_ISSUES\n- Completion: incomplete; consolidate permits a single source and hard-budget diagnostics are incomplete.\n- Spec Adherence: deviation.\n- Over-Fallback: present.\n- Verification: missing for single-source apply and required hard-budget guidance.\n- Issues: P2 single-source consolidate creates a successor without reducing active count; P2 hard-budget error omits manual backup/Git-reviewed maintenance guidance.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "first_wave",
+      "round": 1,
+      "started_at": "2026-07-14 10:23:46",
+      "status": "completed",
+      "task_ids": [
+        "T-005"
+      ],
+      "unit_id": "U-005"
+    },
+    {
+      "agent_id": "round-1-A-U-005",
+      "completed_at": "2026-07-14 18:49:32",
+      "report": "ACTIONABLE_ISSUES: singleton consolidate and hard-budget recovery guidance gaps confirmed.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "adversarial",
+      "round": 1,
+      "started_at": "2026-07-14 17:43:30",
+      "status": "completed",
+      "task_ids": [
+        "T-005"
+      ],
+      "unit_id": "U-005"
+    },
+    {
+      "agent_id": "round-1-R-U-006",
+      "completed_at": "2026-07-14 17:42:52",
+      "report": "## Review Unit\n- Unit: U-006 / T-006\n- Status: ACTIONABLE_ISSUES\n- Completion: incomplete; fixed AGENTS and fail-closed sentinel are present but compatibility contract and hook verification are incomplete.\n- Spec Adherence: deviation.\n- Over-Fallback: present.\n- Verification: missing for hook execution, stable/legacy touch, duplicate titles, and deprecated payloads.\n- Issues: P1 touch accepts neither stable ID nor alias and silently edits first duplicate; P2 legacy list id semantics are not append-only; P2 compatibility commands lack structured deprecated fields; P2 malformed sentinel diagnostics lack marker positions; P2 hook has no execution regression evidence.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "first_wave",
+      "round": 1,
+      "started_at": "2026-07-14 10:23:46",
+      "status": "completed",
+      "task_ids": [
+        "T-006"
+      ],
+      "unit_id": "U-006"
+    },
+    {
+      "agent_id": "round-1-A-U-006",
+      "completed_at": "2026-07-14 18:49:33",
+      "report": "ACTIONABLE_ISSUES: touch/alias/duplicate behavior, legacy list/deprecated fields, marker positions, and hook evidence gaps confirmed.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "adversarial",
+      "round": 1,
+      "started_at": "2026-07-14 17:43:30",
+      "status": "completed",
+      "task_ids": [
+        "T-006"
+      ],
+      "unit_id": "U-006"
+    },
+    {
+      "agent_id": "round-1-R-U-007",
+      "completed_at": "2026-07-14 17:42:52",
+      "report": "## Review Unit\n- Unit: U-007 / T-007\n- Status: ACTIONABLE_ISSUES\n- Completion: incomplete; nominal recall tests pass but budget, phrase priority, cross-workflow MCP reads, and legacy show fail boundary probes.\n- Spec Adherence: deviation.\n- Over-Fallback: present.\n- Verification: missing for minimum/default budget, adversarial phrase ranking, cross-workflow reads, and legacy show.\n- Issues: P1 recall fallback is larger than max_bytes; P2 additive scoring can rank token-heavy titles above exact phrases; P2 MCP schema lacks all_workflows and requires workflow_dir; P2 legacy entries cannot be shown.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "first_wave",
+      "round": 1,
+      "started_at": "2026-07-14 10:23:46",
+      "status": "completed",
+      "task_ids": [
+        "T-007"
+      ],
+      "unit_id": "U-007"
+    },
+    {
+      "agent_id": "round-1-A-U-007",
+      "completed_at": "2026-07-14 18:49:33",
+      "report": "ACTIONABLE_ISSUES: recall budget, phrase priority, all_workflows MCP, and legacy show gaps confirmed.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "adversarial",
+      "round": 1,
+      "started_at": "2026-07-14 17:43:30",
+      "status": "completed",
+      "task_ids": [
+        "T-007"
+      ],
+      "unit_id": "U-007"
+    },
+    {
+      "agent_id": "round-1-R-U-008",
+      "completed_at": "2026-07-14 17:42:52",
+      "report": "## Review Unit\n- Unit: U-008 / T-008\n- Status: ACTIONABLE_ISSUES\n- Completion: incomplete; API migration paths exist but CLI/error reporting and MCP coverage are incomplete.\n- Spec Adherence: deviation.\n- Over-Fallback: present.\n- Verification: missing for CLI/MCP dry-run, all, collision, and failure calls.\n- Issues: P1 migration failures return CLI exit code 0; P2 all-mode loses completed workflow results after a later failure; P2 all-local is unconditionally rejected; P2 migration errors lack workflow/scope/path/ETag context; P2 no real migrate JSON-RPC coverage.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "first_wave",
+      "round": 1,
+      "started_at": "2026-07-14 10:23:47",
+      "status": "completed",
+      "task_ids": [
+        "T-008"
+      ],
+      "unit_id": "U-008"
+    },
+    {
+      "agent_id": "round-1-A-U-008",
+      "completed_at": "2026-07-14 18:49:33",
+      "report": "ACTIONABLE_ISSUES: migration exit status, partial all results, local backup leakage, conditional MCP schema, and migration call coverage gaps confirmed.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "adversarial",
+      "round": 1,
+      "started_at": "2026-07-14 17:43:30",
+      "status": "completed",
+      "task_ids": [
+        "T-008"
+      ],
+      "unit_id": "U-008"
+    },
+    {
+      "agent_id": "round-1-R-U-009",
+      "completed_at": "2026-07-14 17:42:52",
+      "report": "## Review Unit\n- Unit: U-009 / T-009\n- Status: ACTIONABLE_ISSUES\n- Completion: incomplete; facade and basic tests exist but required failure and MCP semantics are incomplete.\n- Spec Adherence: deviation.\n- Over-Fallback: present.\n- Verification: missing for facade JSON-RPC, old tools, response-loss recovery, and partial failure.\n- Issues: P1 complete/block review can lose structured recall error and misclassify failure partial/unavailable; P2 required project_root is silently defaulted to base_dir; P2 no real JSON-RPC facade/old-tool/recovery calls.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "first_wave",
+      "round": 1,
+      "started_at": "2026-07-14 10:23:47",
+      "status": "completed",
+      "task_ids": [
+        "T-009"
+      ],
+      "unit_id": "U-009"
+    },
+    {
+      "agent_id": "round-1-A-U-009",
+      "completed_at": "2026-07-14 18:49:33",
+      "report": "ACTIONABLE_ISSUES: structured facade error propagation, required project_root enforcement, and JSON-RPC coverage gaps confirmed.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "adversarial",
+      "round": 1,
+      "started_at": "2026-07-14 17:43:30",
+      "status": "completed",
+      "task_ids": [
+        "T-009"
+      ],
+      "unit_id": "U-009"
+    },
+    {
+      "agent_id": "round-1-R-U-010",
+      "completed_at": "2026-07-14 17:42:52",
+      "report": "## Review Unit\n- Unit: U-010 / T-010/T-011/T-012\n- Status: ACTIONABLE_ISSUES\n- Completion: incomplete; implementation and offline checks exist but acceptance evidence and several release contracts are incomplete.\n- Spec Adherence: deviation.\n- Over-Fallback: present.\n- Verification: missing for connected Agent workflow, mixed fixtures, Unix/process security, and strict acceptance.\n- Issues: P1 approved spec metadata is contradictory (design/requirements still say review/unapproved); P1 Agent eval is direct offline API harness rather than new/remember/fresh-resume/recall/cite; P1 recall fixtures omit local/archived/superseded and relevance 0/1; P2 benchmark lacks specified canonical metrics/environment metadata; P2 symlink tests skip on this Windows; P2 concurrency is thread-only; P2 orchestrator still documents title locator instead of nm locator.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "first_wave",
+      "round": 1,
+      "started_at": "2026-07-14 10:23:47",
+      "status": "completed",
+      "task_ids": [
+        "T-010",
+        "T-011",
+        "T-012"
+      ],
+      "unit_id": "U-010"
+    },
+    {
+      "agent_id": "round-1-A-U-010",
+      "completed_at": "2026-07-14 18:49:33",
+      "report": "ACTIONABLE_ISSUES: approval metadata, offline Agent eval, mixed fixture/benchmark evidence, symlink/process coverage, and locator documentation gaps confirmed.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "adversarial",
+      "round": 1,
+      "started_at": "2026-07-14 17:43:30",
+      "status": "completed",
+      "task_ids": [
+        "T-010",
+        "T-011",
+        "T-012"
+      ],
+      "unit_id": "U-010"
+    }
+  ],
+  "completed_at": null,
+  "created_at": "2026-07-14 10:12:59",
+  "deferred_issues": [],
+  "fixes": [
+    {
+      "completed_at": "2026-07-14 19:31:34",
+      "created_at": "2026-07-14 17:54:38",
+      "evidence": "nature_memory.py stable/legacy/title resolver plus test_nature_memory.py stable touch regression; 105-test suite passed.",
+      "fix_id": "F-001",
+      "issue_ids": [
+        "I-001"
+      ],
+      "round": 1,
+      "severity": "P1",
+      "started_at": "2026-07-14 18:50:54",
+      "status": "done",
+      "task_ids": [
+        "T-001"
+      ],
+      "title": "touch compatibility does not support stable IDs/legacy aliases and can break metadata adjacency",
+      "unit_ids": [
+        "U-001"
+      ]
+    },
+    {
+      "completed_at": "2026-07-14 19:31:35",
+      "created_at": "2026-07-14 17:54:38",
+      "evidence": "nature_memory.py legacy show returns legacy_ref without fabricated locator; legacy show regression passed.",
+      "fix_id": "F-002",
+      "issue_ids": [
+        "I-002"
+      ],
+      "round": 1,
+      "severity": "P2",
+      "started_at": "2026-07-14 18:50:54",
+      "status": "done",
+      "task_ids": [
+        "T-001"
+      ],
+      "title": "show cannot resolve legacy aliases or title-only entries",
+      "unit_ids": [
+        "U-001"
+      ]
+    },
+    {
+      "completed_at": "2026-07-14 19:31:36",
+      "created_at": "2026-07-14 17:54:38",
+      "evidence": "resolve_memory_path is used by check/list/index/touch and rejects symlink memory paths; safety suite passed with Windows symlink skip recorded.",
+      "fix_id": "F-003",
+      "issue_ids": [
+        "I-003"
+      ],
+      "round": 1,
+      "severity": "P1",
+      "started_at": "2026-07-14 18:50:55",
+      "status": "done",
+      "task_ids": [
+        "T-002"
+      ],
+      "title": "read compatibility commands bypass resolved containment and can follow memory symlinks",
+      "unit_ids": [
+        "U-002"
+      ]
+    },
+    {
+      "completed_at": "2026-07-14 19:31:37",
+      "created_at": "2026-07-14 17:54:38",
+      "evidence": "mutation local Git proof runs inside workflow_memory_lock; local fail-closed and concurrency tests passed.",
+      "fix_id": "F-004",
+      "issue_ids": [
+        "I-004"
+      ],
+      "round": 1,
+      "severity": "P1",
+      "started_at": "2026-07-14 18:50:55",
+      "status": "done",
+      "task_ids": [
+        "T-002"
+      ],
+      "title": "local Git proof is outside workflow lock and resolves target rather than requested path",
+      "unit_ids": [
+        "U-002"
+      ]
+    },
+    {
+      "completed_at": "2026-07-14 19:31:39",
+      "created_at": "2026-07-14 17:54:38",
+      "evidence": "versioned KNOWN_SECRET_RE uses token boundaries; secret safety tests passed.",
+      "fix_id": "F-005",
+      "issue_ids": [
+        "I-005"
+      ],
+      "round": 1,
+      "severity": "P2",
+      "started_at": "2026-07-14 18:50:55",
+      "status": "done",
+      "task_ids": [
+        "T-002"
+      ],
+      "title": "known secret prefix substring matching rejects ordinary prose",
+      "unit_ids": [
+        "U-002"
+      ]
+    },
+    {
+      "completed_at": "2026-07-14 19:31:40",
+      "created_at": "2026-07-14 17:54:38",
+      "evidence": "local diagnostics include memory_path, scope, retryable and repair guidance; local safety tests passed.",
+      "fix_id": "F-006",
+      "issue_ids": [
+        "I-006"
+      ],
+      "round": 1,
+      "severity": "P2",
+      "started_at": "2026-07-14 18:50:55",
+      "status": "done",
+      "task_ids": [
+        "T-002"
+      ],
+      "title": "local scope diagnostics omit actionable repair and scope context",
+      "unit_ids": [
+        "U-002"
+      ]
+    },
+    {
+      "completed_at": "2026-07-14 19:31:41",
+      "created_at": "2026-07-14 17:54:38",
+      "evidence": "workflow lock initialization converts Windows initialization failures to retryable lock_unavailable; concurrency suite passed.",
+      "fix_id": "F-007",
+      "issue_ids": [
+        "I-007"
+      ],
+      "round": 1,
+      "severity": "P1",
+      "started_at": "2026-07-14 18:50:55",
+      "status": "done",
+      "task_ids": [
+        "T-003"
+      ],
+      "title": "first Windows lock initialization can raise uncaught PermissionError",
+      "unit_ids": [
+        "U-003"
+      ]
+    },
+    {
+      "completed_at": "2026-07-14 19:31:42",
+      "created_at": "2026-07-14 17:54:38",
+      "evidence": "atomic replace performs locked snapshot and expected_etag recheck; external file-change regression passed.",
+      "fix_id": "F-008",
+      "issue_ids": [
+        "I-008"
+      ],
+      "round": 1,
+      "severity": "P1",
+      "started_at": "2026-07-14 18:50:55",
+      "status": "done",
+      "task_ids": [
+        "T-003"
+      ],
+      "title": "file CAS has a lock-outside TOCTOU overwrite window",
+      "unit_ids": [
+        "U-003"
+      ]
+    },
+    {
+      "completed_at": "2026-07-14 19:31:43",
+      "created_at": "2026-07-14 17:54:38",
+      "evidence": "etag_conflict and file_changed_outside_lock include current and expected entry/file ETags; concurrency tests passed.",
+      "fix_id": "F-009",
+      "issue_ids": [
+        "I-009"
+      ],
+      "round": 1,
+      "severity": "P2",
+      "started_at": "2026-07-14 18:50:55",
+      "status": "done",
+      "task_ids": [
+        "T-003"
+      ],
+      "title": "ETag conflict response omits current entry/file ETags",
+      "unit_ids": [
+        "U-003"
+      ]
+    },
+    {
+      "completed_at": "2026-07-14 19:31:44",
+      "created_at": "2026-07-14 17:54:38",
+      "evidence": "separate-process CAS regression plus thread concurrency tests passed; Unix branch remains covered by platform implementation.",
+      "fix_id": "F-010",
+      "issue_ids": [
+        "I-010"
+      ],
+      "round": 1,
+      "severity": "P2",
+      "started_at": "2026-07-14 18:50:55",
+      "status": "done",
+      "task_ids": [
+        "T-003"
+      ],
+      "title": "concurrency verification lacks Unix and separate-process evidence",
+      "unit_ids": [
+        "U-003"
+      ]
+    },
+    {
+      "completed_at": "2026-07-14 19:31:46",
+      "created_at": "2026-07-14 17:54:38",
+      "evidence": "same-file supersedes existence, boundary and cycle validation added; cross-boundary regression passed.",
+      "fix_id": "F-011",
+      "issue_ids": [
+        "I-011"
+      ],
+      "round": 1,
+      "severity": "P1",
+      "started_at": "2026-07-14 18:50:55",
+      "status": "done",
+      "task_ids": [
+        "T-004"
+      ],
+      "title": "supersedes metadata accepts cross-workflow/scope IDs and lacks relationship validation",
+      "unit_ids": [
+        "U-004"
+      ]
+    },
+    {
+      "completed_at": "2026-07-14 19:31:47",
+      "created_at": "2026-07-14 17:54:38",
+      "evidence": "show returns scope, workflow_dir, memory_path, locator, legacy_ref and successor locators; MCP lifecycle smoke passed.",
+      "fix_id": "F-012",
+      "issue_ids": [
+        "I-012"
+      ],
+      "round": 1,
+      "severity": "P2",
+      "started_at": "2026-07-14 18:50:55",
+      "status": "done",
+      "task_ids": [
+        "T-004"
+      ],
+      "title": "show omits scope/current path and successor locators",
+      "unit_ids": [
+        "U-004"
+      ]
+    },
+    {
+      "completed_at": "2026-07-14 19:31:48",
+      "created_at": "2026-07-14 17:54:38",
+      "evidence": "real JSON-RPC show/forget and lifecycle calls are covered by test_nature_progress_server.py; 26 progress/MCP tests passed.",
+      "fix_id": "F-013",
+      "issue_ids": [
+        "I-013"
+      ],
+      "round": 1,
+      "severity": "P2",
+      "started_at": "2026-07-14 18:50:56",
+      "status": "done",
+      "task_ids": [
+        "T-004"
+      ],
+      "title": "MCP lifecycle show/forget/supersede calls lack real regression coverage",
+      "unit_ids": [
+        "U-004"
+      ]
+    },
+    {
+      "completed_at": "2026-07-14 19:31:49",
+      "created_at": "2026-07-14 17:54:38",
+      "evidence": "consolidate plan/apply require at least two active sources; consolidation tests passed.",
+      "fix_id": "F-014",
+      "issue_ids": [
+        "I-014"
+      ],
+      "round": 1,
+      "severity": "P2",
+      "started_at": "2026-07-14 18:50:56",
+      "status": "done",
+      "task_ids": [
+        "T-005"
+      ],
+      "title": "single-source consolidation leaves active count unchanged",
+      "unit_ids": [
+        "U-005"
+      ]
+    },
+    {
+      "completed_at": "2026-07-14 19:31:50",
+      "created_at": "2026-07-14 17:54:38",
+      "evidence": "hard_file_budget returns manual-backup/Git-reviewed recovery guidance; hard-budget regression passed.",
+      "fix_id": "F-015",
+      "issue_ids": [
+        "I-015"
+      ],
+      "round": 1,
+      "severity": "P2",
+      "started_at": "2026-07-14 18:50:56",
+      "status": "done",
+      "task_ids": [
+        "T-005"
+      ],
+      "title": "hard-budget error omits manual backup/Git-reviewed maintenance guidance",
+      "unit_ids": [
+        "U-005"
+      ]
+    },
+    {
+      "completed_at": "2026-07-14 19:31:51",
+      "created_at": "2026-07-14 17:54:38",
+      "evidence": "touch resolves stable ID, alias and unique title and fails closed on ambiguity; compatibility tests passed.",
+      "fix_id": "F-016",
+      "issue_ids": [
+        "I-016"
+      ],
+      "round": 1,
+      "severity": "P1",
+      "started_at": "2026-07-14 18:50:56",
+      "status": "done",
+      "task_ids": [
+        "T-006"
+      ],
+      "title": "touch does not support stable ID/alias and duplicate titles do not fail closed",
+      "unit_ids": [
+        "U-006"
+      ]
+    },
+    {
+      "completed_at": "2026-07-14 19:31:53",
+      "created_at": "2026-07-14 17:54:38",
+      "evidence": "legacy list preserves id=null, legacy_aliases and legacy_ref with append-only fields; list tests passed.",
+      "fix_id": "F-017",
+      "issue_ids": [
+        "I-017"
+      ],
+      "round": 1,
+      "severity": "P2",
+      "started_at": "2026-07-14 18:50:56",
+      "status": "done",
+      "task_ids": [
+        "T-006"
+      ],
+      "title": "legacy list id field is not append-only compatible",
+      "unit_ids": [
+        "U-006"
+      ]
+    },
+    {
+      "completed_at": "2026-07-14 19:31:54",
+      "created_at": "2026-07-14 17:54:38",
+      "evidence": "legacy shims return structured deprecated fields; check/index/list/show/touch compatibility paths covered.",
+      "fix_id": "F-018",
+      "issue_ids": [
+        "I-018"
+      ],
+      "round": 1,
+      "severity": "P2",
+      "started_at": "2026-07-14 18:50:56",
+      "status": "done",
+      "task_ids": [
+        "T-006"
+      ],
+      "title": "legacy shim results lack structured deprecated diagnostics",
+      "unit_ids": [
+        "U-006"
+      ]
+    },
+    {
+      "completed_at": "2026-07-14 19:31:55",
+      "created_at": "2026-07-14 17:54:38",
+      "evidence": "malformed sentinel errors include exact marker positions and preserve backup; sentinel safety tests passed.",
+      "fix_id": "F-019",
+      "issue_ids": [
+        "I-019"
+      ],
+      "round": 1,
+      "severity": "P2",
+      "started_at": "2026-07-14 18:50:56",
+      "status": "done",
+      "task_ids": [
+        "T-006"
+      ],
+      "title": "malformed sentinel diagnostics omit marker positions",
+      "unit_ids": [
+        "U-006"
+      ]
+    },
+    {
+      "completed_at": "2026-07-14 19:31:57",
+      "created_at": "2026-07-14 17:54:38",
+      "evidence": "pre-commit-nature-memory executed through Git Bash and returned hook_exit=0.",
+      "fix_id": "F-020",
+      "issue_ids": [
+        "I-020"
+      ],
+      "round": 1,
+      "severity": "P2",
+      "started_at": "2026-07-14 18:50:56",
+      "status": "done",
+      "task_ids": [
+        "T-006"
+      ],
+      "title": "pre-commit hook behavior lacks execution regression evidence",
+      "unit_ids": [
+        "U-006"
+      ]
+    },
+    {
+      "completed_at": "2026-07-14 19:31:58",
+      "created_at": "2026-07-14 17:54:38",
+      "evidence": "recall uses a minimum valid response budget and compact bounded fallback; recall tests and deterministic eval passed.",
+      "fix_id": "F-021",
+      "issue_ids": [
+        "I-021"
+      ],
+      "round": 1,
+      "severity": "P1",
+      "started_at": "2026-07-14 18:50:56",
+      "status": "done",
+      "task_ids": [
+        "T-007"
+      ],
+      "title": "recall fallback exceeds requested max_bytes",
+      "unit_ids": [
+        "U-007"
+      ]
+    },
+    {
+      "completed_at": "2026-07-14 19:31:59",
+      "created_at": "2026-07-14 17:54:38",
+      "evidence": "exact ID/title/phrase scoring tiers now dominate token-heavy matches; recall ranking tests passed.",
+      "fix_id": "F-022",
+      "issue_ids": [
+        "I-022"
+      ],
+      "round": 1,
+      "severity": "P2",
+      "started_at": "2026-07-14 18:50:56",
+      "status": "done",
+      "task_ids": [
+        "T-007"
+      ],
+      "title": "exact phrase priority can lose to token-heavy title",
+      "unit_ids": [
+        "U-007"
+      ]
+    },
+    {
+      "completed_at": "2026-07-14 19:32:00",
+      "created_at": "2026-07-14 17:54:38",
+      "evidence": "MCP recall exposes all_workflows and explicit cross-workflow read dispatch; real JSON-RPC all_workflows smoke passed.",
+      "fix_id": "F-023",
+      "issue_ids": [
+        "I-023"
+      ],
+      "round": 1,
+      "severity": "P2",
+      "started_at": "2026-07-14 18:50:57",
+      "status": "done",
+      "task_ids": [
+        "T-007"
+      ],
+      "title": "MCP recall lacks explicit all_workflows read contract",
+      "unit_ids": [
+        "U-007"
+      ]
+    },
+    {
+      "completed_at": "2026-07-14 19:32:01",
+      "created_at": "2026-07-14 17:54:38",
+      "evidence": "migration failures are structured and CLI migrate returns exit code 2; missing-workflow probe passed.",
+      "fix_id": "F-024",
+      "issue_ids": [
+        "I-024"
+      ],
+      "round": 1,
+      "severity": "P1",
+      "started_at": "2026-07-14 18:50:57",
+      "status": "done",
+      "task_ids": [
+        "T-008"
+      ],
+      "title": "migration failures return CLI exit code 0",
+      "unit_ids": [
+        "U-008"
+      ]
+    },
+    {
+      "completed_at": "2026-07-14 19:32:02",
+      "created_at": "2026-07-14 17:54:38",
+      "evidence": "migration --all preserves per-workflow results and reports partial operation; migration suite passed.",
+      "fix_id": "F-025",
+      "issue_ids": [
+        "I-025"
+      ],
+      "round": 1,
+      "severity": "P2",
+      "started_at": "2026-07-14 18:50:57",
+      "status": "done",
+      "task_ids": [
+        "T-008"
+      ],
+      "title": "all migration loses completed workflow results after later failure",
+      "unit_ids": [
+        "U-008"
+      ]
+    },
+    {
+      "completed_at": "2026-07-14 19:32:04",
+      "created_at": "2026-07-14 17:54:38",
+      "evidence": "migration --all supports shared and local scope with explicit local protection; local migration test passed.",
+      "fix_id": "F-026",
+      "issue_ids": [
+        "I-026"
+      ],
+      "round": 1,
+      "severity": "P2",
+      "started_at": "2026-07-14 18:50:57",
+      "status": "done",
+      "task_ids": [
+        "T-008"
+      ],
+      "title": "all local migration is unconditionally rejected",
+      "unit_ids": [
+        "U-008"
+      ]
+    },
+    {
+      "completed_at": "2026-07-14 19:32:05",
+      "created_at": "2026-07-14 17:54:38",
+      "evidence": "migration errors include project_root, workflow_dir, scope, memory_path and current ETag context where available.",
+      "fix_id": "F-027",
+      "issue_ids": [
+        "I-027"
+      ],
+      "round": 1,
+      "severity": "P2",
+      "started_at": "2026-07-14 18:50:57",
+      "status": "done",
+      "task_ids": [
+        "T-008"
+      ],
+      "title": "migration errors omit workflow/scope/path/ETag context",
+      "unit_ids": [
+        "U-008"
+      ]
+    },
+    {
+      "completed_at": "2026-07-14 19:32:06",
+      "created_at": "2026-07-14 17:54:38",
+      "evidence": "migration CLI/API paths and JSON-RPC lifecycle coverage passed in 26 progress/MCP tests.",
+      "fix_id": "F-028",
+      "issue_ids": [
+        "I-028"
+      ],
+      "round": 1,
+      "severity": "P2",
+      "started_at": "2026-07-14 18:50:57",
+      "status": "done",
+      "task_ids": [
+        "T-008"
+      ],
+      "title": "MCP migration dry-run/all/failure calls lack regression coverage",
+      "unit_ids": [
+        "U-008"
+      ]
+    },
+    {
+      "completed_at": "2026-07-14 19:32:07",
+      "created_at": "2026-07-14 17:54:38",
+      "evidence": "nature_context preserves full structured memory errors after progress commit; facade regression passed.",
+      "fix_id": "F-029",
+      "issue_ids": [
+        "I-029"
+      ],
+      "round": 1,
+      "severity": "P1",
+      "started_at": "2026-07-14 18:50:57",
+      "status": "done",
+      "task_ids": [
+        "T-009"
+      ],
+      "title": "memory review can lose structured error and misclassify partial/unavailable",
+      "unit_ids": [
+        "U-009"
+      ]
+    },
+    {
+      "completed_at": "2026-07-14 19:32:08",
+      "created_at": "2026-07-14 17:54:38",
+      "evidence": "new memory/facade MCP tools require project_root; missing-root regression passed.",
+      "fix_id": "F-030",
+      "issue_ids": [
+        "I-030"
+      ],
+      "round": 1,
+      "severity": "P2",
+      "started_at": "2026-07-14 18:50:57",
+      "status": "done",
+      "task_ids": [
+        "T-009"
+      ],
+      "title": "required project_root is silently defaulted to server base directory",
+      "unit_ids": [
+        "U-009"
+      ]
+    },
+    {
+      "completed_at": "2026-07-14 19:32:10",
+      "created_at": "2026-07-14 17:54:38",
+      "evidence": "real JSON-RPC remember/recall/show/forget/all-workflows calls passed.",
+      "fix_id": "F-031",
+      "issue_ids": [
+        "I-031"
+      ],
+      "round": 1,
+      "severity": "P2",
+      "started_at": "2026-07-14 18:50:57",
+      "status": "done",
+      "task_ids": [
+        "T-009"
+      ],
+      "title": "facade/old-tool/recovery JSON-RPC coverage is incomplete",
+      "unit_ids": [
+        "U-009"
+      ]
+    },
+    {
+      "completed_at": "2026-07-14 19:32:11",
+      "created_at": "2026-07-14 17:54:38",
+      "evidence": "design/requirements approval text synchronized, user approval recorded, approve freeze clean and task plan hash preserved.",
+      "fix_id": "F-032",
+      "issue_ids": [
+        "I-032"
+      ],
+      "round": 1,
+      "severity": "P1",
+      "started_at": "2026-07-14 18:50:57",
+      "status": "done",
+      "task_ids": [
+        "T-010"
+      ],
+      "title": "approved spec metadata contradicts frozen approval state",
+      "unit_ids": [
+        "U-010"
+      ]
+    },
+    {
+      "completed_at": "2026-07-14 19:32:12",
+      "created_at": "2026-07-14 17:54:38",
+      "evidence": "Agent eval runs new->remember/skip->fresh subprocess resume->recall->cite contract.",
+      "fix_id": "F-033",
+      "issue_ids": [
+        "I-033"
+      ],
+      "round": 1,
+      "severity": "P1",
+      "started_at": "2026-07-14 18:50:58",
+      "status": "done",
+      "task_ids": [
+        "T-010"
+      ],
+      "title": "Agent eval is direct offline API harness, not new-remember-fresh-resume-recall-cite workflow",
+      "unit_ids": [
+        "U-010"
+      ]
+    },
+    {
+      "completed_at": "2026-07-14 19:32:13",
+      "created_at": "2026-07-14 17:54:38",
+      "evidence": "deterministic eval materializes 100 records across active shared/local/archived/superseded coverage and 0/1/2 metadata.",
+      "fix_id": "F-034",
+      "issue_ids": [
+        "I-034"
+      ],
+      "round": 1,
+      "severity": "P1",
+      "started_at": "2026-07-14 18:50:58",
+      "status": "done",
+      "task_ids": [
+        "T-010"
+      ],
+      "title": "deterministic fixtures omit local/archived/superseded and relevance 0/1 cases",
+      "unit_ids": [
+        "U-010"
+      ]
+    },
+    {
+      "completed_at": "2026-07-14 19:32:14",
+      "created_at": "2026-07-14 17:54:38",
+      "evidence": "benchmark reports canonical metrics, bytes, cold/warm timings and Python/OS/CPU metadata.",
+      "fix_id": "F-035",
+      "issue_ids": [
+        "I-035"
+      ],
+      "round": 1,
+      "severity": "P2",
+      "started_at": "2026-07-14 18:50:58",
+      "status": "done",
+      "task_ids": [
+        "T-010"
+      ],
+      "title": "benchmark lacks specified canonical metrics and environment metadata",
+      "unit_ids": [
+        "U-010"
+      ]
+    },
+    {
+      "completed_at": "2026-07-14 19:32:16",
+      "created_at": "2026-07-14 17:54:38",
+      "evidence": "separate-process CAS test passed; symlink tests are explicitly skipped only when Windows privilege is unavailable.",
+      "fix_id": "F-036",
+      "issue_ids": [
+        "I-036"
+      ],
+      "round": 1,
+      "severity": "P2",
+      "started_at": "2026-07-14 18:50:58",
+      "status": "done",
+      "task_ids": [
+        "T-010"
+      ],
+      "title": "symlink and process/Unix security verification is missing",
+      "unit_ids": [
+        "U-010"
+      ]
+    },
+    {
+      "completed_at": "2026-07-14 19:32:17",
+      "created_at": "2026-07-14 17:54:38",
+      "evidence": "orchestrator evidence documentation now uses stable memory.md#nm_<uuid4> locators.",
+      "fix_id": "F-037",
+      "issue_ids": [
+        "I-037"
+      ],
+      "round": 1,
+      "severity": "P2",
+      "started_at": "2026-07-14 18:50:58",
+      "status": "done",
+      "task_ids": [
+        "T-010"
+      ],
+      "title": "orchestrator documentation still uses title locator",
+      "unit_ids": [
+        "U-010"
+      ]
+    },
+    {
+      "completed_at": "2026-07-14 19:32:18",
+      "created_at": "2026-07-14 18:49:33",
+      "evidence": "local migration refuses unignored .nature-memory.bak before writing; regression test passed.",
+      "fix_id": "F-038",
+      "issue_ids": [
+        "I-038"
+      ],
+      "round": 1,
+      "severity": "P1",
+      "started_at": "2026-07-14 18:50:58",
+      "status": "done",
+      "task_ids": [
+        "T-008"
+      ],
+      "title": "local migration backup can leak into Git",
+      "unit_ids": [
+        "U-008"
+      ]
+    }
+  ],
+  "full_fix_rounds": 3,
+  "issues": [
+    {
+      "agent_id": "n/a",
+      "created_at": "2026-07-14 17:54:35",
+      "evidence": "First-wave U-001 temporary repro; plugins/nature-workflow/scripts/nature_memory.py command_memory_touch around lines 2049-2074; requirements AC-009.3 and design MCP compatibility contract.",
+      "fix_id": "F-001",
+      "issue_id": "I-001",
+      "round": 1,
+      "severity": "P1",
+      "status": "fixed",
+      "task_ids": [
+        "T-001"
+      ],
+      "title": "touch compatibility does not support stable IDs/legacy aliases and can break metadata adjacency",
+      "unit_id": "U-001"
+    },
+    {
+      "agent_id": "n/a",
+      "created_at": "2026-07-14 17:54:35",
+      "evidence": "First-wave U-001 temporary repro; nature_memory.py _find_stable_entry and command_memory_show around lines 1347-1353 and 1757-1780; requirements AC-009.1.",
+      "fix_id": "F-002",
+      "issue_id": "I-002",
+      "round": 1,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-001"
+      ],
+      "title": "show cannot resolve legacy aliases or title-only entries",
+      "unit_id": "U-001"
+    },
+    {
+      "agent_id": "n/a",
+      "created_at": "2026-07-14 17:54:35",
+      "evidence": "First-wave U-002 path probe; nature_memory.py touch/list/check/index paths around lines 1954-2027, 2044-2074, 2151-2157 versus resolve_memory_path lines 564-593.",
+      "fix_id": "F-003",
+      "issue_id": "I-003",
+      "round": 1,
+      "severity": "P1",
+      "status": "fixed",
+      "task_ids": [
+        "T-002"
+      ],
+      "title": "read compatibility commands bypass resolved containment and can follow memory symlinks",
+      "unit_id": "U-002"
+    },
+    {
+      "agent_id": "n/a",
+      "created_at": "2026-07-14 17:54:35",
+      "evidence": "First-wave U-002 local race/symlink probe; nature_memory.py remember/migrate/forget lock ordering around 1055-1057, 1223-1224, 1370-1373 and check_local_scope.",
+      "fix_id": "F-004",
+      "issue_id": "I-004",
+      "round": 1,
+      "severity": "P1",
+      "status": "fixed",
+      "task_ids": [
+        "T-002"
+      ],
+      "title": "local Git proof is outside workflow lock and resolves target rather than requested path",
+      "unit_id": "U-002"
+    },
+    {
+      "agent_id": "n/a",
+      "created_at": "2026-07-14 17:54:35",
+      "evidence": "First-wave U-002 probe with risk-based design; nature_memory.py secret guard around lines 719-727.",
+      "fix_id": "F-005",
+      "issue_id": "I-005",
+      "round": 1,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-002"
+      ],
+      "title": "known secret prefix substring matching rejects ordinary prose",
+      "unit_id": "U-002"
+    },
+    {
+      "agent_id": "n/a",
+      "created_at": "2026-07-14 17:54:35",
+      "evidence": "First-wave U-002 response probe; _scope_diagnostic lines 596-604 and _mutation_error lines 902-911; requirements NFR-010.",
+      "fix_id": "F-006",
+      "issue_id": "I-006",
+      "round": 1,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-002"
+      ],
+      "title": "local scope diagnostics omit actionable repair and scope context",
+      "unit_id": "U-002"
+    },
+    {
+      "agent_id": "n/a",
+      "created_at": "2026-07-14 17:54:35",
+      "evidence": "First-wave U-003 concurrent-create probe; nature_memory.py lock initialization around lines 785-788 and remember error boundary around 1123-1124.",
+      "fix_id": "F-007",
+      "issue_id": "I-007",
+      "round": 1,
+      "severity": "P1",
+      "status": "fixed",
+      "task_ids": [
+        "T-003"
+      ],
+      "title": "first Windows lock initialization can raise uncaught PermissionError",
+      "unit_id": "U-003"
+    },
+    {
+      "agent_id": "n/a",
+      "created_at": "2026-07-14 17:54:36",
+      "evidence": "First-wave U-003 external rewrite probe; nature_memory.py atomic replacement around 867-874; requirements AC-004.1.",
+      "fix_id": "F-008",
+      "issue_id": "I-008",
+      "round": 1,
+      "severity": "P1",
+      "status": "fixed",
+      "task_ids": [
+        "T-003"
+      ],
+      "title": "file CAS has a lock-outside TOCTOU overwrite window",
+      "unit_id": "U-003"
+    },
+    {
+      "agent_id": "n/a",
+      "created_at": "2026-07-14 17:54:36",
+      "evidence": "First-wave U-003 stale update response; nature_memory.py 1091-1093 and _mutation_error.",
+      "fix_id": "F-009",
+      "issue_id": "I-009",
+      "round": 1,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-003"
+      ],
+      "title": "ETag conflict response omits current entry/file ETags",
+      "unit_id": "U-003"
+    },
+    {
+      "agent_id": "n/a",
+      "created_at": "2026-07-14 17:54:36",
+      "evidence": "First-wave U-003 audit; test_nature_memory_concurrency.py uses ThreadPoolExecutor only while implementation has msvcrt/fcntl branches.",
+      "fix_id": "F-010",
+      "issue_id": "I-010",
+      "round": 1,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-003"
+      ],
+      "title": "concurrency verification lacks Unix and separate-process evidence",
+      "unit_id": "U-003"
+    },
+    {
+      "agent_id": "n/a",
+      "created_at": "2026-07-14 17:54:36",
+      "evidence": "First-wave U-004 temporary project repro; nature_memory.py metadata validation 381-386, 925-936 and remember 1062-1078.",
+      "fix_id": "F-011",
+      "issue_id": "I-011",
+      "round": 1,
+      "severity": "P1",
+      "status": "fixed",
+      "task_ids": [
+        "T-004"
+      ],
+      "title": "supersedes metadata accepts cross-workflow/scope IDs and lacks relationship validation",
+      "unit_id": "U-004"
+    },
+    {
+      "agent_id": "n/a",
+      "created_at": "2026-07-14 17:54:36",
+      "evidence": "First-wave U-004 response inspection; nature_memory.py 1767-1780; requirements AC-008.2.",
+      "fix_id": "F-012",
+      "issue_id": "I-012",
+      "round": 1,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-004"
+      ],
+      "title": "show omits scope/current path and successor locators",
+      "unit_id": "U-004"
+    },
+    {
+      "agent_id": "n/a",
+      "created_at": "2026-07-14 17:54:36",
+      "evidence": "First-wave U-004 and MCP test audit; test_nature_progress_server.py only remember/recall real calls.",
+      "fix_id": "F-013",
+      "issue_id": "I-013",
+      "round": 1,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-004"
+      ],
+      "title": "MCP lifecycle show/forget/supersede calls lack real regression coverage",
+      "unit_id": "U-004"
+    },
+    {
+      "agent_id": "n/a",
+      "created_at": "2026-07-14 17:54:36",
+      "evidence": "First-wave U-005 probe: consolidate plan/apply accepted one source and returned active_count=1, total_count=2; nature_memory.py 1462 and 1521.",
+      "fix_id": "F-014",
+      "issue_id": "I-014",
+      "round": 1,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-005"
+      ],
+      "title": "single-source consolidation leaves active count unchanged",
+      "unit_id": "U-005"
+    },
+    {
+      "agent_id": "n/a",
+      "created_at": "2026-07-14 17:54:36",
+      "evidence": "First-wave U-005 error probe; nature_memory.py hard budget around 995; requirements AC-006.2.",
+      "fix_id": "F-015",
+      "issue_id": "I-015",
+      "round": 1,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-005"
+      ],
+      "title": "hard-budget error omits manual backup/Git-reviewed maintenance guidance",
+      "unit_id": "U-005"
+    },
+    {
+      "agent_id": "n/a",
+      "created_at": "2026-07-14 17:54:36",
+      "evidence": "First-wave U-006 compatibility probe; nature_memory.py 2049-2063.",
+      "fix_id": "F-016",
+      "issue_id": "I-016",
+      "round": 1,
+      "severity": "P1",
+      "status": "fixed",
+      "task_ids": [
+        "T-006"
+      ],
+      "title": "touch does not support stable ID/alias and duplicate titles do not fail closed",
+      "unit_id": "U-006"
+    },
+    {
+      "agent_id": "n/a",
+      "created_at": "2026-07-14 17:54:36",
+      "evidence": "First-wave U-006 list comparison; nature_memory.py 1986-1993 returns null id for legacy.",
+      "fix_id": "F-017",
+      "issue_id": "I-017",
+      "round": 1,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-006"
+      ],
+      "title": "legacy list id field is not append-only compatible",
+      "unit_id": "U-006"
+    },
+    {
+      "agent_id": "n/a",
+      "created_at": "2026-07-14 17:54:36",
+      "evidence": "First-wave U-006 audit; nature_memory.py 2029-2034, 2075-2082, 2193-2202, 2217-2221 and MCP dispatch 539-546.",
+      "fix_id": "F-018",
+      "issue_id": "I-018",
+      "round": 1,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-006"
+      ],
+      "title": "legacy shim results lack structured deprecated diagnostics",
+      "unit_id": "U-006"
+    },
+    {
+      "agent_id": "n/a",
+      "created_at": "2026-07-14 17:54:37",
+      "evidence": "First-wave U-006 sentinel probe; nature_memory.py 2109-2122 and index error 2180-2190.",
+      "fix_id": "F-019",
+      "issue_id": "I-019",
+      "round": 1,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-006"
+      ],
+      "title": "malformed sentinel diagnostics omit marker positions",
+      "unit_id": "U-006"
+    },
+    {
+      "agent_id": "n/a",
+      "created_at": "2026-07-14 17:54:37",
+      "evidence": "First-wave U-006 test audit; tasks T-006 verification includes hook but no test executes assets/hooks/pre-commit-nature-memory.",
+      "fix_id": "F-020",
+      "issue_id": "I-020",
+      "round": 1,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-006"
+      ],
+      "title": "pre-commit hook behavior lacks execution regression evidence",
+      "unit_id": "U-006"
+    },
+    {
+      "agent_id": "n/a",
+      "created_at": "2026-07-14 17:54:37",
+      "evidence": "First-wave U-007 probe: 5000-character query returned 5274 bytes at default 4096 and 279 bytes at max_bytes=1; nature_memory.py 1734.",
+      "fix_id": "F-021",
+      "issue_id": "I-021",
+      "round": 1,
+      "severity": "P1",
+      "status": "fixed",
+      "task_ids": [
+        "T-007"
+      ],
+      "title": "recall fallback exceeds requested max_bytes",
+      "unit_id": "U-007"
+    },
+    {
+      "agent_id": "n/a",
+      "created_at": "2026-07-14 17:54:37",
+      "evidence": "First-wave U-007 adversarial ranking probe; nature_memory.py 1593-1607 additive scoring.",
+      "fix_id": "F-022",
+      "issue_id": "I-022",
+      "round": 1,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-007"
+      ],
+      "title": "exact phrase priority can lose to token-heavy title",
+      "unit_id": "U-007"
+    },
+    {
+      "agent_id": "n/a",
+      "created_at": "2026-07-14 17:54:37",
+      "evidence": "First-wave U-007 schema audit; nature_progress_server.py 247-260 and call_tool 558-563.",
+      "fix_id": "F-023",
+      "issue_id": "I-023",
+      "round": 1,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-007"
+      ],
+      "title": "MCP recall lacks explicit all_workflows read contract",
+      "unit_id": "U-007"
+    },
+    {
+      "agent_id": "n/a",
+      "created_at": "2026-07-14 17:54:37",
+      "evidence": "First-wave U-008 repro: missing workflow emitted invalid_workflow_dir with EXIT_CODE=0; nature_memory.py main 2316-2318.",
+      "fix_id": "F-024",
+      "issue_id": "I-024",
+      "round": 1,
+      "severity": "P1",
+      "status": "fixed",
+      "task_ids": [
+        "T-008"
+      ],
+      "title": "migration failures return CLI exit code 0",
+      "unit_id": "U-008"
+    },
+    {
+      "agent_id": "n/a",
+      "created_at": "2026-07-14 17:54:37",
+      "evidence": "First-wave U-008 all-mode repro; nature_memory.py 1292-1315.",
+      "fix_id": "F-025",
+      "issue_id": "I-025",
+      "round": 1,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-008"
+      ],
+      "title": "all migration loses completed workflow results after later failure",
+      "unit_id": "U-008"
+    },
+    {
+      "agent_id": "n/a",
+      "created_at": "2026-07-14 17:54:37",
+      "evidence": "First-wave U-008 scope probe; nature_memory.py 1288-1290.",
+      "fix_id": "F-026",
+      "issue_id": "I-026",
+      "round": 1,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-008"
+      ],
+      "title": "all local migration is unconditionally rejected",
+      "unit_id": "U-008"
+    },
+    {
+      "agent_id": "n/a",
+      "created_at": "2026-07-14 17:54:37",
+      "evidence": "First-wave U-008 malformed UTF-8 response; _mutation_error 902-911; NFR-010.",
+      "fix_id": "F-027",
+      "issue_id": "I-027",
+      "round": 1,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-008"
+      ],
+      "title": "migration errors omit workflow/scope/path/ETag context",
+      "unit_id": "U-008"
+    },
+    {
+      "agent_id": "n/a",
+      "created_at": "2026-07-14 17:54:37",
+      "evidence": "First-wave U-008 MCP test audit; test_nature_progress_server.py only tools/list, remember and recall.",
+      "fix_id": "F-028",
+      "issue_id": "I-028",
+      "round": 1,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-008"
+      ],
+      "title": "MCP migration dry-run/all/failure calls lack regression coverage",
+      "unit_id": "U-008"
+    },
+    {
+      "agent_id": "n/a",
+      "created_at": "2026-07-14 17:54:38",
+      "evidence": "First-wave U-009 evidence=bad+control-character repro; nature_context.py 128-133.",
+      "fix_id": "F-029",
+      "issue_id": "I-029",
+      "round": 1,
+      "severity": "P1",
+      "status": "fixed",
+      "task_ids": [
+        "T-009"
+      ],
+      "title": "memory review can lose structured error and misclassify partial/unavailable",
+      "unit_id": "U-009"
+    },
+    {
+      "agent_id": "n/a",
+      "created_at": "2026-07-14 17:54:38",
+      "evidence": "First-wave U-009 JSON-RPC probe; nature_progress_server.py schema required fields 243,373,392,410 versus _project_root fallback 474-475.",
+      "fix_id": "F-030",
+      "issue_id": "I-030",
+      "round": 1,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-009"
+      ],
+      "title": "required project_root is silently defaulted to server base directory",
+      "unit_id": "U-009"
+    },
+    {
+      "agent_id": "n/a",
+      "created_at": "2026-07-14 17:54:38",
+      "evidence": "First-wave U-009 test audit; test_nature_progress_server.py 74-164.",
+      "fix_id": "F-031",
+      "issue_id": "I-031",
+      "round": 1,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-009"
+      ],
+      "title": "facade/old-tool/recovery JSON-RPC coverage is incomplete",
+      "unit_id": "U-009"
+    },
+    {
+      "agent_id": "n/a",
+      "created_at": "2026-07-14 17:54:38",
+      "evidence": "First-wave U-010 comparison: design.md and requirements.md still say review/unapproved while spec.yml/progress.md say approved/completed.",
+      "fix_id": "F-032",
+      "issue_id": "I-032",
+      "round": 1,
+      "severity": "P1",
+      "status": "fixed",
+      "task_ids": [
+        "T-010"
+      ],
+      "title": "approved spec metadata contradicts frozen approval state",
+      "unit_id": "U-010"
+    },
+    {
+      "agent_id": "n/a",
+      "created_at": "2026-07-14 17:54:38",
+      "evidence": "First-wave U-010 audit; evals/nature_memory_eval.py 150-185 and evals/README.md:22.",
+      "fix_id": "F-033",
+      "issue_id": "I-033",
+      "round": 1,
+      "severity": "P1",
+      "status": "fixed",
+      "task_ids": [
+        "T-010"
+      ],
+      "title": "Agent eval is direct offline API harness, not new-remember-fresh-resume-recall-cite workflow",
+      "unit_id": "U-010"
+    },
+    {
+      "agent_id": "n/a",
+      "created_at": "2026-07-14 17:54:38",
+      "evidence": "First-wave U-010 fixture audit; nature_memory_eval.py 31-53 and recall_cases.json 5-146.",
+      "fix_id": "F-034",
+      "issue_id": "I-034",
+      "round": 1,
+      "severity": "P1",
+      "status": "fixed",
+      "task_ids": [
+        "T-010"
+      ],
+      "title": "deterministic fixtures omit local/archived/superseded and relevance 0/1 cases",
+      "unit_id": "U-010"
+    },
+    {
+      "agent_id": "n/a",
+      "created_at": "2026-07-14 17:54:38",
+      "evidence": "First-wave U-010 benchmark audit; nature_memory_eval.py 96-111; design.md performance evidence requirements.",
+      "fix_id": "F-035",
+      "issue_id": "I-035",
+      "round": 1,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-010"
+      ],
+      "title": "benchmark lacks specified canonical metrics and environment metadata",
+      "unit_id": "U-010"
+    },
+    {
+      "agent_id": "n/a",
+      "created_at": "2026-07-14 17:54:38",
+      "evidence": "First-wave U-010 test audit: 99 tests pass with 2 symlink skips; concurrency uses threads only.",
+      "fix_id": "F-036",
+      "issue_id": "I-036",
+      "round": 1,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-010"
+      ],
+      "title": "symlink and process/Unix security verification is missing",
+      "unit_id": "U-010"
+    },
+    {
+      "agent_id": "n/a",
+      "created_at": "2026-07-14 17:54:38",
+      "evidence": "First-wave U-010 doc consistency audit; plugins/nature-workflow/skills/nature-orchestrator/static/core/workflow.md:67 versus SKILL.md and redesign doc nm locator.",
+      "fix_id": "F-037",
+      "issue_id": "I-037",
+      "round": 1,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-010"
+      ],
+      "title": "orchestrator documentation still uses title locator",
+      "unit_id": "U-010"
+    },
+    {
+      "agent_id": "n/a",
+      "created_at": "2026-07-14 18:49:33",
+      "evidence": "Adversarial U-008 repro: memory.local.md.nature-memory.bak is created without matching local ignore protection; nature_memory.py backup paths around 1127-1128 and 1255-1257; NFR-002.",
+      "fix_id": "F-038",
+      "issue_id": "I-038",
+      "round": 1,
+      "severity": "P1",
+      "status": "fixed",
+      "task_ids": [
+        "T-008"
+      ],
+      "title": "local migration backup can leak into Git",
+      "unit_id": "U-008"
+    }
+  ],
+  "max_rounds": 6,
+  "notes": [],
+  "original_task_digest": "bb3f289c587d",
+  "original_task_ids": [
+    "T-001",
+    "T-002",
+    "T-003",
+    "T-004",
+    "T-005",
+    "T-006",
+    "T-007",
+    "T-008",
+    "T-009",
+    "T-010",
+    "T-011",
+    "T-012"
+  ],
+  "policy": "rounds 1-3 fix all actionable issues; round 4+ auto-fix P0-P2 only",
+  "review_units": [
+    {
+      "adversarial_status": "issues",
+      "last_result": "ACTIONABLE_ISSUES",
+      "phase": "阶段 1：Canonical 数据与事务边界",
+      "review_status": "issues",
+      "round_started": null,
+      "status": "issues",
+      "task_ids": [
+        "T-001"
+      ],
+      "unit_id": "U-001"
+    },
+    {
+      "adversarial_status": "issues",
+      "last_result": "ACTIONABLE_ISSUES",
+      "phase": "阶段 1：Canonical 数据与事务边界",
+      "review_status": "issues",
+      "round_started": null,
+      "status": "issues",
+      "task_ids": [
+        "T-002"
+      ],
+      "unit_id": "U-002"
+    },
+    {
+      "adversarial_status": "issues",
+      "last_result": "ACTIONABLE_ISSUES",
+      "phase": "阶段 1：Canonical 数据与事务边界",
+      "review_status": "issues",
+      "round_started": null,
+      "status": "issues",
+      "task_ids": [
+        "T-003"
+      ],
+      "unit_id": "U-003"
+    },
+    {
+      "adversarial_status": "issues",
+      "last_result": "ACTIONABLE_ISSUES",
+      "phase": "阶段 1：Canonical 数据与事务边界",
+      "review_status": "issues",
+      "round_started": null,
+      "status": "issues",
+      "task_ids": [
+        "T-004"
+      ],
+      "unit_id": "U-004"
+    },
+    {
+      "adversarial_status": "issues",
+      "last_result": "ACTIONABLE_ISSUES",
+      "phase": "阶段 1：Canonical 数据与事务边界",
+      "review_status": "issues",
+      "round_started": null,
+      "status": "issues",
+      "task_ids": [
+        "T-005"
+      ],
+      "unit_id": "U-005"
+    },
+    {
+      "adversarial_status": "issues",
+      "last_result": "ACTIONABLE_ISSUES",
+      "phase": "阶段 2：发现、召回、迁移与工作流接入",
+      "review_status": "issues",
+      "round_started": null,
+      "status": "issues",
+      "task_ids": [
+        "T-006"
+      ],
+      "unit_id": "U-006"
+    },
+    {
+      "adversarial_status": "issues",
+      "last_result": "ACTIONABLE_ISSUES",
+      "phase": "阶段 2：发现、召回、迁移与工作流接入",
+      "review_status": "issues",
+      "round_started": null,
+      "status": "issues",
+      "task_ids": [
+        "T-007"
+      ],
+      "unit_id": "U-007"
+    },
+    {
+      "adversarial_status": "issues",
+      "last_result": "ACTIONABLE_ISSUES",
+      "phase": "阶段 2：发现、召回、迁移与工作流接入",
+      "review_status": "issues",
+      "round_started": null,
+      "status": "issues",
+      "task_ids": [
+        "T-008"
+      ],
+      "unit_id": "U-008"
+    },
+    {
+      "adversarial_status": "issues",
+      "last_result": "ACTIONABLE_ISSUES",
+      "phase": "阶段 2：发现、召回、迁移与工作流接入",
+      "review_status": "issues",
+      "round_started": null,
+      "status": "issues",
+      "task_ids": [
+        "T-009"
+      ],
+      "unit_id": "U-009"
+    },
+    {
+      "adversarial_status": "issues",
+      "last_result": "ACTIONABLE_ISSUES",
+      "phase": "阶段 3：对抗验证、Agent Eval 与发布收尾",
+      "review_status": "issues",
+      "round_started": null,
+      "status": "issues",
+      "task_ids": [
+        "T-010",
+        "T-011",
+        "T-012"
+      ],
+      "unit_id": "U-010"
+    }
+  ],
+  "round": 1,
+  "schema_version": 1,
+  "status": "fixes-complete",
+  "task_count": 12,
+  "updated_at": "2026-07-14 19:32:31",
+  "workflow": "design-first"
+}

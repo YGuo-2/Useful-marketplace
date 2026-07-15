@@ -2,25 +2,25 @@
 
 > **Workflow:** design-first
 > **Mode:** strict
-> **Status:** Completed
+> **Status:** Approved
 > **Current Task:** n/a
 > **Approval:** approved
-> **Last Checkpoint:** 2026-07-14 09:36:21
+> **Last Checkpoint:** 2026-07-14 19:13:54
 > **Branch:** explore/nature-memory-redesign
-> **Last Known Commit:** d6ec024
+> **Last Known Commit:** a337821
 
 ## Resume Summary
 - Goal: 同步文档、hook、manifest 并执行发布前全量验证
 - Approved specs: design.md, requirements.md, tasks.md
 - Current task: n/a
-- Next safe action: Run pre-acceptance, then final acceptance.
+- Next safe action: Run spec_status, then continue the current task.
 - Blockers: n/a
 
 ## Active Task State
 - Task ID: n/a
-- Status: done
+- Status: pending
 - Started at: n/a
-- Verification needed: 99 Nature unittest passed (2 Windows symlink skips); compileall passed; deterministic eval 5 workflows/80 records/50 queries Recall@3=1.0 MRR=1.0 nDCG@3=1.0 no-hit FPR=0.0; agent eval 20 scenarios x 3 fresh processes write precision=1.0 write recall=1.0 locator=100% security failures=0; MCP JSON-RPC smoke passed; fixture and manifest JSON validation passed; spec validator/resume and git diff --check run
+- Verification needed: 用户确认‘我已审批，请立即执行’，并继续执行 acceptance fixes。
 - Files expected to change: `README.md`, `docs/nature-memory-redesign.md`, `plugins/nature-workflow/skills/nature-workflow/SKILL.md`, `plugins/nature-workflow/skills/nature-orchestrator/static/core/workflow.md`, `plugins/nature-workflow/assets/hooks/pre-commit-nature-memory`, `plugins/nature-workflow/.mcp.json`, `plugins/nature-workflow/.codex-plugin/plugin.json`, `.agents/plugins/marketplace.json`
 
 ## Completed Work Log
@@ -41,4 +41,4 @@
 | T-012 | 2026-07-14 09:36:21 | d6ec024 | 99 Nature unittest passed (2 Windows symlink skips); compileall passed; deterministic eval 5 workflows/80 records/50 queries Recall@3=1.0 MRR=1.0 nDCG@3=1.0 no-hit FPR=0.0; agent eval 20 scenarios x 3 fresh processes write precision=1.0 write recall=1.0 locator=100% security failures=0; MCP JSON-RPC smoke passed; fixture and manifest JSON validation passed; spec validator/resume and git diff --check run | 同步 README、docs/nature-memory-redesign.md、Nature skill、orchestrator、hook、MCP version/config、plugin manifest 和 marketplace 到 schema-v1 / 0.2.0；离线 fixture eval 不声明 connected model evaluation。 |
 
 ## Recovery Notes
-- Completed T-012
+- Approved specs and froze baseline: 用户确认‘我已审批，请立即执行’，并继续执行 acceptance fixes。

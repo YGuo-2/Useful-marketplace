@@ -7,6 +7,7 @@ import sys
 import tempfile
 import unittest
 from concurrent.futures import ThreadPoolExecutor
+import multiprocessing
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -28,6 +29,22 @@ def create(root: Path, wf: Path, title: str) -> dict:
     if not result["ok"]:
         raise AssertionError(result)
     return result
+
+
+def process_update(root_text: str, workflow_text: str, entry_id: str, etag: str, title: str, output) -> None:
+    root = Path(root_text)
+    workflow_dir = Path(workflow_text)
+    result = memory.command_memory_remember(
+        root,
+        workflow_dir,
+        "shared",
+        title,
+        title,
+        {"kind": "decision"},
+        entry_id=entry_id,
+        expected_etag=etag,
+    )
+    output.put(result)
 
 
 class MemoryConcurrencyTests(unittest.TestCase):
@@ -105,6 +122,29 @@ class MemoryConcurrencyTests(unittest.TestCase):
             self.assertTrue(all(result["ok"] for result in results), results)
             self.assertEqual(len(memory.parse_memory((first_wf / "memory.md").read_text(encoding="utf-8"))), 1)
             self.assertEqual(len(memory.parse_memory((second_wf / "memory.md").read_text(encoding="utf-8"))), 1)
+
+    def test_separate_processes_share_the_same_cas_boundary(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            wf = workflow(root, "process")
+            initial = create(root, wf, "same process")
+            context = multiprocessing.get_context("spawn")
+            queue = context.Queue()
+            processes = [
+                context.Process(
+                    target=process_update,
+                    args=(str(root), str(wf), initial["entry_id"], initial["etag"], title, queue),
+                )
+                for title in ("process winner one", "process winner two")
+            ]
+            for process in processes:
+                process.start()
+            results = [queue.get(timeout=30) for _ in processes]
+            for process in processes:
+                process.join(timeout=30)
+                self.assertEqual(process.exitcode, 0)
+            self.assertEqual(sum(item.get("ok", False) for item in results), 1, results)
+            self.assertEqual(sum(item.get("error", {}).get("code") == "etag_conflict" for item in results), 1, results)
 
 
 if __name__ == "__main__":

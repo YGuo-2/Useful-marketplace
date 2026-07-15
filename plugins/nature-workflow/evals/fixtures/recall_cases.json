@@ -1,6 +1,7 @@
 {
   "version": 1,
   "records_per_workflow": 16,
+  "coverage_contract": {"active_shared": 80, "local": 10, "archived_or_superseded": 10, "query_slices": ["exact", "partial", "mixed", "no_hit"], "relevance_levels": [0, 1, 2]},
   "workflows": [
     {"workflow": "wf-01", "records": [
       {"id": "nm_00000000000040008000000000000001", "title": "wf-01 decision 01", "body": "wf-01 evidence 01"},

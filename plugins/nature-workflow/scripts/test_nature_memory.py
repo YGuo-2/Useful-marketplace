@@ -575,7 +575,28 @@ class NatureMemoryTests(unittest.TestCase):
 
             self.assertFalse(result["ok"])
             self.assertEqual(result["error"]["code"], "hard_file_budget")
+            self.assertIn("manual backup", result["error"]["recovery"])
             self.assertFalse((workflow / "memory.md").exists())
+
+    def test_supersedes_must_reference_same_workflow(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            first = make_workflow(repo, "first")
+            second = make_workflow(repo, "second")
+            source = nature_memory.command_memory_remember(
+                repo, first, "shared", "source", "body", {"kind": "decision"}
+            )
+            result = nature_memory.command_memory_remember(
+                repo,
+                second,
+                "shared",
+                "cross-boundary",
+                "body",
+                {"kind": "decision", "supersedes": [source["entry_id"]]},
+            )
+            self.assertFalse(result["ok"])
+            self.assertEqual(result["error"]["code"], "cross_boundary_supersedes")
+            self.assertFalse((second / "memory.md").exists())
 
     def test_consolidate_plan_is_deterministic_and_apply_is_full_cas(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -723,6 +744,19 @@ class NatureMemoryTests(unittest.TestCase):
             self.assertEqual(applied["error"]["code"], "ambiguous_legacy_ref")
             self.assertEqual(path.read_bytes(), before)
 
+    def test_local_migration_protects_backup_path(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            workflow = make_workflow(repo)
+            subprocess.run(["git", "init", str(repo)], capture_output=True, check=True)
+            (repo / ".gitignore").write_text("memory.local.md\n", encoding="utf-8")
+            path = workflow / "memory.local.md"
+            path.write_text("## M1 · local\nprivate\n", encoding="utf-8")
+            result = nature_memory.command_memory_migrate(repo, workflow, "local")
+            self.assertFalse(result["ok"])
+            self.assertEqual(result["error"]["code"], "local_backup_not_ignored")
+            self.assertFalse((workflow / "memory.local.md.nature-memory.bak").exists())
+
     def test_migrate_all_is_per_workflow_and_recoverable(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp)
@@ -858,6 +892,32 @@ class NatureMemoryTests(unittest.TestCase):
 
             self.assertTrue(result["ok"])
             self.assertNotIn("2000-01-01T00:00:00Z", text)
+
+    def test_touch_by_stable_id_keeps_metadata_adjacent(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            workflow = make_workflow(repo)
+            created = nature_memory.command_memory_remember(
+                repo, workflow, "shared", "Canonical", "body", {"kind": "decision"}
+            )
+            result = nature_memory.command_memory_touch(None, None, created["entry_id"], base=repo)
+            lines = (workflow / "memory.md").read_text(encoding="utf-8").splitlines()
+            self.assertTrue(result["ok"], result)
+            self.assertTrue(lines[1].startswith(nature_memory.MEMORY_METADATA_PREFIX))
+            self.assertTrue(lines[2].startswith("<!-- updated:"))
+            self.assertEqual(nature_memory.parse_memory("\n".join(lines) + "\n")[0].entry_id, created["entry_id"])
+
+    def test_show_legacy_alias_returns_legacy_ref_without_fabricated_locator(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            workflow = make_workflow(repo)
+            (workflow / "memory.md").write_text("## M3 · 旧决策\n旧正文\n", encoding="utf-8")
+            result = nature_memory.command_memory_show(repo, workflow, "shared", "M3")
+            self.assertTrue(result["ok"], result)
+            self.assertIsNone(result["entry"]["id"])
+            self.assertIsNone(result["entry"]["locator"])
+            self.assertTrue(result["entry"]["legacy_ref"])
+            self.assertTrue(result["deprecated"])
 
     def test_touch_unknown_title_raises(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

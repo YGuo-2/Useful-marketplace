@@ -250,6 +250,19 @@ class StateEngineTests(unittest.TestCase):
         self.assertEqual(result["progress"]["resume_state"], "ready")
         self.assertEqual(result["memory_context"]["status"], "unavailable")
 
+    def test_resume_preserves_structured_memory_error_and_requires_project_root(self) -> None:
+        wf = self.make(["T1: collect evidence"])
+        with patch.object(
+            nature_memory,
+            "command_memory_recall",
+            return_value={"ok": False, "error": {"code": "invalid_utf8", "detail": "memory file must be valid UTF-8", "retryable": False}},
+        ):
+            result = nc.resume_with_memory(project_root=self.base, workflow_dir=wf)
+        self.assertEqual(result["memory_context"]["status"], "unavailable")
+        self.assertEqual(result["memory_context"]["error"]["code"], "invalid_utf8")
+        with self.assertRaises(np.NatureProgressError):
+            nc.resume_with_memory(workflow_dir=wf)
+
     def test_complete_and_block_commit_progress_before_memory_review_failure(self) -> None:
         complete_wf = self.make(["T1: complete"])
         np.command_start(None, complete_wf, "T1", base=self.base)

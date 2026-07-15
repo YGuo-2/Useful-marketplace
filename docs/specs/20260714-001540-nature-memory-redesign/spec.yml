@@ -4,10 +4,10 @@ mode: strict
 approval: approved
 risk_level: high
 current_task: n/a
-last_checkpoint: 2026-07-14 09:36:21
+last_checkpoint: 2026-07-14 19:13:55
 artifacts: design.md, requirements.md, tasks.md, progress.md, spec.yml
 requirements: AC-001.1, AC-001.2, AC-001.3, AC-002.1, AC-002.2, AC-003.1, AC-003.2, AC-004.1, AC-004.2, AC-004.3, AC-005.1, AC-005.2, AC-005.3, AC-006.1, AC-006.2, AC-006.3, AC-007.1, AC-007.2, AC-007.3, AC-008.1, AC-008.2, AC-009.1, AC-009.2, AC-009.3, AC-010.1, AC-010.2, AC-010.3, NFR-001, NFR-002, NFR-003, NFR-004, NFR-005, NFR-006, NFR-007, NFR-008, NFR-009, NFR-010, NFR-011, NFR-012, REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-006, REQ-007, REQ-008, REQ-009, REQ-010
 task_ids: T-001, T-002, T-003, T-004, T-005, T-006, T-007, T-008, T-009, T-010, T-011, T-012
 task_graph: T-001, T-001->T-002, T-002->T-003, T-003->T-004, T-004->T-005, T-002->T-006, T-004->T-007, T-005->T-008, T-006->T-008, T-007->T-008, T-008->T-009, T-009->T-010, T-009->T-011, T-010->T-012, T-011->T-012
-artifact_hashes: design.md=79a4fb76f1b2, requirements.md=f0b2d1e21d00
+artifact_hashes: design.md=4257787ec141, requirements.md=d93a4e4c6321
 task_plan_hash: b62c7c8860f5

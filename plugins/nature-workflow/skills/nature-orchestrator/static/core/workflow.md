@@ -64,7 +64,7 @@ Surface where the user is by echoing the engine, not by narrating from memory:
 - Products land under the workflow directory the engine already manages
   (`docs/nature-workflows/<workflow>/`) or a path the user chose; record that path
   as the step's `evidence`.
-- Evidence is a locator (a file path, or `memory.md#<title>` style pointer), so a
+- Evidence is a locator (a file path, or a stable `memory.md#nm_<uuid4>` pointer), so a
   resumed session can trace every completed step to its product. This replaces the
   old `_交付结果/00-20` folder convention.
 

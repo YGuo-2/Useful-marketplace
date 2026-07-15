@@ -12,7 +12,9 @@ import nature_progress as progress
 
 
 def _project_root(project_root: str | Path | None) -> Path:
-    return (Path(project_root).expanduser() if project_root else progress.base_dir()).resolve(strict=True)
+    if project_root is None or not str(project_root).strip():
+        raise progress.NatureProgressError("project_root is required")
+    return Path(project_root).expanduser().resolve(strict=True)
 
 
 def _query_from_progress(summary: dict[str, Any], fallback: str = "nature workflow") -> str:
@@ -29,14 +31,14 @@ def _query_from_progress(summary: dict[str, Any], fallback: str = "nature workfl
     return " ".join(parts) or fallback
 
 
-def _memory_failure(code: str = "memory_review_unavailable") -> dict[str, Any]:
+def _memory_failure(error: dict[str, Any] | None = None) -> dict[str, Any]:
+    payload = dict(error or {})
+    payload.setdefault("code", "memory_review_unavailable")
+    payload.setdefault("retryable", False)
+    payload.setdefault("detail", "memory context could not be loaded; progress state remains authoritative")
     return {
         "status": "unavailable",
-        "error": {
-            "code": code,
-            "retryable": False,
-            "detail": "memory context could not be loaded; progress state remains authoritative",
-        },
+        "error": payload,
     }
 
 
@@ -63,7 +65,7 @@ def _load_memory_context(
         file_etag=file_etag,
     )
     if not recall.get("ok"):
-        return _memory_failure(recall.get("error", {}).get("code", "memory_context_unavailable"))
+        return _memory_failure(recall.get("error"))
     status = "partial" if any(item.get("severity") == memory.SEVERITY_ERROR for item in document.diagnostics) else "available"
     return {
         "status": status,
@@ -97,6 +99,8 @@ def resume_with_memory(
             top_k=top_k,
             max_bytes=max_bytes,
         )
+    except progress.NatureProgressError as exc:
+        context = _memory_failure({"code": "memory_context_unavailable", "detail": str(exc), "retryable": False})
     except Exception:
         context = _memory_failure()
     return {
@@ -131,6 +135,8 @@ def _review_after_progress(
             "candidates": context.get("results", []),
             "diagnostics": context.get("diagnostics", []),
         }
+    except progress.NatureProgressError as exc:
+        return _memory_failure({"code": "memory_review_unavailable", "detail": str(exc), "retryable": False})
     except Exception:
         return _memory_failure()
 

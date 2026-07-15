@@ -81,6 +81,16 @@ SEVERITY_WARNING = "warning"
 SUPPORTED_SCHEMA = 1
 SECRET_RULE_VERSION = "v1"
 KNOWN_SECRET_PREFIXES = ("sk-", "ghp_", "github_pat_", "xoxb-", "xoxp-", "AKIA", "AIza")
+KNOWN_SECRET_RE = re.compile(
+    r"(?<![A-Za-z0-9])(?:"
+    r"sk-[A-Za-z0-9_-]{8,}|"
+    r"ghp_[A-Za-z0-9]{16,}|"
+    r"github_pat_[A-Za-z0-9_]{16,}|"
+    r"xox[bp]-[A-Za-z0-9-]{12,}|"
+    r"AKIA[0-9A-Z]{12,}|"
+    r"AIza[0-9A-Za-z_-]{16,}"
+    r")"
+)
 PRIVATE_KEY_RE = re.compile(r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----")
 SUSPECT_SECRET_RE = re.compile(
     r"(?i)\b(?:api[_ -]?key|access[_ -]?token|password|secret)\b\s*[:=]\s*[^\s]{16,}"
@@ -91,6 +101,7 @@ HARD_FILE_BYTES = 256 * 1024
 RECALL_DEFAULT_TOP_K = 3
 RECALL_MAX_TOP_K = 5
 RECALL_MAX_BYTES = 4096
+RECALL_MIN_BYTES = 256
 ENTRY_KINDS = {"decision", "fact", "constraint", "preference", "hypothesis", "procedure"}
 LIFECYCLES = {"active", "superseded", "archived"}
 PROVENANCES = {"user", "workflow", "paper", "external", "agent"}
@@ -124,10 +135,18 @@ class ParsedMemory:
 class MemoryBoundaryError(NatureProgressError):
     """Stable, non-content-bearing error for path, privacy, or input boundaries."""
 
-    def __init__(self, code: str, detail: str, *, retryable: bool = False) -> None:
+    def __init__(
+        self,
+        code: str,
+        detail: str,
+        *,
+        retryable: bool = False,
+        context: dict[str, Any] | None = None,
+    ) -> None:
         self.code = code
         self.detail = detail
         self.retryable = retryable
+        self.context = dict(context or {})
         super().__init__(f"{code}: {detail}")
 
 
@@ -578,12 +597,16 @@ def resolve_memory_path(
         _assert_within(workflow, root, "workflow directory")
     except NatureProgressError as exc:
         raise MemoryBoundaryError("path_outside_project", "workflow_dir must stay within project_root") from exc
-    if workflow.exists() and not workflow.is_dir():
+    if not workflow.exists():
+        raise MemoryBoundaryError("invalid_workflow_dir", "workflow directory must exist")
+    if not workflow.is_dir():
         raise MemoryBoundaryError("invalid_workflow_dir", "workflow_dir must be a directory")
     filename = MEMORY_FILE if scope == "shared" else LOCAL_MEMORY_FILE if scope == "local" else None
     if filename is None:
         raise MemoryBoundaryError("invalid_scope", "scope must be shared or local")
     path = workflow / filename
+    if path.is_symlink():
+        raise MemoryBoundaryError("path_symlink_escape", "memory path must not be a symlink")
     resolved_path = path.resolve(strict=False)
     try:
         _assert_within(resolved_path, root, "memory path")
@@ -593,8 +616,15 @@ def resolve_memory_path(
     return resolved_path
 
 
-def _scope_diagnostic(code: str, detail: str, *, retryable: bool = False) -> dict[str, Any]:
-    return {
+def _scope_diagnostic(
+    code: str,
+    detail: str,
+    *,
+    retryable: bool = False,
+    memory_path: str | None = None,
+    repair: str | None = None,
+) -> dict[str, Any]:
+    result: dict[str, Any] = {
         "ok": False,
         "code": code,
         "rule": code,
@@ -602,16 +632,34 @@ def _scope_diagnostic(code: str, detail: str, *, retryable: bool = False) -> dic
         "retryable": retryable,
         "scope": "local",
     }
+    if memory_path:
+        result["memory_path"] = memory_path
+    if repair:
+        result["repair"] = repair
+    return result
 
 
 def check_local_scope(project_root: str | Path, memory_path: str | Path) -> dict[str, Any]:
     """Prove local memory is untracked and ignored without reading its contents."""
     root = Path(project_root).expanduser().resolve(strict=True)
-    path = Path(memory_path).expanduser().resolve(strict=False)
+    path = Path(memory_path).expanduser()
+    if not path.is_absolute():
+        path = root / path
+    path = Path(os.path.abspath(str(path)))
+
+    def fail(code: str, detail: str, *, retryable: bool = False, repair: str | None = None) -> dict[str, Any]:
+        return _scope_diagnostic(
+            code,
+            detail,
+            retryable=retryable,
+            memory_path=str(path),
+            repair=repair,
+        )
+
     try:
         _assert_within(path, root, "memory path")
     except NatureProgressError:
-        return _scope_diagnostic("path_outside_project", "memory path must stay within project_root")
+        return fail("path_outside_project", "memory path must stay within project_root")
     try:
         rev_parse = subprocess.run(
             ["git", "-C", str(root), "rev-parse", "--show-toplevel"],
@@ -620,17 +668,17 @@ def check_local_scope(project_root: str | Path, memory_path: str | Path) -> dict
             check=False,
         )
     except FileNotFoundError:
-        return _scope_diagnostic("local_scope_git_unavailable", "Git is required to protect local memory")
+        return fail("local_scope_git_unavailable", "Git is required to protect local memory", repair="Install Git and retry local mutation.")
     if rev_parse.returncode != 0:
         stderr = (rev_parse.stderr or "").casefold()
         code = "local_scope_not_repository" if "not a git repository" in stderr else "local_scope_git_failed"
-        return _scope_diagnostic(code, "local mutation requires a readable Git worktree")
+        return fail(code, "local mutation requires a readable Git worktree", repair="Run the operation from a readable Git worktree.")
 
     repo_root = Path(rev_parse.stdout.strip()).resolve(strict=True)
     try:
         relative = path.relative_to(repo_root).as_posix()
     except ValueError:
-        return _scope_diagnostic("path_outside_repository", "local memory must be inside the Git worktree")
+        return fail("path_outside_repository", "local memory must be inside the Git worktree", repair="Keep memory.local.md inside the Git worktree.")
 
     tracked = subprocess.run(
         ["git", "-C", str(repo_root), "ls-files", "--error-unmatch", "--", relative],
@@ -639,9 +687,9 @@ def check_local_scope(project_root: str | Path, memory_path: str | Path) -> dict
         check=False,
     )
     if tracked.returncode == 0:
-        return _scope_diagnostic("local_scope_tracked", "local memory is already tracked by Git")
+        return fail("local_scope_tracked", "local memory is already tracked by Git", repair="Remove the file from Git tracking before using local scope.")
     if tracked.returncode != 1:
-        return _scope_diagnostic("local_scope_git_failed", "Git could not determine local tracking state")
+        return fail("local_scope_git_failed", "Git could not determine local tracking state", retryable=True, repair="Retry after Git reports a readable worktree.")
 
     ignored = subprocess.run(
         ["git", "-C", str(repo_root), "check-ignore", "--no-index", "--quiet", "--", relative],
@@ -657,10 +705,11 @@ def check_local_scope(project_root: str | Path, memory_path: str | Path) -> dict
             "detail": "local memory is untracked and ignored",
             "retryable": False,
             "scope": "local",
+            "memory_path": str(path),
         }
     if ignored.returncode == 1:
-        return _scope_diagnostic("local_scope_not_ignored", "local memory must be ignored before mutation")
-    return _scope_diagnostic("local_scope_git_failed", "Git could not determine local ignore state")
+        return fail("local_scope_not_ignored", "local memory must be ignored before mutation", repair="Add the exact memory.local.md path to .gitignore, then retry.")
+    return fail("local_scope_git_failed", "Git could not determine local ignore state", retryable=True, repair="Retry after Git reports ignore state.")
 
 
 def assert_scope_mutation_allowed(
@@ -668,13 +717,19 @@ def assert_scope_mutation_allowed(
     workflow_dir: str | Path,
     scope: str,
 ) -> Path:
-    """Return a safe mutation target or fail closed before any write occurs."""
-    path = resolve_memory_path(project_root, workflow_dir, scope)
-    if scope == "local":
-        status = check_local_scope(project_root, path)
-        if not status["ok"]:
-            raise MemoryBoundaryError(status["code"], status["detail"])
-    return path
+    """Return a safe mutation target; local Git proof is performed inside its lock."""
+    return resolve_memory_path(project_root, workflow_dir, scope)
+
+
+def assert_local_scope_mutation_allowed(project_root: str | Path, path: Path) -> None:
+    status = check_local_scope(project_root, path)
+    if not status["ok"]:
+        raise MemoryBoundaryError(
+            status["code"],
+            status["detail"],
+            retryable=bool(status.get("retryable", False)),
+            context={key: value for key, value in status.items() if key not in {"ok", "code", "rule", "detail", "retryable"}},
+        )
 
 
 def _iter_input_strings(value: Any, field: str = "input") -> list[tuple[str, str]]:
@@ -716,7 +771,7 @@ def validate_low_trust_inputs(value: Any, *, field: str = "input") -> list[dict[
                     severity=SEVERITY_ERROR,
                 )
             )
-        if PRIVATE_KEY_RE.search(text) or any(prefix in text for prefix in KNOWN_SECRET_PREFIXES):
+        if PRIVATE_KEY_RE.search(text) or KNOWN_SECRET_RE.search(text):
             diagnostics.append(
                 _diagnostic(
                     "secret_format",
@@ -775,18 +830,32 @@ def workflow_memory_lock(
     if not workflow.is_dir():
         raise MemoryBoundaryError("invalid_workflow_dir", "workflow directory must exist")
     lock_path = workflow / lock_name
-    handle = lock_path.open("a+b")
+    try:
+        handle = lock_path.open("a+b")
+    except OSError as exc:
+        raise MemoryBoundaryError(
+            "lock_unavailable",
+            "workflow memory lock could not be opened",
+            retryable=True,
+        ) from exc
     acquired = False
     deadline = time.monotonic() + max(0.0, timeout)
     try:
         if os.name == "nt":
             import msvcrt
 
-            handle.seek(0, os.SEEK_END)
-            if handle.tell() == 0:
-                handle.write(b"0")
-                handle.flush()
-            handle.seek(0)
+            try:
+                handle.seek(0, os.SEEK_END)
+                if handle.tell() == 0:
+                    handle.write(b"0")
+                    handle.flush()
+                handle.seek(0)
+            except OSError as exc:
+                raise MemoryBoundaryError(
+                    "lock_unavailable",
+                    "workflow memory lock could not be initialized",
+                    retryable=True,
+                ) from exc
             while True:
                 try:
                     msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
@@ -838,7 +907,7 @@ def project_memory_lock(project_root: str | Path, timeout: float = 5.0):
         yield acquired
 
 
-def _atomic_replace_text(path: Path, text: str) -> None:
+def _atomic_replace_text(path: Path, text: str, *, expected_etag: str | None = None) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary_name: str | None = None
     try:
@@ -853,6 +922,15 @@ def _atomic_replace_text(path: Path, text: str) -> None:
             temporary.write(text.encode("utf-8"))
             temporary.flush()
             os.fsync(temporary.fileno())
+        if expected_etag is not None:
+            _, current_etag = _read_snapshot(path)
+            if current_etag != expected_etag:
+                raise MemoryBoundaryError(
+                    "file_changed_outside_lock",
+                    "memory file changed before atomic replace; no write was performed",
+                    retryable=True,
+                    context={"current_file_etag": current_etag, "expected_file_etag": expected_etag},
+                )
         os.replace(temporary_name, path)
         temporary_name = None
     finally:
@@ -870,8 +948,9 @@ def _replace_if_snapshot_matches(path: Path, text: str, snapshot_etag: str) -> N
             "file_changed_outside_lock",
             "memory file changed after the locked snapshot; no write was performed",
             retryable=True,
+            context={"current_file_etag": current_etag, "expected_file_etag": snapshot_etag},
         )
-    _atomic_replace_text(path, text)
+    _atomic_replace_text(path, text, expected_etag=snapshot_etag)
 
 
 def _entry_bounds(text: str, entry: Entry) -> tuple[int, int, list[str]]:
@@ -900,14 +979,16 @@ def _append_entry(text: str, rendered: str) -> str:
 
 
 def _mutation_error(action: str, error: MemoryBoundaryError) -> dict[str, Any]:
+    error_payload = {
+        "code": error.code,
+        "detail": error.detail,
+        "retryable": error.retryable,
+    }
+    error_payload.update(error.context)
     return {
         "ok": False,
         "action": action,
-        "error": {
-            "code": error.code,
-            "detail": error.detail,
-            "retryable": error.retryable,
-        },
+        "error": error_payload,
     }
 
 
@@ -975,6 +1056,146 @@ def _entry_locator(project_root: Path, path: Path, entry_id: str) -> str:
     return f"{relative}#{entry_id}"
 
 
+def _entry_reference(entry: Entry) -> str:
+    """Return a stable or legacy reference without fabricating an ID."""
+    return entry.entry_id or entry.legacy_ref or entry.title
+
+
+def _deprecated_fields(reason: str) -> dict[str, Any]:
+    return {
+        "deprecated": True,
+        "deprecated_code": "legacy_compatibility_shim",
+        "deprecated_detail": reason,
+    }
+
+
+def _find_entry_reference(document: ParsedMemory, reference: str) -> Entry:
+    """Resolve stable IDs, legacy aliases, or unique display titles fail-closed."""
+    normalized = _recall_normalize(reference)
+    if not normalized:
+        raise MemoryBoundaryError("entry_reference_required", "entry reference must not be empty")
+    if reference.startswith("nm_"):
+        if not _is_valid_stable_id(reference):
+            raise MemoryBoundaryError("invalid_stable_id", "entry_id must be an nm_ UUID4 ID")
+        matches = [entry for entry in document.entries if entry.entry_id == reference]
+    else:
+        matches = [
+            entry
+            for entry in document.entries
+            if any(_recall_normalize(alias) == normalized for alias in entry.legacy_aliases)
+        ]
+        if not matches:
+            matches = [entry for entry in document.entries if _recall_normalize(entry.title) == normalized]
+    if not matches:
+        raise MemoryBoundaryError("not_found", "memory entry reference was not found")
+    if len(matches) > 1:
+        raise MemoryBoundaryError(
+            "ambiguous_legacy_ref",
+            "memory entry reference matches multiple entries; use a stable ID or migrate first",
+            context={"candidate_lines": [entry.line for entry in matches]},
+        )
+    return matches[0]
+
+
+def _relationship_errors(document: ParsedMemory) -> list[dict[str, Any]]:
+    """Validate same-file supersedes references and reject dangling/cyclic graphs."""
+    by_id = {entry.entry_id: entry for entry in document.entries if entry.entry_id}
+    diagnostics: list[dict[str, Any]] = []
+    graph: dict[str, list[str]] = {}
+    for entry in document.entries:
+        if not entry.entry_id:
+            continue
+        references = entry.metadata.get("supersedes", [])
+        if not isinstance(references, list):
+            continue
+        graph[entry.entry_id] = [item for item in references if isinstance(item, str)]
+        for target_id in graph[entry.entry_id]:
+            if target_id not in by_id:
+                diagnostics.append(
+                    _diagnostic(
+                        "dangling_supersedes",
+                        "supersedes must reference an entry in the same workflow and scope",
+                        entry.line,
+                        entry=entry.title,
+                    )
+                )
+    visiting: set[str] = set()
+    visited: set[str] = set()
+
+    def visit(entry_id: str) -> None:
+        if entry_id in visiting:
+            entry = by_id.get(entry_id)
+            diagnostics.append(
+                _diagnostic(
+                    "supersedes_cycle",
+                    "supersedes relationships must be acyclic",
+                    entry.line if entry else None,
+                    entry=entry.title if entry else "",
+                )
+            )
+            return
+        if entry_id in visited:
+            return
+        visiting.add(entry_id)
+        for target_id in graph.get(entry_id, []):
+            if target_id in by_id:
+                visit(target_id)
+        visiting.remove(entry_id)
+        visited.add(entry_id)
+
+    for entry_id in by_id:
+        visit(entry_id)
+    return diagnostics
+
+
+def _validate_supersedes_references(
+    document: ParsedMemory,
+    references: Any,
+    *,
+    new_id: str | None = None,
+) -> None:
+    if references is None:
+        return
+    if not isinstance(references, list) or not all(_is_valid_stable_id(item) for item in references):
+        raise MemoryBoundaryError("invalid_supersedes", "supersedes must be a list of stable nm_ UUID4 IDs")
+    if len(set(references)) != len(references):
+        raise MemoryBoundaryError("duplicate_supersedes", "supersedes IDs must be unique")
+    if new_id and new_id in references:
+        raise MemoryBoundaryError("self_supersede", "an entry cannot supersede itself")
+    existing_ids = {entry.entry_id for entry in document.entries if entry.entry_id}
+    missing = [item for item in references if item not in existing_ids]
+    if missing:
+        raise MemoryBoundaryError(
+            "cross_boundary_supersedes",
+            "supersedes IDs must belong to the same workflow and scope",
+            context={"missing_ids": missing},
+        )
+    candidate_graph = {
+        entry.entry_id: list(entry.metadata.get("supersedes", []))
+        for entry in document.entries
+        if entry.entry_id and isinstance(entry.metadata.get("supersedes", []), list)
+    }
+    if new_id:
+        candidate_graph[new_id] = list(references)
+    visiting: set[str] = set()
+    visited: set[str] = set()
+
+    def visit(entry_id: str) -> None:
+        if entry_id in visiting:
+            raise MemoryBoundaryError("supersedes_cycle", "supersedes relationships must be acyclic")
+        if entry_id in visited:
+            return
+        visiting.add(entry_id)
+        for target_id in candidate_graph.get(entry_id, []):
+            if target_id in candidate_graph:
+                visit(target_id)
+        visiting.remove(entry_id)
+        visited.add(entry_id)
+
+    for entry_id in candidate_graph:
+        visit(entry_id)
+
+
 def _budget_summary(text: str, document: ParsedMemory) -> dict[str, Any]:
     active = [entry for entry in document.entries if entry.metadata.get("lifecycle") == "active"]
     active_bytes = sum(len(entry.raw_block.encode("utf-8")) for entry in active)
@@ -995,7 +1216,11 @@ def _assert_file_budget(text: str) -> None:
     if len(text.encode("utf-8")) > HARD_FILE_BYTES:
         raise MemoryBoundaryError(
             "hard_file_budget",
-            f"canonical memory file would exceed {HARD_FILE_BYTES} bytes; no write was performed",
+            f"canonical memory file would exceed {HARD_FILE_BYTES} bytes; no write was performed; create a manual backup and perform Git-reviewed maintenance before retrying",
+            context={
+                "hard_file_bytes": HARD_FILE_BYTES,
+                "recovery": "manual backup plus Git-reviewed maintenance is required; consolidation/archive is not guaranteed to reduce file size",
+            },
         )
 
 
@@ -1027,6 +1252,9 @@ def _reject_invalid_document(document: ParsedMemory) -> None:
     errors = [item for item in document.diagnostics if item["severity"] == SEVERITY_ERROR]
     if errors:
         raise MemoryBoundaryError(errors[0]["code"], errors[0]["detail"])
+    relationship_errors = _relationship_errors(document)
+    if relationship_errors:
+        raise MemoryBoundaryError(relationship_errors[0]["code"], relationship_errors[0]["detail"])
     if any(entry.requires_migration for entry in document.entries):
         raise MemoryBoundaryError(
             "legacy_requires_migration",
@@ -1054,6 +1282,8 @@ def command_memory_remember(
         assert_low_trust_inputs(body, field="body")
         path = assert_scope_mutation_allowed(root, workflow_dir, scope)
         with workflow_memory_lock(path.parent, lock_timeout):
+            if scope == "local":
+                assert_local_scope_mutation_allowed(root, path)
             text, snapshot_etag = _read_snapshot(path)
             document = parse_memory_document(text, path)
             _reject_invalid_document(document)
@@ -1076,6 +1306,7 @@ def command_memory_remember(
                         }
                 new_id = "nm_" + uuid.uuid4().hex
                 final_metadata = _finalize_metadata(template, new_id, created_at=now, updated_at=now)
+                _validate_supersedes_references(document, final_metadata.get("supersedes"), new_id=new_id)
                 rendered = serialize_entry(title, body, final_metadata)
                 new_text = _append_entry(text, rendered)
                 operation = "created"
@@ -1090,8 +1321,14 @@ def command_memory_remember(
                     raise MemoryBoundaryError("invalid_lifecycle_transition", "only active entries can be updated")
                 current_etag = _entry_etag(existing)
                 if expected_etag != current_etag:
-                    raise MemoryBoundaryError("etag_conflict", "entry ETag does not match current memory", retryable=True)
+                    raise MemoryBoundaryError(
+                        "etag_conflict",
+                        "entry ETag does not match current memory",
+                        retryable=True,
+                        context={"current_entry_etag": current_etag, "current_file_etag": snapshot_etag},
+                    )
                 template = _canonical_metadata_input(metadata, existing)
+                _validate_supersedes_references(document, template.get("supersedes"), new_id=existing.entry_id)
                 final_metadata = _finalize_metadata(
                     template,
                     existing.entry_id,
@@ -1126,6 +1363,31 @@ def command_memory_remember(
 
 def _migration_backup_path(path: Path) -> Path:
     return path.with_name(path.name + AGENTS_BACKUP_SUFFIX)
+
+
+def _migration_failure(
+    root: Path,
+    workflow_dir: str | Path | None,
+    scope: str,
+    error: MemoryBoundaryError,
+) -> dict[str, Any]:
+    context = dict(error.context)
+    context.update({"project_root": str(root), "scope": scope})
+    if workflow_dir:
+        context.setdefault("workflow_dir", str(workflow_dir))
+        try:
+            path = resolve_memory_path(root, workflow_dir, scope)
+        except MemoryBoundaryError:
+            path = None
+        if path is not None:
+            context.setdefault("memory_path", str(path))
+            try:
+                _, current_etag = _read_snapshot(path)
+                context.setdefault("current_file_etag", current_etag)
+            except MemoryBoundaryError:
+                pass
+    error.context = context
+    return _mutation_error("memory_migrate", error)
 
 
 def _migration_candidates(
@@ -1222,6 +1484,8 @@ def _migrate_one(
 
     path = assert_scope_mutation_allowed(project_root, workflow_dir, scope)
     with workflow_memory_lock(path.parent, lock_timeout):
+        if scope == "local":
+            assert_local_scope_mutation_allowed(project_root, path)
         text, snapshot_etag = _read_snapshot(path)
         document = _migration_preflight(text, path)
         reports, migrated_text, collisions = _migration_candidates(project_root, path, text, document)
@@ -1253,6 +1517,15 @@ def _migrate_one(
             }
         _assert_file_budget(migrated_text)
         backup = _migration_backup_path(path)
+        if scope == "local":
+            backup_status = check_local_scope(project_root, backup)
+            if not backup_status["ok"]:
+                raise MemoryBoundaryError(
+                    "local_backup_not_ignored",
+                    "local migration backup must also be untracked and ignored before mutation",
+                    retryable=bool(backup_status.get("retryable", False)),
+                    context={"backup_path": str(backup), "repair": backup_status.get("repair")},
+                )
         if path.exists():
             shutil.copyfile(path, backup)
         _replace_if_snapshot_matches(path, migrated_text, snapshot_etag)
@@ -1286,31 +1559,36 @@ def command_memory_migrate(
     try:
         root = Path(project_root).expanduser().resolve(strict=True)
         if all_workflows:
-            if scope != "shared":
-                raise MemoryBoundaryError("all_local_unsupported", "--all migration only covers shared memory")
             workflow_root = checked_root(base=root)
-            workflow_dirs = _workflow_dirs_with_memory(workflow_root)
+            workflow_dirs = _workflow_dirs_with_memory(workflow_root, scope=scope, project_root=root)
             results: list[dict[str, Any]] = []
             for workflow in workflow_dirs:
-                results.append(
-                    _migrate_one(
-                        root,
-                        workflow,
-                        scope,
-                        dry_run=dry_run,
-                        lock_timeout=lock_timeout,
+                try:
+                    results.append(
+                        _migrate_one(
+                            root,
+                            workflow,
+                            scope,
+                            dry_run=dry_run,
+                            lock_timeout=lock_timeout,
+                        )
                     )
-                )
+                except MemoryBoundaryError as exc:
+                    results.append(_migration_failure(root, workflow, scope, exc))
+            all_ok = all(result.get("ok", False) for result in results)
             return {
-                "ok": all(result.get("ok", False) for result in results),
+                "ok": all_ok,
                 "action": action,
-                "operation": "dry_run" if dry_run else "migrated",
+                "operation": "dry_run" if dry_run else ("migrated" if all_ok else "partial"),
                 "all_workflows": True,
                 "results": results,
             }
         if workflow_dir is None:
             raise MemoryBoundaryError("workflow_dir_required", "workflow_dir is required unless all_workflows is true")
-        return _migrate_one(root, workflow_dir, scope, dry_run=dry_run, lock_timeout=lock_timeout)
+        try:
+            return _migrate_one(root, workflow_dir, scope, dry_run=dry_run, lock_timeout=lock_timeout)
+        except MemoryBoundaryError as exc:
+            return _migration_failure(root, workflow_dir, scope, exc)
     except MemoryBoundaryError as exc:
         return _mutation_error(action, exc)
 
@@ -1371,6 +1649,8 @@ def command_memory_forget(
         if expected_etag is None:
             raise MemoryBoundaryError("etag_required", "expected_etag is required for forget")
         with workflow_memory_lock(path.parent, lock_timeout):
+            if scope == "local":
+                assert_local_scope_mutation_allowed(root, path)
             text, snapshot_etag = _read_snapshot(path)
             document = parse_memory_document(text, path)
             _reject_invalid_document(document)
@@ -1378,7 +1658,12 @@ def command_memory_forget(
             if entry.metadata.get("lifecycle") != "active":
                 raise MemoryBoundaryError("invalid_lifecycle_transition", "only active entries can be archived")
             if expected_etag != _entry_etag(entry):
-                raise MemoryBoundaryError("etag_conflict", "entry ETag does not match current memory", retryable=True)
+                raise MemoryBoundaryError(
+                    "etag_conflict",
+                    "entry ETag does not match current memory",
+                    retryable=True,
+                    context={"current_entry_etag": _entry_etag(entry), "current_file_etag": snapshot_etag},
+                )
             now = now_utc()
             metadata = dict(entry.metadata)
             metadata["lifecycle"] = "archived"
@@ -1413,6 +1698,8 @@ def command_memory_supersede(
         if expected_etag is None:
             raise MemoryBoundaryError("etag_required", "expected_etag is required for supersede")
         with workflow_memory_lock(path.parent, lock_timeout):
+            if scope == "local":
+                assert_local_scope_mutation_allowed(root, path)
             text, snapshot_etag = _read_snapshot(path)
             document = parse_memory_document(text, path)
             _reject_invalid_document(document)
@@ -1420,7 +1707,12 @@ def command_memory_supersede(
             if source.metadata.get("lifecycle") != "active":
                 raise MemoryBoundaryError("invalid_lifecycle_transition", "only active entries can be superseded")
             if expected_etag != _entry_etag(source):
-                raise MemoryBoundaryError("etag_conflict", "entry ETag does not match current memory", retryable=True)
+                raise MemoryBoundaryError(
+                    "etag_conflict",
+                    "entry ETag does not match current memory",
+                    retryable=True,
+                    context={"current_entry_etag": _entry_etag(source), "current_file_etag": snapshot_etag},
+                )
             now = now_utc()
             source_metadata = dict(source.metadata)
             source_metadata["lifecycle"] = "superseded"
@@ -1429,6 +1721,7 @@ def command_memory_supersede(
             new_id = "nm_" + uuid.uuid4().hex
             successor_template = _canonical_metadata_input(new_metadata)
             successor_template["supersedes"] = [old_id]
+            _validate_supersedes_references(document, successor_template["supersedes"], new_id=None)
             successor_metadata = _finalize_metadata(
                 successor_template,
                 new_id,
@@ -1459,8 +1752,8 @@ def command_memory_consolidate_plan(
         text, file_etag = _read_snapshot(path)
         document = parse_memory_document(text, path)
         _reject_invalid_document(document)
-        if not source_ids:
-            raise MemoryBoundaryError("source_ids_required", "at least one source ID is required")
+        if len(source_ids) < 2:
+            raise MemoryBoundaryError("source_ids_required", "at least two source IDs are required for consolidation")
         if len(set(source_ids)) != len(source_ids):
             raise MemoryBoundaryError("duplicate_source_id", "source IDs must be unique")
         sources = [_find_stable_entry(document, source_id) for source_id in source_ids]
@@ -1502,11 +1795,13 @@ def command_memory_consolidate_apply(
         assert_low_trust_inputs(new_body, field="body")
         path = assert_scope_mutation_allowed(root, workflow_dir, scope)
         with workflow_memory_lock(path.parent, lock_timeout):
+            if scope == "local":
+                assert_local_scope_mutation_allowed(root, path)
             text, snapshot_etag = _read_snapshot(path)
             document = parse_memory_document(text, path)
             _reject_invalid_document(document)
-            if not source_ids:
-                raise MemoryBoundaryError("source_ids_required", "at least one source ID is required")
+            if len(source_ids) < 2:
+                raise MemoryBoundaryError("source_ids_required", "at least two source IDs are required for consolidation")
             if len(set(source_ids)) != len(source_ids):
                 raise MemoryBoundaryError("duplicate_source_id", "source IDs must be unique")
             sources = [_find_stable_entry(document, source_id) for source_id in source_ids]
@@ -1516,11 +1811,22 @@ def command_memory_consolidate_apply(
             ordered = sorted(sources, key=lambda entry: entry.entry_id or "")
             current_plan_id = _plan_id(root, path, scope, ordered)
             if current_plan_id != plan_id or any(supplied_etags.get(entry.entry_id) != _entry_etag(entry) for entry in ordered):
-                raise MemoryBoundaryError("stale_plan", "consolidation plan no longer matches canonical entries", retryable=True)
+                raise MemoryBoundaryError(
+                    "stale_plan",
+                    "consolidation plan no longer matches canonical entries",
+                    retryable=True,
+                    context={
+                        "current_file_etag": snapshot_etag,
+                        "current_source_etags": {entry.entry_id: _entry_etag(entry) for entry in ordered},
+                        "expected_source_etags": supplied_etags,
+                        "current_plan_id": current_plan_id,
+                    },
+                )
             now = now_utc()
             new_id = "nm_" + uuid.uuid4().hex
             template = _canonical_metadata_input(new_metadata)
             template["supersedes"] = [entry.entry_id for entry in ordered]
+            _validate_supersedes_references(document, template["supersedes"], new_id=new_id)
             final_metadata = _finalize_metadata(template, new_id, created_at=now, updated_at=now)
             successor = serialize_entry(new_title, new_body, final_metadata)
             new_text = text
@@ -1584,16 +1890,16 @@ def _score_recall_entry(entry: Entry, query: str) -> tuple[int, list[str]]:
     matched: set[str] = set()
     score = 0
     if normalized_query == stable_id or normalized_query in aliases:
-        score += 100000
+        score += 400_100_000
         matched.add(query.strip())
     if normalized_query == normalized_title:
-        score += 50000
+        score += 300_000_000
         matched.add(entry.title)
     if normalized_query and normalized_query in normalized_title:
-        score += 20000
+        score += 100_000_000
         matched.add(query.strip())
     if normalized_query and normalized_query in normalized_body:
-        score += 8000
+        score += 50_000_000
         matched.add(query.strip())
 
     query_tokens = _recall_english_tokens(query)
@@ -1662,8 +1968,8 @@ def command_memory_recall(
             raise MemoryBoundaryError("query_required", "recall query must not be empty")
         if isinstance(top_k, bool) or not isinstance(top_k, int) or not 1 <= top_k <= RECALL_MAX_TOP_K:
             raise MemoryBoundaryError("invalid_top_k", f"top_k must be between 1 and {RECALL_MAX_TOP_K}")
-        if isinstance(max_bytes, bool) or not isinstance(max_bytes, int) or not 1 <= max_bytes <= RECALL_MAX_BYTES:
-            raise MemoryBoundaryError("invalid_max_bytes", f"max_bytes must be between 1 and {RECALL_MAX_BYTES}")
+        if isinstance(max_bytes, bool) or not isinstance(max_bytes, int) or not RECALL_MIN_BYTES <= max_bytes <= RECALL_MAX_BYTES:
+            raise MemoryBoundaryError("invalid_max_bytes", f"max_bytes must be between {RECALL_MIN_BYTES} and {RECALL_MAX_BYTES}")
         path = resolve_memory_path(root, workflow_dir, scope)
         if document is None:
             text, file_etag = _read_snapshot(path)
@@ -1732,15 +2038,70 @@ def command_memory_recall(
             "diagnostics": diagnostics,
         }
         if len(json.dumps(response, ensure_ascii=False, separators=(",", ":")).encode("utf-8")) > max_bytes:
-            return {
+            # Drop optional context before dropping complete records. The final
+            # response is still valid JSON and is bounded by max_bytes whenever
+            # a valid response can fit the caller's budget.
+            compact = {
                 "ok": True,
                 "action": action,
-                "query": query,
-                "scope": scope,
-                "file_etag": file_etag,
-                "results": [],
-                "diagnostics": [{"code": "response_budget_exceeded", "detail": "no complete result fits max_bytes", "severity": SEVERITY_WARNING}],
+                "results": result_records,
             }
+            if len(json.dumps(compact, ensure_ascii=False, separators=(",", ":")).encode("utf-8")) > max_bytes:
+                compact["results"] = []
+            if len(json.dumps(compact, ensure_ascii=False, separators=(",", ":")).encode("utf-8")) > max_bytes:
+                compact = {"ok": True, "results": []}
+            return compact
+        return response
+    except MemoryBoundaryError as exc:
+        return _mutation_error(action, exc)
+
+
+def command_memory_recall_all(
+    project_root: str | Path,
+    workflow_root: str | Path | None,
+    scope: str,
+    query: str,
+    *,
+    top_k: int = RECALL_DEFAULT_TOP_K,
+    max_bytes: int = RECALL_MAX_BYTES,
+    filters: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Explicit cross-workflow read; mutation APIs remain single-workflow."""
+    action = "memory_recall"
+    try:
+        root = Path(project_root).expanduser().resolve(strict=True)
+        workflow_base = checked_root(str(workflow_root) if workflow_root else None, base=root)
+        workflows = _workflow_dirs_with_memory(workflow_base, scope=scope, project_root=root)
+        combined: list[dict[str, Any]] = []
+        diagnostics: list[dict[str, Any]] = []
+        for workflow in workflows:
+            result = command_memory_recall(
+                root,
+                workflow,
+                scope,
+                query,
+                top_k=top_k,
+                max_bytes=max_bytes,
+                filters=filters,
+            )
+            if not result.get("ok"):
+                return result
+            combined.extend(result.get("results", []))
+            diagnostics.extend(result.get("diagnostics", []))
+        combined.sort(key=lambda item: (-int(item.get("score", 0)), _recall_normalize(str(item.get("title", ""))), str(item.get("id", ""))))
+        response = {
+            "ok": True,
+            "action": action,
+            "query": query,
+            "scope": scope,
+            "all_workflows": True,
+            "results": combined[:top_k],
+            "diagnostics": diagnostics,
+        }
+        while len(json.dumps(response, ensure_ascii=False, separators=(",", ":")).encode("utf-8")) > max_bytes and response["results"]:
+            response["results"].pop()
+        if len(json.dumps(response, ensure_ascii=False, separators=(",", ":")).encode("utf-8")) > max_bytes:
+            return {"ok": True, "action": action, "all_workflows": True, "results": []}
         return response
     except MemoryBoundaryError as exc:
         return _mutation_error(action, exc)
@@ -1758,27 +2119,42 @@ def command_memory_show(
         path = resolve_memory_path(root, workflow_dir, scope)
         text, file_etag = _read_snapshot(path)
         document = parse_memory_document(text, path)
-        entry = _find_stable_entry(document, entry_id)
+        errors = [item for item in document.diagnostics if item["severity"] == SEVERITY_ERROR]
+        if errors:
+            raise MemoryBoundaryError(errors[0]["code"], errors[0]["detail"])
+        entry = _find_entry_reference(document, entry_id)
         successors = [
             item.entry_id
             for item in document.entries
-            if item.entry_id and entry_id in item.metadata.get("supersedes", [])
+            if item.entry_id and entry.entry_id and entry.entry_id in item.metadata.get("supersedes", [])
         ]
-        return {
+        successor_locators = [_entry_locator(root, path, successor_id) for successor_id in successors]
+        entry_reference = _entry_reference(entry)
+        result = {
             "ok": True,
             "action": action,
+            "scope": scope,
+            "workflow_dir": str(path.parent),
+            "memory_path": str(path),
             "entry": {
                 "id": entry.entry_id,
                 "title": entry.title,
                 "body": entry.body,
                 "metadata": dict(entry.metadata),
-                "lifecycle": entry.metadata.get("lifecycle"),
+                "lifecycle": entry.metadata.get("lifecycle") or "legacy",
                 "etag": _entry_etag(entry),
                 "file_etag": file_etag,
-                "locator": _entry_locator(root, path, entry.entry_id),
+                "locator": _entry_locator(root, path, entry_reference) if entry.entry_id else None,
+                "legacy_ref": entry.legacy_ref,
+                "legacy_aliases": list(entry.legacy_aliases),
+                "requires_migration": entry.requires_migration,
                 "derived_successor_ids": successors,
+                "derived_successor_locators": successor_locators,
             },
         }
+        if entry.requires_migration:
+            result.update(_deprecated_fields("show reads legacy memory without assigning a stable ID"))
+        return result
     except MemoryBoundaryError as exc:
         return _mutation_error(action, exc)
 
@@ -1849,6 +2225,7 @@ def _check_text(text: str, *, path: Path | None = None) -> list[dict[str, Any]]:
     document = parse_memory_document(text, path)
     entries = document.entries
     violations.extend(document.diagnostics)
+    violations.extend(_relationship_errors(document))
     if len(entries) > MAX_ENTRIES:
         violations.append(
             _violation(
@@ -1951,49 +2328,68 @@ def _check_text(text: str, *, path: Path | None = None) -> list[dict[str, Any]]:
     return violations
 
 
-def _workflow_dirs_with_memory(root: Path) -> list[Path]:
+def _workflow_dirs_with_memory(
+    root: Path,
+    *,
+    scope: str = "shared",
+    project_root: Path | None = None,
+) -> list[Path]:
     if not root.exists():
         return []
     workflows: list[Path] = []
     for item in root.iterdir():
-        if not item.is_dir():
+        if not item.is_dir() or item.is_symlink():
             continue
         resolved = item.resolve(strict=False)
         try:
             _assert_within(resolved, root, "workflow directory")
         except NatureProgressError:
             continue
-        if (resolved / MEMORY_FILE).is_file():
+        filename = MEMORY_FILE if scope == "shared" else LOCAL_MEMORY_FILE
+        memory_path = resolved / filename
+        if memory_path.is_symlink():
+            continue
+        if memory_path.is_file():
+            if project_root is not None:
+                try:
+                    resolve_memory_path(project_root, resolved, scope)
+                except MemoryBoundaryError:
+                    continue
             workflows.append(resolved)
     return sorted(workflows)
 
 
-def _read_memory(workflow_dir: Path) -> str:
-    path = _memory_path(workflow_dir)
+def _read_memory(workflow_dir: Path, project_root: Path | None = None, scope: str = "shared") -> str:
+    path = resolve_memory_path(project_root or workflow_dir, workflow_dir, scope) if project_root else _memory_path(workflow_dir, scope)
     if not path.exists():
         return ""
     return path.read_text(encoding="utf-8")
 
 
-def _memory_summary(workflow_dir: Path) -> dict[str, Any]:
-    path = _memory_path(workflow_dir)
-    document = parse_memory_document(_read_memory(workflow_dir), path)
+def _memory_summary(workflow_dir: Path, project_root: Path, scope: str = "shared") -> dict[str, Any]:
+    path = resolve_memory_path(project_root, workflow_dir, scope)
+    document = parse_memory_document(_read_memory(workflow_dir, project_root, scope), path)
+    entries: list[dict[str, Any]] = []
+    for entry in document.entries:
+        item = {
+            "id": entry.entry_id,
+            "title": entry.title,
+            "updated": entry.updated,
+            "line": entry.line,
+            "schema": entry.schema,
+            "legacy_aliases": list(entry.legacy_aliases),
+            "legacy_ref": entry.legacy_ref,
+            "requires_migration": entry.requires_migration,
+            "locator": _entry_locator(project_root, path, _entry_reference(entry)) if entry.entry_id else None,
+        }
+        if entry.requires_migration:
+            item.update(_deprecated_fields("list preserves legacy IDs and adds no fabricated stable identity"))
+        entries.append(item)
     return {
         "workflow_dir": str(workflow_dir),
         "memory_path": str(path),
-        "entries": [
-            {
-                "id": entry.entry_id,
-                "title": entry.title,
-                "updated": entry.updated,
-                "line": entry.line,
-                "schema": entry.schema,
-                "legacy_aliases": list(entry.legacy_aliases),
-                "legacy_ref": entry.legacy_ref,
-                "requires_migration": entry.requires_migration,
-            }
-            for entry in document.entries
-        ],
+        "scope": scope,
+        "entries": entries,
         "diagnostics": document.diagnostics,
     }
 
@@ -2005,16 +2401,17 @@ def command_memory_check(
     base: Path | None = None,
     all_workflows: bool = False,
 ) -> dict[str, Any]:
+    project_root = (base or base_dir()).resolve()
     if all_workflows:
-        root = checked_root(workflow_root, base=base)
-        workflow_dirs = _workflow_dirs_with_memory(root)
+        root = checked_root(workflow_root, base=project_root)
+        workflow_dirs = _workflow_dirs_with_memory(root, project_root=project_root)
     else:
-        workflow_dirs = [checked_workflow_dir(workflow, workflow_root, base=base)]
+        workflow_dirs = [checked_workflow_dir(workflow, workflow_root, base=project_root)]
 
     checked: list[dict[str, Any]] = []
     violations: list[dict[str, Any]] = []
     for workflow_dir in workflow_dirs:
-        path = _memory_path(workflow_dir)
+        path = resolve_memory_path(project_root, workflow_dir, "shared")
         text = path.read_text(encoding="utf-8") if path.exists() else ""
         document = parse_memory_document(text, path)
         checked.append(
@@ -2031,6 +2428,7 @@ def command_memory_check(
         "action": "memory_check",
         "checked": checked,
         "violations": violations,
+        **_deprecated_fields("check is retained as an advisory compatibility shim"),
     }
 
 
@@ -2041,46 +2439,59 @@ def command_memory_touch(
     *,
     base: Path | None = None,
 ) -> dict[str, Any]:
-    workflow_dir = checked_workflow_dir(workflow, workflow_root, base=base)
-    path = _memory_path(workflow_dir)
+    project_root = (base or base_dir()).resolve(strict=True)
+    workflow_dir = checked_workflow_dir(workflow, workflow_root, base=project_root)
+    path = resolve_memory_path(project_root, workflow_dir, "shared")
     if not path.exists():
         raise NatureProgressError(f"Missing {MEMORY_FILE} in {workflow_dir}")
 
-    target_key = _title_key(entry_id)
-    if not target_key:
-        raise NatureProgressError("entry title must not be empty")
-    lines = path.read_text(encoding="utf-8").splitlines()
-    heading_index: int | None = None
-    matched_title: str | None = None
-    # Fence-aware: only real (non-fenced) entry headings are touch targets.
-    for index in _candidate_heading_indices(lines):
-        title = _heading_title(lines[index])
-        if title is not None and _title_key(title) == target_key:
-            heading_index = index
-            matched_title = title
-            break
-    if heading_index is None:
-        raise NatureProgressError(f"Unknown memory entry: {entry_id}")
-
-    stamped = now_utc()
-    updated_line = f"<!-- updated: {stamped} -->"
-    next_index = heading_index + 1
-    if next_index < len(lines) and lines[next_index].strip().startswith("<!-- updated:"):
-        lines[next_index] = updated_line
-        timestamp_line = next_index + 1
-    else:
-        lines.insert(next_index, updated_line)
-        timestamp_line = next_index + 1
-    _atomic_write_text(path, "\n".join(lines).rstrip() + "\n")
-    return {
+    with workflow_memory_lock(path.parent):
+        text, snapshot_etag = _read_snapshot(path)
+        document = parse_memory_document(text, path)
+        errors = [item for item in document.diagnostics if item["severity"] == SEVERITY_ERROR]
+        if errors:
+            raise MemoryBoundaryError(errors[0]["code"], errors[0]["detail"])
+        entry = _find_entry_reference(document, entry_id)
+        start, end, raw_lines = _entry_bounds(text, entry)
+        lines = [line.rstrip("\r\n") for line in raw_lines]
+        stamped = now_utc()
+        updated_line = f"<!-- updated: {stamped} -->"
+        if entry.timestamp_line is not None:
+            lines[entry.timestamp_line - 1] = updated_line
+        else:
+            insert_index = start + 1
+            if insert_index < end and _parse_metadata_line(
+                lines[insert_index],
+                line_number=insert_index + 1,
+                entry_title=entry.title,
+                source_path=path,
+            )[2]:
+                insert_index += 1
+            lines.insert(insert_index, updated_line)
+        new_text = "\n".join(lines).rstrip() + "\n"
+        _replace_if_snapshot_matches(path, new_text, snapshot_etag)
+        written_text, file_etag = _read_snapshot(path)
+        written_document = parse_memory_document(written_text, path)
+        written_entry = _find_entry_reference(written_document, entry_id)
+    result = {
         "ok": True,
         "action": "memory_touch",
         "workflow_dir": str(workflow_dir),
         "memory_path": str(path),
-        "entry": matched_title,
+        "scope": "shared",
+        "entry": written_entry.title,
+        "entry_id": written_entry.entry_id,
+        "id": written_entry.entry_id,
+        "legacy_ref": written_entry.legacy_ref,
+        "legacy_aliases": list(written_entry.legacy_aliases),
+        "locator": _entry_locator(project_root, path, _entry_reference(written_entry)) if written_entry.entry_id else None,
         "updated": stamped,
-        "line": timestamp_line,
+        "line": written_entry.timestamp_line,
+        "file_etag": file_etag,
     }
+    if written_entry.requires_migration:
+        result.update(_deprecated_fields("touch only refreshes the legacy timestamp; migrate explicitly for schema-v1 writes"))
+    return result
 
 
 def _entry_hook(entries: list[Entry]) -> str:
@@ -2111,6 +2522,7 @@ def _replace_sentinel(existing: str, section: str | None = None) -> str:
         raise MemoryBoundaryError(
             "malformed_sentinel",
             "AGENTS.md contains a non-exact Nature memory marker line",
+            context={"marker_positions": {"substring_lines": [index + 1 for index in marker_substrings]}},
         )
     if not start_positions and not end_positions:
         outer = existing.rstrip()
@@ -2120,6 +2532,12 @@ def _replace_sentinel(existing: str, section: str | None = None) -> str:
         raise MemoryBoundaryError(
             "malformed_sentinel",
             "AGENTS.md must contain zero markers or one ordered marker pair",
+            context={
+                "marker_positions": {
+                    "start_lines": [index + 1 for index in start_positions],
+                    "end_lines": [index + 1 for index in end_positions],
+                }
+            },
         )
     fixed = FIXED_AGENTS_SECTION.rstrip()
     return f"{outer}\n\n{fixed}\n" if outer else f"{fixed}\n"
@@ -2145,11 +2563,11 @@ def command_memory_index(
     root = checked_root(workflow_root, base=project_root)
     # `--workflow` remains accepted for old callers, but repair is always global
     # so one paper cannot overwrite the project's discovery section.
-    workflow_dirs = _workflow_dirs_with_memory(root)
+    workflow_dirs = _workflow_dirs_with_memory(root, project_root=project_root)
     indexed: list[dict[str, Any]] = []
     warnings: list[dict[str, Any]] = []
     for workflow_dir in workflow_dirs:
-        path = _memory_path(workflow_dir)
+        path = resolve_memory_path(project_root, workflow_dir, "shared")
         text = path.read_text(encoding="utf-8") if path.exists() else ""
         # Non-blocking: never abort the index, but surface entry-like headings that
         # did not make it in (F4: no silent drop) alongside every other lint hit.
@@ -2187,7 +2605,9 @@ def command_memory_index(
                     "code": exc.code,
                     "detail": exc.detail,
                     "retryable": exc.retryable,
+                    **exc.context,
                 },
+                **_deprecated_fields("index repairs only the fixed AGENTS discovery section"),
             }
         _atomic_write_text(agents, repaired)
     return {
@@ -2199,6 +2619,7 @@ def command_memory_index(
         "backup_path": str(backup) if backup else None,
         "indexed": indexed,
         "warnings": warnings,
+        **_deprecated_fields("index repairs only the fixed AGENTS discovery section"),
     }
 
 
@@ -2210,15 +2631,19 @@ def command_memory_list(
     all_workflows: bool = False,
 ) -> dict[str, Any]:
     if all_workflows:
-        root = checked_root(workflow_root, base=base)
-        workflows = _workflow_dirs_with_memory(root)
+        project_root = (base or base_dir()).resolve()
+        root = checked_root(workflow_root, base=project_root)
+        workflows = _workflow_dirs_with_memory(root, project_root=project_root)
     else:
-        workflows = [checked_workflow_dir(workflow, workflow_root, base=base)]
-    return {
+        project_root = (base or base_dir()).resolve()
+        workflows = [checked_workflow_dir(workflow, workflow_root, base=project_root)]
+    result = {
         "ok": True,
         "action": "memory_list",
-        "workflows": [_memory_summary(workflow_dir) for workflow_dir in workflows],
+        "workflows": [_memory_summary(workflow_dir, project_root) for workflow_dir in workflows],
     }
+    result.update(_deprecated_fields("list is retained as a read-only compatibility shim"))
+    return result
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -2313,7 +2738,7 @@ def main(argv: list[str] | None = None) -> int:
         args = parser.parse_args(argv)
         result = dispatch(args)
         print(json.dumps(result, ensure_ascii=False, indent=2))
-        if args.command == "check" and not result.get("ok", False):
+        if args.command in {"check", "migrate"} and not result.get("ok", False):
             return 2
         return 0
     except NatureProgressError as exc:

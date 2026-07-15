@@ -1,6 +1,10 @@
 {
   "version": 1,
   "model": "local-deterministic-fixture-policy",
+  "model_parameters": {"temperature": 0, "seed": 0},
+  "plugin_version": "0.2.0",
+  "allowed_tools": ["nature_new_workflow", "nature_memory_remember", "nature_resume_with_memory", "nature_memory_recall", "nature_memory_show"],
+  "scenario_contract": ["new", "remember", "fresh_resume", "recall", "cite"],
   "scenarios": [
     {"id": "A01", "title": "remember decision 01", "body": "durable fact 01", "should_remember": true, "must_not_write": []},
     {"id": "A02", "title": "remember decision 02", "body": "durable fact 02", "should_remember": true, "must_not_write": []},

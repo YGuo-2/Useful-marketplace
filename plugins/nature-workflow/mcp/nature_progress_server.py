@@ -42,6 +42,7 @@ from nature_memory import (  # noqa: E402
     command_memory_list,
     command_memory_migrate,
     command_memory_recall,
+    command_memory_recall_all,
     command_memory_remember,
     command_memory_show,
     command_memory_supersede,
@@ -254,10 +255,11 @@ TOOLS.extend(
                     "scope": {"type": "string", "enum": ["shared", "local"]},
                     "query": {"type": "string"},
                     "top_k": {"type": "integer", "minimum": 1, "maximum": 5},
-                    "max_bytes": {"type": "integer", "minimum": 1, "maximum": 4096},
+                    "max_bytes": {"type": "integer", "minimum": 256, "maximum": 4096},
                     "filters": {"type": "object"},
+                    "all_workflows": {"type": "boolean"},
                 },
-                "required": ["project_root", "workflow_dir", "scope", "query"],
+                "required": ["project_root", "scope", "query"],
             },
         },
         {
@@ -472,7 +474,10 @@ def _required_string(args: dict[str, Any], name: str) -> str:
 
 
 def _project_root_required(args: dict[str, Any]) -> Path:
-    return _base(args) or base_dir()
+    raw = args.get("project_root")
+    if not isinstance(raw, str) or not raw.strip():
+        raise NatureProgressError("project_root is required")
+    return Path(raw).expanduser().resolve(strict=False)
 
 
 def _required_scope(args: dict[str, Any]) -> str:
@@ -556,11 +561,24 @@ def call_tool(name: str, args: dict[str, Any]) -> Any:
             expected_etag=args.get("expected_etag") or None,
         )
     if name == "nature_memory_recall":
+        project_root = _project_root_required(args)
+        scope = _required_scope(args)
+        query = _required_string(args, "query")
+        if bool(args.get("all_workflows", False)):
+            return command_memory_recall_all(
+                project_root,
+                _root(args),
+                scope,
+                query,
+                top_k=args.get("top_k", 3),
+                max_bytes=args.get("max_bytes", 4096),
+                filters=args.get("filters") if isinstance(args.get("filters"), dict) else None,
+            )
         return command_memory_recall(
-            _project_root_required(args),
+            project_root,
             _required_string(args, "workflow_dir"),
-            _required_scope(args),
-            _required_string(args, "query"),
+            scope,
+            query,
             top_k=args.get("top_k", 3),
             max_bytes=args.get("max_bytes", 4096),
             filters=args.get("filters") if isinstance(args.get("filters"), dict) else None,

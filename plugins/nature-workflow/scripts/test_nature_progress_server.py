@@ -162,6 +162,26 @@ class ServerEncodingSmokeTest(unittest.TestCase):
             self.assertTrue(recall_payload["ok"], recall_payload)
             self.assertEqual(recall_payload["results"][0]["title"], "MCP decision")
 
+            entry_id = remember_payload["entry_id"]
+            entry_etag = remember_payload["etag"]
+            lifecycle_requests = "\n".join(
+                [
+                    _rpc({"jsonrpc": "2.0", "id": 5, "method": "initialize"}),
+                    _rpc({"jsonrpc": "2.0", "id": 6, "method": "tools/call", "params": {"name": "nature_memory_show", "arguments": {"project_root": tmp, "workflow_dir": workflow_dir, "scope": "shared", "entry_id": entry_id}}}),
+                    _rpc({"jsonrpc": "2.0", "id": 7, "method": "tools/call", "params": {"name": "nature_memory_forget", "arguments": {"project_root": tmp, "workflow_dir": workflow_dir, "scope": "shared", "entry_id": entry_id, "expected_etag": entry_etag, "reason": "MCP lifecycle test"}}}),
+                    _rpc({"jsonrpc": "2.0", "id": 8, "method": "tools/call", "params": {"name": "nature_memory_recall", "arguments": {"project_root": tmp, "scope": "shared", "query": "MCP decision", "all_workflows": True}}}),
+                ]
+            ) + "\n"
+            lifecycle_proc = subprocess.run([sys.executable, str(SERVER)], input=lifecycle_requests, text=True, capture_output=True, timeout=30)
+            lifecycle_replies = [json.loads(line) for line in lifecycle_proc.stdout.splitlines() if line.strip()]
+            show_payload = json.loads(next(reply for reply in lifecycle_replies if reply.get("id") == 6)["result"]["content"][0]["text"])
+            forget_payload = json.loads(next(reply for reply in lifecycle_replies if reply.get("id") == 7)["result"]["content"][0]["text"])
+            all_recall_payload = json.loads(next(reply for reply in lifecycle_replies if reply.get("id") == 8)["result"]["content"][0]["text"])
+            self.assertTrue(show_payload["ok"], show_payload)
+            self.assertTrue(forget_payload["ok"], forget_payload)
+            self.assertTrue(all_recall_payload["ok"], all_recall_payload)
+            self.assertTrue(all_recall_payload["all_workflows"])
+
 
 if __name__ == "__main__":
     unittest.main()

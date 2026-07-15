@@ -490,10 +490,24 @@ def _tasks(args: dict[str, Any]) -> list[str] | None:
     return raw
 
 
+def _validation_error(code: str, detail: str, *, context: dict[str, Any] | None = None) -> NatureProgressError:
+    error = NatureProgressError(detail, code=code, retryable=False, context=context)
+    error.rpc_code = -32602
+    return error
+
+
 def _required_string(args: dict[str, Any], name: str) -> str:
     raw = args.get(name)
-    if not isinstance(raw, str) or not raw.strip():
-        raise NatureProgressError(f"{name} is required")
+    if raw is None:
+        raise _validation_error(f"missing_{name}", f"{name} is required", context={"field": name})
+    if not isinstance(raw, str):
+        raise _validation_error(
+            f"invalid_{name}",
+            f"{name} must be a non-empty string",
+            context={"field": name},
+        )
+    if not raw.strip():
+        raise _validation_error(f"missing_{name}", f"{name} is required", context={"field": name})
     return raw
 
 
@@ -546,7 +560,11 @@ def _project_root_required(args: dict[str, Any]) -> Path:
 def _required_scope(args: dict[str, Any]) -> str:
     scope = _required_string(args, "scope")
     if scope not in {"shared", "local"}:
-        raise NatureProgressError("scope must be shared or local")
+        raise _validation_error(
+            "invalid_scope",
+            "scope must be shared or local",
+            context={"field": "scope", "allowed": ["shared", "local"]},
+        )
     return scope
 
 
@@ -781,14 +799,20 @@ def handle(message: dict[str, Any]) -> dict[str, Any] | None:
             result = call_tool(params.get("name", ""), params.get("arguments", {}) or {})
             return response(request_id, text_result(result))
         except NatureProgressError as exc:
+            code = getattr(exc, "code", None)
+            detail = getattr(exc, "detail", str(exc))
+            if isinstance(exc, MemoryBoundaryError) and code == "nature_progress_error":
+                message = str(exc)
+                if ": " in message:
+                    code, detail = message.split(": ", 1)
             error: dict[str, Any] = {
                 "code": getattr(exc, "rpc_code", -32000),
-                "message": getattr(exc, "detail", str(exc)),
+                "message": detail,
             }
-            if getattr(exc, "code", None):
+            if code:
                 error["data"] = {
-                    "code": exc.code,
-                    "detail": getattr(exc, "detail", str(exc)),
+                    "code": code,
+                    "detail": detail,
                     "retryable": bool(getattr(exc, "retryable", False)),
                     **dict(getattr(exc, "context", {}) or {}),
                 }

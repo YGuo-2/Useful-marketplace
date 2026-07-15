@@ -4,7 +4,6 @@
     "U-002",
     "U-003",
     "U-004",
-    "U-005",
     "U-006",
     "U-007",
     "U-008",
@@ -1140,6 +1139,290 @@
       "role": "adversarial",
       "round": 4,
       "started_at": "2026-07-15 01:58:18",
+      "status": "completed",
+      "task_ids": [
+        "T-010",
+        "T-011",
+        "T-012"
+      ],
+      "unit_id": "U-010"
+    },
+    {
+      "agent_id": "round-5-R-U-001",
+      "completed_at": "2026-07-15 03:08:13",
+      "report": "## Review Unit\n- Unit: U-001 / T-001\n- Status: ACTIONABLE_ISSUES\n- Completion: incomplete; canonical schema and mixed parsing pass, but touch locator ownership is not enforced.\n- Spec Adherence: deviation.\n- Over-Fallback: present; touch can resolve UUID without validating locator workflow.\n- Verification: missing cross-workflow touch-locator regression; existing Windows/WSL/MCP/eval evidence does not cover it.\n- Issues: P1 T-001: command_memory_touch omits locator path validation and can mutate a same-ID entry in another workflow; direct probe showed show rejected locator_workflow_mismatch while touch succeeded and changed the second file.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "first_wave",
+      "round": 5,
+      "started_at": "2026-07-15 02:56:21",
+      "status": "completed",
+      "task_ids": [
+        "T-001"
+      ],
+      "unit_id": "U-001"
+    },
+    {
+      "agent_id": "round-5-A-U-001",
+      "completed_at": "2026-07-15 03:19:21",
+      "report": "## Review Unit\n- Unit: U-001 / T-001\n- Status: ACTIONABLE_ISSUES\n- Completion: incomplete; first-wave I-148 is confirmed and an nm_-prefixed title boundary is additional.\n- Spec Adherence: deviation.\n- Over-Fallback: present; touch lacks locator ownership validation and every nm_ reference is treated as stable ID.\n- Verification: cross-workflow touch and nm_ title regressions missing.\n- Issues: P1 I-148 confirmed: touch can mutate another workflow. P2 new: unique title `nm_title` is rejected as invalid_stable_id instead of resolving as a title.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "adversarial",
+      "round": 5,
+      "started_at": "2026-07-15 03:09:04",
+      "status": "completed",
+      "task_ids": [
+        "T-001"
+      ],
+      "unit_id": "U-001"
+    },
+    {
+      "agent_id": "round-5-R-U-002",
+      "completed_at": "2026-07-15 03:08:13",
+      "report": "## Review Unit\n- Unit: U-002 / T-002\n- Status: PASS\n- Completion: complete; containment, symlink/hardlink rejection, scope isolation, secret/sentinel/control-character validation, and project-root diagnostics are covered.\n- Spec Adherence: strict.\n- Over-Fallback: none.\n- Verification: sufficient; Windows/WSL safety, eval, MCP, and missing-root regressions pass.\n- Issues: n/a",
+      "result": "PASS",
+      "role": "first_wave",
+      "round": 5,
+      "started_at": "2026-07-15 02:56:21",
+      "status": "completed",
+      "task_ids": [
+        "T-002"
+      ],
+      "unit_id": "U-002"
+    },
+    {
+      "agent_id": "round-5-A-U-002",
+      "completed_at": "2026-07-15 03:19:20",
+      "report": "## Review Unit\n- Unit: U-002 / T-002\n- Status: ACTIONABLE_ISSUES\n- Completion: incomplete; first-wave PASS was too broad.\n- Spec Adherence: deviation.\n- Over-Fallback: present.\n- Verification: missing workflow-root, read TOCTOU, and locator-preserving minimal diagnostic regressions.\n- Issues: P1 new: path containment/link check can race with later read and expose an external hardlink. P2 new: missing workflow root becomes empty success or raw touch error. P2 new: minimum response diagnostics retain only code and lose workflow/path identity. Existing project-root/scope issues remain fixed.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "adversarial",
+      "round": 5,
+      "started_at": "2026-07-15 03:09:04",
+      "status": "completed",
+      "task_ids": [
+        "T-002"
+      ],
+      "unit_id": "U-002"
+    },
+    {
+      "agent_id": "round-5-R-U-003",
+      "completed_at": "2026-07-15 03:08:13",
+      "report": "## Review Unit\n- Unit: U-003 / T-003\n- Status: ACTIONABLE_ISSUES\n- Completion: incomplete; lock/CAS behavior passes common paths but two race windows remain.\n- Spec Adherence: deviation.\n- Over-Fallback: present.\n- Verification: missing first-create Windows race and POSIX post-exchange external rewrite regression.\n- Issues: P1 T-003: nonexistent Windows target can be created between snapshot and os.replace and be overwritten. P1 T-003: POSIX renameat2 exchange followed by ETag mismatch recovery can overwrite an external edit made between exchange and restore.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "first_wave",
+      "round": 5,
+      "started_at": "2026-07-15 02:56:21",
+      "status": "completed",
+      "task_ids": [
+        "T-003"
+      ],
+      "unit_id": "U-003"
+    },
+    {
+      "agent_id": "round-5-A-U-003",
+      "completed_at": "2026-07-15 03:19:21",
+      "report": "## Review Unit\n- Unit: U-003 / T-003\n- Status: ACTIONABLE_ISSUES\n- Completion: incomplete.\n- Spec Adherence: deviation.\n- Over-Fallback: present.\n- Verification: first-create, POSIX restore-window, unexpected errno and restore diagnostics are uncovered.\n- Issues: P1 I-149 and I-150 confirmed. P2 new: unexpected renameat2 errno escapes raw OSError instead of structured CAS error. P2 new: cas_restore_failed lacks current/expected ETags and recovery preservation evidence.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "adversarial",
+      "round": 5,
+      "started_at": "2026-07-15 03:09:04",
+      "status": "completed",
+      "task_ids": [
+        "T-003"
+      ],
+      "unit_id": "U-003"
+    },
+    {
+      "agent_id": "round-5-R-U-004",
+      "completed_at": "2026-07-15 03:08:12",
+      "report": "## Review Unit\n- Unit: U-004 / T-004\n- Status: ACTIONABLE_ISSUES\n- Completion: incomplete; lifecycle paths pass but terminal touch is not guarded.\n- Spec Adherence: deviation.\n- Over-Fallback: present.\n- Verification: no archived/superseded touch regression.\n- Issues: P2 T-004: command_memory_touch rewrites archived and superseded entries instead of rejecting non-active lifecycle states.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "first_wave",
+      "round": 5,
+      "started_at": "2026-07-15 02:56:21",
+      "status": "completed",
+      "task_ids": [
+        "T-004"
+      ],
+      "unit_id": "U-004"
+    },
+    {
+      "agent_id": "round-5-A-U-004",
+      "completed_at": "2026-07-15 03:19:20",
+      "report": "## Review Unit\n- Unit: U-004 / T-004\n- Status: ACTIONABLE_ISSUES\n- Completion: incomplete.\n- Spec Adherence: deviation.\n- Over-Fallback: present.\n- Verification: terminal touch regression missing.\n- Issues: P2 I-151 confirmed; MCP test currently fixes the incorrect terminal-touch success behavior. Existing I-118 remains deferred and is not duplicated.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "adversarial",
+      "round": 5,
+      "started_at": "2026-07-15 03:09:04",
+      "status": "completed",
+      "task_ids": [
+        "T-004"
+      ],
+      "unit_id": "U-004"
+    },
+    {
+      "agent_id": "round-5-R-U-005",
+      "completed_at": "2026-07-15 03:08:13",
+      "report": "## Review Unit\n- Unit: U-005 / T-005\n- Status: ACTIONABLE_ISSUES\n- Completion: implementation behavior passes probes; evidence gaps remain.\n- Spec Adherence: strict behavior, incomplete verification.\n- Over-Fallback: none.\n- Verification: focused budget and WSL/eval evidence pass.\n- Issues: existing deferred P3 I-107 (soft-byte remember boundary), I-108 (hard-budget byte identity), and I-136 (fixture starts above hard limit) remain unclosed; no duplicate issue recorded.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "first_wave",
+      "round": 5,
+      "started_at": "2026-07-15 02:56:21",
+      "status": "completed",
+      "task_ids": [
+        "T-005"
+      ],
+      "unit_id": "U-005"
+    },
+    {
+      "agent_id": "round-5-A-U-005",
+      "completed_at": "2026-07-15 03:19:20",
+      "report": "## Review Unit\n- Unit: U-005 / T-005\n- Status: ACTIONABLE_ISSUES\n- Completion: behavior passes probes but strict evidence is incomplete.\n- Spec Adherence: strict behavior.\n- Over-Fallback: none.\n- Verification: P3 I-107, I-108 and I-136 are confirmed existing deferred gaps; no new issue.\n- Issues: existing deferred issues only.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "adversarial",
+      "round": 5,
+      "started_at": "2026-07-15 03:09:04",
+      "status": "completed",
+      "task_ids": [
+        "T-005"
+      ],
+      "unit_id": "U-005"
+    },
+    {
+      "agent_id": "round-5-R-U-006",
+      "completed_at": "2026-07-15 03:08:13",
+      "report": "## Review Unit\n- Unit: U-006 / T-006\n- Status: ACTIONABLE_ISSUES\n- Completion: incomplete; trust block and repair work for direct paths pass, parent-link and formatting boundaries remain.\n- Spec Adherence: deviation.\n- Over-Fallback: present.\n- Verification: missing parent-directory symlink and CRLF/external-layout regressions.\n- Issues: P1 T-006: _resolve_agents_path follows a parent symlink and can modify an external AGENTS.md and backup. P2 T-006: repair normalizes marker-outside content and CRLF/trailing layout through splitlines/reconstruction.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "first_wave",
+      "round": 5,
+      "started_at": "2026-07-15 02:56:21",
+      "status": "completed",
+      "task_ids": [
+        "T-006"
+      ],
+      "unit_id": "U-006"
+    },
+    {
+      "agent_id": "round-5-A-U-006",
+      "completed_at": "2026-07-15 03:19:21",
+      "report": "## Review Unit\n- Unit: U-006 / T-006\n- Status: ACTIONABLE_ISSUES\n- Completion: incomplete.\n- Spec Adherence: deviation.\n- Over-Fallback: present.\n- Verification: parent symlink and CRLF/layout regressions missing.\n- Issues: P1 I-152 and P2 I-153 confirmed; backup failure/UTF-8 issues are fixed.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "adversarial",
+      "round": 5,
+      "started_at": "2026-07-15 03:09:04",
+      "status": "completed",
+      "task_ids": [
+        "T-006"
+      ],
+      "unit_id": "U-006"
+    },
+    {
+      "agent_id": "round-5-R-U-007",
+      "completed_at": "2026-07-15 03:08:12",
+      "report": "## Review Unit\n- Unit: U-007 / T-007\n- Status: ACTIONABLE_ISSUES\n- Completion: incomplete; normal recall and metrics pass but two boundary semantics fail.\n- Spec Adherence: deviation.\n- Over-Fallback: present.\n- Verification: missing ordered budget regression and valid later-workflow locator regression.\n- Issues: P2 T-007: oversized top-ranked candidate is skipped and a lower-ranked record is returned. P2 T-007: all-workflows recall rejects a valid locator from a later workflow after an earlier workflow returns locator_workflow_mismatch.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "first_wave",
+      "round": 5,
+      "started_at": "2026-07-15 02:56:21",
+      "status": "completed",
+      "task_ids": [
+        "T-007"
+      ],
+      "unit_id": "U-007"
+    },
+    {
+      "agent_id": "round-5-A-U-007",
+      "completed_at": "2026-07-15 03:19:20",
+      "report": "## Review Unit\n- Unit: U-007 / T-007\n- Status: ACTIONABLE_ISSUES\n- Completion: incomplete.\n- Spec Adherence: deviation.\n- Over-Fallback: present.\n- Verification: ordered budget and later-workflow locator regressions missing.\n- Issues: P2 I-154 and I-155 confirmed; no new issue.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "adversarial",
+      "round": 5,
+      "started_at": "2026-07-15 03:09:05",
+      "status": "completed",
+      "task_ids": [
+        "T-007"
+      ],
+      "unit_id": "U-007"
+    },
+    {
+      "agent_id": "round-5-R-U-008",
+      "completed_at": "2026-07-15 03:08:13",
+      "report": "## Review Unit\n- Unit: U-008 / T-008\n- Status: ACTIONABLE_ISSUES\n- Completion: implementation and individual recovery paths pass, but combined recovery evidence is incomplete.\n- Spec Adherence: deviation in verification.\n- Over-Fallback: none.\n- Verification: single replacement, collision, and backup failure tests pass; no combined all-workflows replacement-failure/retry regression.\n- Issues: existing deferred P3 I-145 remains unclosed; no duplicate issue recorded.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "first_wave",
+      "round": 5,
+      "started_at": "2026-07-15 02:56:21",
+      "status": "completed",
+      "task_ids": [
+        "T-008"
+      ],
+      "unit_id": "U-008"
+    },
+    {
+      "agent_id": "round-5-A-U-008",
+      "completed_at": "2026-07-15 03:19:21",
+      "report": "## Review Unit\n- Unit: U-008 / T-008\n- Status: ACTIONABLE_ISSUES\n- Completion: incomplete.\n- Spec Adherence: deviation.\n- Over-Fallback: none for MemoryBoundaryError, but unexpected replacement OSError escapes.\n- Verification: combined recovery and real JSON-RPC replacement-failure tests missing.\n- Issues: P1 new: unexpected replacement OSError can abort all-workflows, retain backup, and block retry. Existing P3 I-145 confirmed and not duplicated.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "adversarial",
+      "round": 5,
+      "started_at": "2026-07-15 03:09:05",
+      "status": "completed",
+      "task_ids": [
+        "T-008"
+      ],
+      "unit_id": "U-008"
+    },
+    {
+      "agent_id": "round-5-R-U-009",
+      "completed_at": "2026-07-15 03:08:13",
+      "report": "## Review Unit\n- Unit: U-009 / T-009\n- Status: ACTIONABLE_ISSUES\n- Completion: incomplete for strict acceptance.\n- Spec Adherence: deviation.\n- Over-Fallback: present; broad exception fallback and bare MCP validation errors bypass required bounded/structured contracts.\n- Verification: missing real JSON-RPC partial-failure and response-loss recovery tests.\n- Issues: P1 T-009 exception fallback can exceed max_bytes; P2 T-009 _required_string/_required_scope errors lack stable data; P2 T-009 no real JSON-RPC post-commit memory failure/response-loss regression.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "first_wave",
+      "round": 5,
+      "started_at": "2026-07-15 02:56:22",
+      "status": "completed",
+      "task_ids": [
+        "T-009"
+      ],
+      "unit_id": "U-009"
+    },
+    {
+      "agent_id": "round-5-A-U-009",
+      "completed_at": "2026-07-15 03:19:20",
+      "report": "## Review Unit\n- Unit: U-009 / T-009\n- Status: ACTIONABLE_ISSUES\n- Completion: incomplete.\n- Spec Adherence: deviation.\n- Over-Fallback: present.\n- Verification: first-wave I-156/I-157/I-158 all confirmed by focused probes and lack of real JSON-RPC failure coverage.\n- Issues: P1 I-156, P2 I-157, and P2 I-158 confirmed; no new issue.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "adversarial",
+      "round": 5,
+      "started_at": "2026-07-15 03:09:05",
+      "status": "completed",
+      "task_ids": [
+        "T-009"
+      ],
+      "unit_id": "U-009"
+    },
+    {
+      "agent_id": "round-5-R-U-010",
+      "completed_at": "2026-07-15 03:08:13",
+      "report": "## Review Unit\n- Unit: U-010 / T-010/T-011/T-012\n- Status: ACTIONABLE_ISSUES\n- Completion: incomplete for strict evidence.\n- Spec Adherence: deviation.\n- Over-Fallback: present in CAS/eval evidence interpretation.\n- Verification: Windows/WSL/MCP and offline eval pass, but POSIX race is duplicate of U-003 P1 and rubric evidence is not independent.\n- Issues: duplicate P1 POSIX CAS race from U-003; P2 T-011/T-012 agent eval reviewer_evidence is harness-generated rather than independent reviewer verdicts and connected evaluation is not claimed.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "first_wave",
+      "round": 5,
+      "started_at": "2026-07-15 02:56:22",
+      "status": "completed",
+      "task_ids": [
+        "T-010",
+        "T-011",
+        "T-012"
+      ],
+      "unit_id": "U-010"
+    },
+    {
+      "agent_id": "round-5-A-U-010",
+      "completed_at": "2026-07-15 03:19:20",
+      "report": "## Review Unit\n- Unit: U-010 / T-010/T-011/T-012\n- Status: ACTIONABLE_ISSUES\n- Completion: incomplete for strict release evidence.\n- Spec Adherence: deviation.\n- Over-Fallback: present in generated rubric/release claims.\n- Verification: offline eval passes, but independent rubric artifacts and current-checkpoint evidence are missing/contradictory.\n- Issues: P2 I-159 confirmed. P1 new: tasks.md release evidence still claims connected Agent eval while README/task note says offline, and completion log cites stale d6ec024 rather than current e088713; strict release evidence is not current.",
+      "result": "ACTIONABLE_ISSUES",
+      "role": "adversarial",
+      "round": 5,
+      "started_at": "2026-07-15 03:09:05",
       "status": "completed",
       "task_ids": [
         "T-010",
@@ -4087,6 +4370,408 @@
       "unit_ids": [
         "U-009"
       ]
+    },
+    {
+      "completed_at": "2026-07-15 03:42:08",
+      "created_at": "2026-07-15 03:19:58",
+      "evidence": "touch now validates locator workflow ownership; cross-workflow touch returns locator_workflow_mismatch without changing bytes; lifecycle/locator regressions pass.",
+      "fix_id": "F-143",
+      "issue_ids": [
+        "I-148"
+      ],
+      "round": 5,
+      "severity": "P1",
+      "started_at": "2026-07-15 03:20:21",
+      "status": "done",
+      "task_ids": [
+        "T-001"
+      ],
+      "title": "Touch accepts a locator from another workflow",
+      "unit_ids": [
+        "U-001"
+      ]
+    },
+    {
+      "completed_at": "2026-07-15 03:42:08",
+      "created_at": "2026-07-15 03:19:58",
+      "evidence": "Windows first-create CAS now refuses an external file appearing after the empty snapshot instead of overwriting it; first-create regression passes.",
+      "fix_id": "F-144",
+      "issue_ids": [
+        "I-149"
+      ],
+      "round": 5,
+      "severity": "P1",
+      "started_at": "2026-07-15 03:20:21",
+      "status": "done",
+      "task_ids": [
+        "T-003"
+      ],
+      "title": "Windows first-create CAS race can overwrite an external file",
+      "unit_ids": [
+        "U-003"
+      ]
+    },
+    {
+      "completed_at": "2026-07-15 03:42:08",
+      "created_at": "2026-07-15 03:19:58",
+      "evidence": "POSIX CAS recovery now detects a post-exchange external rewrite before restore and preserves the external result; race regression/WSL coverage passes.",
+      "fix_id": "F-145",
+      "issue_ids": [
+        "I-150"
+      ],
+      "round": 5,
+      "severity": "P1",
+      "started_at": "2026-07-15 03:20:22",
+      "status": "done",
+      "task_ids": [
+        "T-003"
+      ],
+      "title": "POSIX CAS recovery can overwrite a post-exchange external edit",
+      "unit_ids": [
+        "U-003"
+      ]
+    },
+    {
+      "completed_at": "2026-07-15 03:42:08",
+      "created_at": "2026-07-15 03:19:58",
+      "evidence": "touch enforces active-only lifecycle mutation and rejects archived/superseded entries with zero write; MCP smoke expectation corrected and full script suite passes.",
+      "fix_id": "F-146",
+      "issue_ids": [
+        "I-151"
+      ],
+      "round": 5,
+      "severity": "P2",
+      "started_at": "2026-07-15 03:20:22",
+      "status": "done",
+      "task_ids": [
+        "T-004"
+      ],
+      "title": "Touch mutates terminal lifecycle entries",
+      "unit_ids": [
+        "U-004"
+      ]
+    },
+    {
+      "completed_at": "2026-07-15 03:42:08",
+      "created_at": "2026-07-15 03:19:58",
+      "evidence": "AGENTS resolution rejects parent-directory symlink escapes before read/backup/write; WSL/safety regression passes.",
+      "fix_id": "F-147",
+      "issue_ids": [
+        "I-152"
+      ],
+      "round": 5,
+      "severity": "P1",
+      "started_at": "2026-07-15 03:20:22",
+      "status": "done",
+      "task_ids": [
+        "T-006"
+      ],
+      "title": "AGENTS parent symlink escapes project boundary",
+      "unit_ids": [
+        "U-006"
+      ]
+    },
+    {
+      "completed_at": "2026-07-15 03:42:08",
+      "created_at": "2026-07-15 03:19:58",
+      "evidence": "AGENTS repair preserves CRLF, trailing whitespace, marker-outside bytes and outer layout while replacing only the sentinel block; formatting regression passes.",
+      "fix_id": "F-148",
+      "issue_ids": [
+        "I-153"
+      ],
+      "round": 5,
+      "severity": "P2",
+      "started_at": "2026-07-15 03:20:22",
+      "status": "done",
+      "task_ids": [
+        "T-006"
+      ],
+      "title": "AGENTS repair changes CRLF and surrounding layout",
+      "unit_ids": [
+        "U-006"
+      ]
+    },
+    {
+      "completed_at": "2026-07-15 03:42:08",
+      "created_at": "2026-07-15 03:19:58",
+      "evidence": "recall budget fallback preserves ordered complete-record semantics and does not substitute a lower-ranked record after an oversized higher-ranked candidate.",
+      "fix_id": "F-149",
+      "issue_ids": [
+        "I-154"
+      ],
+      "round": 5,
+      "severity": "P2",
+      "started_at": "2026-07-15 03:20:22",
+      "status": "done",
+      "task_ids": [
+        "T-007"
+      ],
+      "title": "Recall skips an oversized higher-ranked record",
+      "unit_ids": [
+        "U-007"
+      ]
+    },
+    {
+      "completed_at": "2026-07-15 03:42:09",
+      "created_at": "2026-07-15 03:19:58",
+      "evidence": "all-workflows recall dispatches valid locators to the encoded workflow instead of failing on an earlier workflow mismatch; locator regression passes.",
+      "fix_id": "F-150",
+      "issue_ids": [
+        "I-155"
+      ],
+      "round": 5,
+      "severity": "P2",
+      "started_at": "2026-07-15 03:20:22",
+      "status": "done",
+      "task_ids": [
+        "T-007"
+      ],
+      "title": "All-workflows recall rejects valid later-workflow locator",
+      "unit_ids": [
+        "U-007"
+      ]
+    },
+    {
+      "completed_at": "2026-07-15 03:42:09",
+      "created_at": "2026-07-15 03:19:58",
+      "evidence": "facade broad exception paths remain bounded by requested max_bytes and preserve compact structured error identity; progress tests pass.",
+      "fix_id": "F-151",
+      "issue_ids": [
+        "I-156"
+      ],
+      "round": 5,
+      "severity": "P1",
+      "started_at": "2026-07-15 03:26:24",
+      "status": "done",
+      "task_ids": [
+        "T-009"
+      ],
+      "title": "Facade exception fallback bypasses max_bytes",
+      "unit_ids": [
+        "U-009"
+      ]
+    },
+    {
+      "completed_at": "2026-07-15 03:42:09",
+      "created_at": "2026-07-15 03:19:58",
+      "evidence": "required facade/MCP string and scope validation returns stable -32602 structured data with code/context/retryability.",
+      "fix_id": "F-152",
+      "issue_ids": [
+        "I-157"
+      ],
+      "round": 5,
+      "severity": "P2",
+      "started_at": "2026-07-15 03:20:22",
+      "status": "done",
+      "task_ids": [
+        "T-009"
+      ],
+      "title": "MCP validation errors lack structured data",
+      "unit_ids": [
+        "U-009"
+      ]
+    },
+    {
+      "completed_at": "2026-07-15 03:42:09",
+      "created_at": "2026-07-15 03:19:58",
+      "evidence": "real JSON-RPC post-commit failure and resume verification regressions prove progress_committed/unavailable semantics and bounded review payload.",
+      "fix_id": "F-153",
+      "issue_ids": [
+        "I-158"
+      ],
+      "round": 5,
+      "severity": "P2",
+      "started_at": "2026-07-15 03:20:22",
+      "status": "done",
+      "task_ids": [
+        "T-009"
+      ],
+      "title": "Facade post-commit failure lacks real JSON-RPC regression",
+      "unit_ids": [
+        "U-009"
+      ]
+    },
+    {
+      "completed_at": "2026-07-15 03:42:09",
+      "created_at": "2026-07-15 03:19:58",
+      "evidence": "agent eval imports external reviewer_verdicts.json with hash/disagreement checks, records independent verdict evidence, and explicitly sets connected_model_evaluation=false; eval 5 tests and both eval modes pass.",
+      "fix_id": "F-154",
+      "issue_ids": [
+        "I-159"
+      ],
+      "round": 5,
+      "severity": "P2",
+      "started_at": "2026-07-15 03:20:23",
+      "status": "done",
+      "task_ids": [
+        "T-011",
+        "T-012"
+      ],
+      "title": "Agent eval rubric evidence is not independent",
+      "unit_ids": [
+        "U-010"
+      ]
+    },
+    {
+      "completed_at": "2026-07-15 03:42:09",
+      "created_at": "2026-07-15 03:19:58",
+      "evidence": "unique titles beginning with nm_ remain title-resolvable rather than being unconditionally parsed as stable IDs; regression passes.",
+      "fix_id": "F-155",
+      "issue_ids": [
+        "I-160"
+      ],
+      "round": 5,
+      "severity": "P2",
+      "started_at": "2026-07-15 03:20:23",
+      "status": "done",
+      "task_ids": [
+        "T-001"
+      ],
+      "title": "nm_-prefixed titles are rejected as stable IDs",
+      "unit_ids": [
+        "U-001"
+      ]
+    },
+    {
+      "completed_at": "2026-07-15 03:42:09",
+      "created_at": "2026-07-15 03:19:58",
+      "evidence": "memory reads revalidate target identity against the opened file to reject hardlink replacement races; safety regression passes.",
+      "fix_id": "F-156",
+      "issue_ids": [
+        "I-161"
+      ],
+      "round": 5,
+      "severity": "P1",
+      "started_at": "2026-07-15 03:20:23",
+      "status": "done",
+      "task_ids": [
+        "T-002"
+      ],
+      "title": "Memory path validation races with the later read",
+      "unit_ids": [
+        "U-002"
+      ]
+    },
+    {
+      "completed_at": "2026-07-15 03:42:09",
+      "created_at": "2026-07-15 03:19:58",
+      "evidence": "missing workflow roots are structured and fail closed across check/list/recall/migrate/touch compatibility paths; progress 32 tests pass.",
+      "fix_id": "F-157",
+      "issue_ids": [
+        "I-162"
+      ],
+      "round": 5,
+      "severity": "P2",
+      "started_at": "2026-07-15 03:20:23",
+      "status": "done",
+      "task_ids": [
+        "T-002"
+      ],
+      "title": "Missing workflow roots are silently empty or raw errors",
+      "unit_ids": [
+        "U-002"
+      ]
+    },
+    {
+      "completed_at": "2026-07-15 03:42:09",
+      "created_at": "2026-07-15 03:19:58",
+      "evidence": "minimum response diagnostics retain compact workflow/path identity where budget permits and preserve structured unsafe-path errors; full suite passes.",
+      "fix_id": "F-158",
+      "issue_ids": [
+        "I-163"
+      ],
+      "round": 5,
+      "severity": "P2",
+      "started_at": "2026-07-15 03:20:23",
+      "status": "done",
+      "task_ids": [
+        "T-002"
+      ],
+      "title": "Minimal unsafe diagnostics lose locator identity",
+      "unit_ids": [
+        "U-002"
+      ]
+    },
+    {
+      "completed_at": "2026-07-15 03:42:10",
+      "created_at": "2026-07-15 03:19:58",
+      "evidence": "unexpected renameat2 errno is converted to structured retryable CAS error with ETag context; regression passes.",
+      "fix_id": "F-159",
+      "issue_ids": [
+        "I-164"
+      ],
+      "round": 5,
+      "severity": "P2",
+      "started_at": "2026-07-15 03:20:23",
+      "status": "done",
+      "task_ids": [
+        "T-003"
+      ],
+      "title": "Unexpected renameat2 errno escapes as raw OSError",
+      "unit_ids": [
+        "U-003"
+      ]
+    },
+    {
+      "completed_at": "2026-07-15 03:42:10",
+      "created_at": "2026-07-15 03:19:58",
+      "evidence": "CAS restore failures include current/expected ETag context and preserve auditable zero-write behavior; focused concurrency/safety tests pass.",
+      "fix_id": "F-160",
+      "issue_ids": [
+        "I-165"
+      ],
+      "round": 5,
+      "severity": "P2",
+      "started_at": "2026-07-15 03:20:23",
+      "status": "done",
+      "task_ids": [
+        "T-003"
+      ],
+      "title": "CAS restore failure lacks ETag audit context",
+      "unit_ids": [
+        "U-003"
+      ]
+    },
+    {
+      "completed_at": "2026-07-15 03:42:10",
+      "created_at": "2026-07-15 03:19:58",
+      "evidence": "all-workflows migration converts replacement OSError to structured per-workflow failure, cleans operation backup, preserves bytes, and permits retry; migration regressions pass.",
+      "fix_id": "F-161",
+      "issue_ids": [
+        "I-166"
+      ],
+      "round": 5,
+      "severity": "P1",
+      "started_at": "2026-07-15 03:20:23",
+      "status": "done",
+      "task_ids": [
+        "T-008"
+      ],
+      "title": "All-workflows replacement OSError blocks retry",
+      "unit_ids": [
+        "U-008"
+      ]
+    },
+    {
+      "completed_at": null,
+      "created_at": "2026-07-15 03:19:58",
+      "evidence": "pending",
+      "fix_id": "F-162",
+      "issue_ids": [
+        "I-167"
+      ],
+      "round": 5,
+      "severity": "P1",
+      "started_at": "2026-07-15 03:20:23",
+      "status": "active",
+      "task_ids": [
+        "T-011",
+        "T-012"
+      ],
+      "title": "Release evidence is stale and contradictory at current checkpoint",
+      "unit_ids": [
+        "U-010"
+      ]
     }
   ],
   "full_fix_rounds": 3,
@@ -6309,6 +6994,308 @@
       ],
       "title": "Facade MCP does not enforce top_k and max_bytes bounds",
       "unit_id": "U-009"
+    },
+    {
+      "agent_id": "round-5-R-U-001",
+      "created_at": "2026-07-15 03:08:44",
+      "evidence": "command_memory_touch omits locator path validation; probe showed show rejects locator_workflow_mismatch but touch succeeds and mutates the second workflow.",
+      "fix_id": "F-143",
+      "issue_id": "I-148",
+      "round": 5,
+      "severity": "P1",
+      "status": "fixed",
+      "task_ids": [
+        "T-001"
+      ],
+      "title": "Touch accepts a locator from another workflow",
+      "unit_id": "U-001"
+    },
+    {
+      "agent_id": "round-5-R-U-003",
+      "created_at": "2026-07-15 03:08:44",
+      "evidence": "When memory.md does not exist, the snapshot/replace path can be interleaved with an external create and os.replace overwrites it without file_changed_outside_lock.",
+      "fix_id": "F-144",
+      "issue_id": "I-149",
+      "round": 5,
+      "severity": "P1",
+      "status": "fixed",
+      "task_ids": [
+        "T-003"
+      ],
+      "title": "Windows first-create CAS race can overwrite an external file",
+      "unit_id": "U-003"
+    },
+    {
+      "agent_id": "round-5-R-U-003",
+      "created_at": "2026-07-15 03:08:44",
+      "evidence": "renameat2 exchange followed by ETag mismatch recovery can restore over an external rewrite made between exchange and restore.",
+      "fix_id": "F-145",
+      "issue_id": "I-150",
+      "round": 5,
+      "severity": "P1",
+      "status": "fixed",
+      "task_ids": [
+        "T-003"
+      ],
+      "title": "POSIX CAS recovery can overwrite a post-exchange external edit",
+      "unit_id": "U-003"
+    },
+    {
+      "agent_id": "round-5-R-U-004",
+      "created_at": "2026-07-15 03:08:44",
+      "evidence": "command_memory_touch rewrites archived or superseded entries without enforcing active-only mutation.",
+      "fix_id": "F-146",
+      "issue_id": "I-151",
+      "round": 5,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-004"
+      ],
+      "title": "Touch mutates terminal lifecycle entries",
+      "unit_id": "U-004"
+    },
+    {
+      "agent_id": "round-5-R-U-006",
+      "created_at": "2026-07-15 03:08:44",
+      "evidence": "_resolve_agents_path validates lexical containment but follows a parent symlink and modifies an external AGENTS.md/backup.",
+      "fix_id": "F-147",
+      "issue_id": "I-152",
+      "round": 5,
+      "severity": "P1",
+      "status": "fixed",
+      "task_ids": [
+        "T-006"
+      ],
+      "title": "AGENTS parent symlink escapes project boundary",
+      "unit_id": "U-006"
+    },
+    {
+      "agent_id": "round-5-R-U-006",
+      "created_at": "2026-07-15 03:08:44",
+      "evidence": "repair uses splitlines/strip/reconstruction and does not preserve marker-outside bytes, CRLF, trailing spaces, or outer layout.",
+      "fix_id": "F-148",
+      "issue_id": "I-153",
+      "round": 5,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-006"
+      ],
+      "title": "AGENTS repair changes CRLF and surrounding layout",
+      "unit_id": "U-006"
+    },
+    {
+      "agent_id": "round-5-R-U-007",
+      "created_at": "2026-07-15 03:08:44",
+      "evidence": "Budget fallback continues after an oversized top-ranked candidate and returns a lower-ranked record, violating ordered complete-record semantics.",
+      "fix_id": "F-149",
+      "issue_id": "I-154",
+      "round": 5,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-007"
+      ],
+      "title": "Recall skips an oversized higher-ranked record",
+      "unit_id": "U-007"
+    },
+    {
+      "agent_id": "round-5-R-U-007",
+      "created_at": "2026-07-15 03:08:45",
+      "evidence": "Sequential per-workflow recall treats an earlier mismatch as fatal instead of trying the workflow encoded by a valid locator.",
+      "fix_id": "F-150",
+      "issue_id": "I-155",
+      "round": 5,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-007"
+      ],
+      "title": "All-workflows recall rejects valid later-workflow locator",
+      "unit_id": "U-007"
+    },
+    {
+      "agent_id": "round-5-R-U-009",
+      "created_at": "2026-07-15 03:08:45",
+      "evidence": "Broad exception paths return _memory_failure directly without _bounded_payload, allowing large exception detail/context beyond requested budget.",
+      "fix_id": "F-151",
+      "issue_id": "I-156",
+      "round": 5,
+      "severity": "P1",
+      "status": "fixed",
+      "task_ids": [
+        "T-009"
+      ],
+      "title": "Facade exception fallback bypasses max_bytes",
+      "unit_id": "U-009"
+    },
+    {
+      "agent_id": "round-5-R-U-009",
+      "created_at": "2026-07-15 03:08:45",
+      "evidence": "_required_string and _required_scope raise bare NatureProgressError, so JSON-RPC errors lack stable code/retryability data.",
+      "fix_id": "F-152",
+      "issue_id": "I-157",
+      "round": 5,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-009"
+      ],
+      "title": "MCP validation errors lack structured data",
+      "unit_id": "U-009"
+    },
+    {
+      "agent_id": "round-5-R-U-009",
+      "created_at": "2026-07-15 03:08:45",
+      "evidence": "No real tools/call test proves progress_committed=true with structured unavailable memory_review and response-loss recovery.",
+      "fix_id": "F-153",
+      "issue_id": "I-158",
+      "round": 5,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-009"
+      ],
+      "title": "Facade post-commit failure lacks real JSON-RPC regression",
+      "unit_id": "U-009"
+    },
+    {
+      "agent_id": "round-5-R-U-010",
+      "created_at": "2026-07-15 03:08:45",
+      "evidence": "reviewer_evidence is generated and checked by the same harness rather than recording independent reviewer verdicts required by T-011/T-012.",
+      "fix_id": "F-154",
+      "issue_id": "I-159",
+      "round": 5,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-011",
+        "T-012"
+      ],
+      "title": "Agent eval rubric evidence is not independent",
+      "unit_id": "U-010"
+    },
+    {
+      "agent_id": "round-5-A-U-001",
+      "created_at": "2026-07-15 03:19:46",
+      "evidence": "_find_entry_reference treats every nm_ prefix as a stable ID; a unique title nm_title parses but lookup returns invalid_stable_id instead of resolving the title.",
+      "fix_id": "F-155",
+      "issue_id": "I-160",
+      "round": 5,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-001"
+      ],
+      "title": "nm_-prefixed titles are rejected as stable IDs",
+      "unit_id": "U-001"
+    },
+    {
+      "agent_id": "round-5-A-U-002",
+      "created_at": "2026-07-15 03:19:46",
+      "evidence": "Containment/link checks occur before read_bytes; controlled replacement with an external hardlink between those operations returned external memory content.",
+      "fix_id": "F-156",
+      "issue_id": "I-161",
+      "round": 5,
+      "severity": "P1",
+      "status": "fixed",
+      "task_ids": [
+        "T-002"
+      ],
+      "title": "Memory path validation races with the later read",
+      "unit_id": "U-002"
+    },
+    {
+      "agent_id": "round-5-A-U-002",
+      "created_at": "2026-07-15 03:19:46",
+      "evidence": "Nonexistent workflow roots yield empty success for check/list/recall-all/migrate-all and raw touch errors; existing tests only cover project root.",
+      "fix_id": "F-157",
+      "issue_id": "I-162",
+      "round": 5,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-002"
+      ],
+      "title": "Missing workflow roots are silently empty or raw errors",
+      "unit_id": "U-002"
+    },
+    {
+      "agent_id": "round-5-A-U-002",
+      "created_at": "2026-07-15 03:19:46",
+      "evidence": "At max_bytes=256 compact diagnostics retain only code and omit workflow_dir/memory_path, so operators cannot locate the unsafe path.",
+      "fix_id": "F-158",
+      "issue_id": "I-163",
+      "round": 5,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-002"
+      ],
+      "title": "Minimal unsafe diagnostics lose locator identity",
+      "unit_id": "U-002"
+    },
+    {
+      "agent_id": "round-5-A-U-003",
+      "created_at": "2026-07-15 03:19:46",
+      "evidence": "Injected EIO/permission errno from renameat2 escapes command_memory_remember instead of structured CAS error with repair context.",
+      "fix_id": "F-159",
+      "issue_id": "I-164",
+      "round": 5,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-003"
+      ],
+      "title": "Unexpected renameat2 errno escapes as raw OSError",
+      "unit_id": "U-003"
+    },
+    {
+      "agent_id": "round-5-A-U-003",
+      "created_at": "2026-07-15 03:19:46",
+      "evidence": "cas_restore_failed only returns memory_path and lacks current/expected ETags or preservation regression after restore failure.",
+      "fix_id": "F-160",
+      "issue_id": "I-165",
+      "round": 5,
+      "severity": "P2",
+      "status": "fixed",
+      "task_ids": [
+        "T-003"
+      ],
+      "title": "CAS restore failure lacks ETag audit context",
+      "unit_id": "U-003"
+    },
+    {
+      "agent_id": "round-5-A-U-008",
+      "created_at": "2026-07-15 03:19:46",
+      "evidence": "Unexpected replacement OSError aborts batch and leaves operation-created backup, causing retry to return local_backup_exists instead of recovering.",
+      "fix_id": "F-161",
+      "issue_id": "I-166",
+      "round": 5,
+      "severity": "P1",
+      "status": "fixed",
+      "task_ids": [
+        "T-008"
+      ],
+      "title": "All-workflows replacement OSError blocks retry",
+      "unit_id": "U-008"
+    },
+    {
+      "agent_id": "round-5-A-U-010",
+      "created_at": "2026-07-15 03:19:46",
+      "evidence": "tasks.md completion evidence still cites d6ec024 and lists connected Agent eval while the current task note/README scopes eval as offline; strict release evidence is not current.",
+      "fix_id": "F-162",
+      "issue_id": "I-167",
+      "round": 5,
+      "severity": "P1",
+      "status": "planned",
+      "task_ids": [
+        "T-011",
+        "T-012"
+      ],
+      "title": "Release evidence is stale and contradictory at current checkpoint",
+      "unit_id": "U-010"
     }
   ],
   "max_rounds": 6,
@@ -6335,7 +7322,7 @@
       "last_result": "ACTIONABLE_ISSUES",
       "phase": "阶段 1：Canonical 数据与事务边界",
       "review_status": "issues",
-      "round_started": 4,
+      "round_started": 5,
       "status": "issues",
       "task_ids": [
         "T-001"
@@ -6346,8 +7333,8 @@
       "adversarial_status": "issues",
       "last_result": "ACTIONABLE_ISSUES",
       "phase": "阶段 1：Canonical 数据与事务边界",
-      "review_status": "issues",
-      "round_started": 4,
+      "review_status": "pass",
+      "round_started": 5,
       "status": "issues",
       "task_ids": [
         "T-002"
@@ -6359,7 +7346,7 @@
       "last_result": "ACTIONABLE_ISSUES",
       "phase": "阶段 1：Canonical 数据与事务边界",
       "review_status": "issues",
-      "round_started": 4,
+      "round_started": 5,
       "status": "issues",
       "task_ids": [
         "T-003"
@@ -6371,7 +7358,7 @@
       "last_result": "ACTIONABLE_ISSUES",
       "phase": "阶段 1：Canonical 数据与事务边界",
       "review_status": "issues",
-      "round_started": 4,
+      "round_started": 5,
       "status": "issues",
       "task_ids": [
         "T-004"
@@ -6383,7 +7370,7 @@
       "last_result": "ACTIONABLE_ISSUES",
       "phase": "阶段 1：Canonical 数据与事务边界",
       "review_status": "issues",
-      "round_started": 4,
+      "round_started": 5,
       "status": "issues",
       "task_ids": [
         "T-005"
@@ -6395,7 +7382,7 @@
       "last_result": "ACTIONABLE_ISSUES",
       "phase": "阶段 2：发现、召回、迁移与工作流接入",
       "review_status": "issues",
-      "round_started": 4,
+      "round_started": 5,
       "status": "issues",
       "task_ids": [
         "T-006"
@@ -6407,7 +7394,7 @@
       "last_result": "ACTIONABLE_ISSUES",
       "phase": "阶段 2：发现、召回、迁移与工作流接入",
       "review_status": "issues",
-      "round_started": 4,
+      "round_started": 5,
       "status": "issues",
       "task_ids": [
         "T-007"
@@ -6419,7 +7406,7 @@
       "last_result": "ACTIONABLE_ISSUES",
       "phase": "阶段 2：发现、召回、迁移与工作流接入",
       "review_status": "issues",
-      "round_started": 4,
+      "round_started": 5,
       "status": "issues",
       "task_ids": [
         "T-008"
@@ -6431,7 +7418,7 @@
       "last_result": "ACTIONABLE_ISSUES",
       "phase": "阶段 2：发现、召回、迁移与工作流接入",
       "review_status": "issues",
-      "round_started": 4,
+      "round_started": 5,
       "status": "issues",
       "task_ids": [
         "T-009"
@@ -6443,7 +7430,7 @@
       "last_result": "ACTIONABLE_ISSUES",
       "phase": "阶段 3：对抗验证、Agent Eval 与发布收尾",
       "review_status": "issues",
-      "round_started": 4,
+      "round_started": 5,
       "status": "issues",
       "task_ids": [
         "T-010",
@@ -6453,10 +7440,10 @@
       "unit_id": "U-010"
     }
   ],
-  "round": 4,
+  "round": 5,
   "schema_version": 1,
-  "status": "fixes-complete",
+  "status": "fixes-running",
   "task_count": 12,
-  "updated_at": "2026-07-15 02:54:59",
+  "updated_at": "2026-07-15 03:42:10",
   "workflow": "design-first"
 }

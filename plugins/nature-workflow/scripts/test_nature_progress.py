@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -50,6 +51,63 @@ class StateEngineTests(unittest.TestCase):
         # progress.md mirrors disk
         progress = (Path(wf) / "progress.md").read_text(encoding="utf-8")
         self.assertIn("Active task: T1", progress)
+
+    def test_new_can_create_a_missing_workflow_root(self) -> None:
+        root = self.base / "docs" / "nature-workflows"
+        result = np.command_new_workflow(str(root), "wf", "WF", ["T1: first"], base=self.base)
+        self.assertTrue(root.is_dir())
+        self.assertEqual(Path(result["workflow_dir"]).parent, root)
+
+    def test_missing_workflow_root_fails_closed_with_structured_error(self) -> None:
+        missing = self.base / "docs" / "nature-workflows" / "missing"
+
+        for operation in (
+            lambda: np.command_discover(str(missing), base=self.base),
+            lambda: np.checked_workflow_dir(None, str(missing), base=self.base),
+        ):
+            with self.assertRaises(np.NatureProgressError) as raised:
+                operation()
+            error = raised.exception
+            self.assertEqual(error.code, "workflow_root_not_found")
+            self.assertEqual(error.context["workflow_root"], str(missing))
+            self.assertFalse(error.retryable)
+
+    def test_memory_compatibility_paths_fail_closed_on_missing_workflow_root(self) -> None:
+        missing = self.base / "docs" / "nature-workflows" / "missing"
+        operations = (
+            lambda: nature_memory.command_memory_check(str(missing), base=self.base, all_workflows=True),
+            lambda: nature_memory.command_memory_list(str(missing), base=self.base, all_workflows=True),
+            lambda: nature_memory.command_memory_recall_all(self.base, missing, "shared", "query"),
+            lambda: nature_memory.command_memory_touch(str(missing), None, "M1", base=self.base),
+        )
+
+        for operation in operations:
+            with self.assertRaises(np.NatureProgressError) as raised:
+                operation()
+            error = raised.exception
+            self.assertEqual(error.code, "workflow_root_not_found")
+            self.assertEqual(error.context["workflow_root"], str(missing))
+
+    def test_memory_migrate_all_fails_closed_on_missing_default_workflow_root(self) -> None:
+        with self.assertRaises(np.NatureProgressError) as raised:
+            nature_memory.command_memory_migrate(self.base, scope="shared", all_workflows=True)
+        error = raised.exception
+        self.assertEqual(error.code, "workflow_root_not_found")
+        self.assertEqual(
+            error.context["workflow_root"],
+            str(self.base / "docs" / "nature-workflows"),
+        )
+
+    def test_main_emits_structured_missing_root_error(self) -> None:
+        missing = self.base / "docs" / "nature-workflows" / "missing"
+        with patch.dict(os.environ, {"NATURE_WORKFLOW_BASE_DIR": str(self.base)}), patch("builtins.print") as printed:
+            exit_code = np.main(["discover", "--root", str(missing)])
+
+        self.assertEqual(exit_code, 2)
+        payload = json.loads(printed.call_args.args[0])
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["error"]["code"], "workflow_root_not_found")
+        self.assertEqual(payload["error"]["workflow_root"], str(missing))
 
     # --- regression: issue #1, status/disk must not disagree ------------
 

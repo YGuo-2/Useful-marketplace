@@ -29,6 +29,20 @@ def default_spec() -> dict[str, Any]:
 class NatureProgressError(Exception):
     """Raised for user-correctable workflow-state errors."""
 
+    def __init__(
+        self,
+        message: str,
+        *,
+        code: str = "nature_progress_error",
+        retryable: bool = False,
+        context: dict[str, Any] | None = None,
+    ) -> None:
+        self.code = code
+        self.detail = message
+        self.retryable = retryable
+        self.context = dict(context or {})
+        super().__init__(message)
+
 
 def now_utc() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
@@ -53,21 +67,124 @@ def _assert_within(path: Path, parent: Path, label: str) -> Path:
     return path
 
 
-def checked_root(root: str | None = None, *, base: Path | None = None) -> Path:
-    base = (base or base_dir()).resolve()
+def _checked_base(base: Path | None = None) -> Path:
+    candidate = (base or base_dir()).expanduser()
+    try:
+        resolved = candidate.resolve(strict=True)
+    except FileNotFoundError as exc:
+        raise NatureProgressError(
+            "project root must exist",
+            code="project_root_not_found",
+            context={"project_root": str(candidate.resolve(strict=False))},
+        ) from exc
+    except OSError as exc:
+        raise NatureProgressError(
+            "project root could not be resolved",
+            code="project_root_unreadable",
+            retryable=True,
+            context={"project_root": str(candidate.resolve(strict=False))},
+        ) from exc
+    if not resolved.is_dir():
+        raise NatureProgressError(
+            "project root must be a directory",
+            code="invalid_project_root",
+            context={"project_root": str(resolved)},
+        )
+    return resolved
+
+
+def _root_error(
+    code: str,
+    detail: str,
+    path: Path,
+    *,
+    label: str,
+    retryable: bool = False,
+) -> NatureProgressError:
+    return NatureProgressError(
+        detail,
+        code=code,
+        retryable=retryable,
+        context={label: str(path)},
+    )
+
+
+def checked_root(
+    root: str | None = None,
+    *,
+    base: Path | None = None,
+    require_exists: bool = True,
+) -> Path:
+    base = _checked_base(base)
     raw = root or DEFAULT_ROOT
     path = Path(raw).expanduser()
     if not path.is_absolute():
         path = base / path
-    return _assert_within(path.resolve(strict=False), base, "workflow root")
+    resolved = _assert_within(path.resolve(strict=False), base, "workflow root")
+    if not require_exists:
+        return resolved
+    try:
+        exists = resolved.exists()
+        is_dir = resolved.is_dir() if exists else False
+    except OSError as exc:
+        raise _root_error(
+            "workflow_root_unreadable",
+            "workflow root could not be inspected",
+            resolved,
+            label="workflow_root",
+            retryable=True,
+        ) from exc
+    if not exists:
+        raise _root_error(
+            "workflow_root_not_found",
+            "workflow root must exist",
+            resolved,
+            label="workflow_root",
+        )
+    if not is_dir:
+        raise _root_error(
+            "workflow_root_not_directory",
+            "workflow root must be a directory",
+            resolved,
+            label="workflow_root",
+        )
+    return resolved
 
 
 def latest_workflow(root: Path) -> Path:
-    if not root.exists():
-        raise NatureProgressError(f"No workflow root exists at {root}")
-    workflows = [p for p in root.iterdir() if p.is_dir() and (p / "nature.yml").exists()]
+    try:
+        if not root.exists():
+            raise _root_error(
+                "workflow_root_not_found",
+                "workflow root must exist",
+                root,
+                label="workflow_root",
+            )
+        if not root.is_dir():
+            raise _root_error(
+                "workflow_root_not_directory",
+                "workflow root must be a directory",
+                root,
+                label="workflow_root",
+            )
+        workflows = [p for p in root.iterdir() if p.is_dir() and (p / "nature.yml").exists()]
+    except NatureProgressError:
+        raise
+    except OSError as exc:
+        raise _root_error(
+            "workflow_root_unreadable",
+            "workflow root could not be inspected",
+            root,
+            label="workflow_root",
+            retryable=True,
+        ) from exc
     if not workflows:
-        raise NatureProgressError(f"No Nature workflows found under {root}")
+        raise _root_error(
+            "workflow_not_found",
+            "no Nature workflows found under workflow root",
+            root,
+            label="workflow_root",
+        )
     return sorted(workflows, key=lambda p: p.name)[-1]
 
 
@@ -77,7 +194,7 @@ def checked_workflow_dir(
     *,
     base: Path | None = None,
 ) -> Path:
-    base = (base or base_dir()).resolve()
+    base = _checked_base(base)
     root_path = checked_root(root, base=base)
     if not workflow:
         return latest_workflow(root_path)
@@ -93,6 +210,31 @@ def checked_workflow_dir(
     resolved = chosen.resolve(strict=False)
     _assert_within(resolved, base, "workflow directory")
     _assert_within(resolved, root_path, "workflow directory")
+    try:
+        exists = resolved.exists()
+        is_dir = resolved.is_dir() if exists else False
+    except OSError as exc:
+        raise _root_error(
+            "workflow_dir_unreadable",
+            "workflow directory could not be inspected",
+            resolved,
+            label="workflow_dir",
+            retryable=True,
+        ) from exc
+    if not exists:
+        raise _root_error(
+            "workflow_dir_not_found",
+            "workflow directory must exist",
+            resolved,
+            label="workflow_dir",
+        )
+    if not is_dir:
+        raise _root_error(
+            "workflow_dir_not_directory",
+            "workflow directory must be a directory",
+            resolved,
+            label="workflow_dir",
+        )
     return resolved
 
 
@@ -339,7 +481,7 @@ def command_new_workflow(
     *,
     base: Path | None = None,
 ) -> dict[str, Any]:
-    root = checked_root(workflow_root, base=base)
+    root = checked_root(workflow_root, base=base, require_exists=False)
     root.mkdir(parents=True, exist_ok=True)
     clean_slug = slugify(slug or title)
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%SZ")
@@ -369,12 +511,11 @@ def command_new_workflow(
 def command_discover(workflow_root: str | None = None, *, base: Path | None = None) -> dict[str, Any]:
     root = checked_root(workflow_root, base=base)
     workflows: list[dict[str, Any]] = []
-    if root.exists():
-        for item in sorted(root.iterdir(), key=lambda p: p.name):
-            if not item.is_dir() or not (item / "nature.yml").exists():
-                continue
-            record = load_record(item)
-            workflows.append(summarize(record, item))
+    for item in sorted(root.iterdir(), key=lambda p: p.name):
+        if not item.is_dir() or not (item / "nature.yml").exists():
+            continue
+        record = load_record(item)
+        workflows.append(summarize(record, item))
     return {"ok": True, "action": "discover", "workflow_root": str(root), "workflows": workflows}
 
 
@@ -635,7 +776,13 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return 0
     except NatureProgressError as exc:
-        print(json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False, indent=2))
+        error = {
+            "code": exc.code,
+            "detail": exc.detail,
+            "retryable": exc.retryable,
+            **exc.context,
+        }
+        print(json.dumps({"ok": False, "error": error}, ensure_ascii=False, indent=2))
         return 2
 
 

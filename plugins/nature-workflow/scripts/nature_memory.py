@@ -147,11 +147,11 @@ class MemoryBoundaryError(NatureProgressError):
         retryable: bool = False,
         context: dict[str, Any] | None = None,
     ) -> None:
+        super().__init__(f"{code}: {detail}")
         self.code = code
         self.detail = detail
         self.retryable = retryable
         self.context = dict(context or {})
-        super().__init__(f"{code}: {detail}")
 
 
 def _normalize_title(title: str) -> str:
@@ -871,18 +871,44 @@ def _entry_etag(entry: Entry) -> str:
 def _read_snapshot(path: Path) -> tuple[str, str]:
     if not path.exists():
         return "", _file_etag(b"")
-    if not path.is_file():
-        raise MemoryBoundaryError("memory_path_not_regular_file", "memory path must be a regular file")
-    _reject_unsafe_regular_file(path, label="memory file")
     try:
-        raw = path.read_bytes()
+        flags = os.O_RDONLY
+        if hasattr(os, "O_BINARY"):
+            flags |= os.O_BINARY
+        if hasattr(os, "O_NOFOLLOW"):
+            flags |= os.O_NOFOLLOW
+        fd = os.open(path, flags)
+        with os.fdopen(fd, "rb") as handle:
+            fd = -1
+            info = os.fstat(handle.fileno())
+            if not stat.S_ISREG(info.st_mode):
+                raise MemoryBoundaryError("memory_path_not_regular_file", "memory path must be a regular file")
+            if getattr(info, "st_nlink", 1) > 1:
+                raise MemoryBoundaryError("path_hardlink_escape", "memory file must not be a hardlink")
+            # On Windows O_NOFOLLOW is unavailable.  Re-check the directory
+            # entry after opening; the handle remains bound to the inspected
+            # inode if another process replaces the pathname afterwards.
+            try:
+                _reject_unsafe_regular_file(path, label="memory file")
+            except FileNotFoundError:
+                raise MemoryBoundaryError("file_changed_outside_lock", "memory file disappeared while it was being read", retryable=True)
+            raw = handle.read()
+    except MemoryBoundaryError:
+        raise
     except OSError as exc:
+        if exc.errno == errno.ELOOP:
+            raise MemoryBoundaryError("path_symlink_escape", "memory file must not be a symlink") from exc
+        if exc.errno == errno.ENOENT:
+            return "", _file_etag(b"")
         raise MemoryBoundaryError(
             "memory_path_unreadable",
             "memory file could not be read",
             retryable=True,
             context={"memory_path": str(path)},
         ) from exc
+    finally:
+        if "fd" in locals() and fd != -1:
+            os.close(fd)
     try:
         return raw.decode("utf-8"), _file_etag(raw)
     except UnicodeDecodeError as exc:
@@ -1047,31 +1073,60 @@ def _atomic_replace_text(path: Path, text: str, *, expected_etag: str | None = N
                         "current_file_bytes": len(current_text.encode("utf-8")),
                     },
                 )
-        if expected_etag is not None and os.name == "nt" and path.exists():
-            with _windows_cas_guard(path) as guard:
-                current_raw = guard.read() if guard is not None else b""
-                current_etag = _file_etag(current_raw)
-                if current_etag != expected_etag:
+        if expected_etag is not None and os.name == "nt":
+            if not path.exists() and expected_etag == _file_etag(b""):
+                try:
+                    os.link(temporary_name, path)
+                except FileExistsError as exc:
+                    _, current_etag = _read_snapshot(path)
                     raise MemoryBoundaryError(
                         "file_changed_outside_lock",
-                        "memory file changed before atomic replace; no write was performed",
+                        "memory file appeared before atomic create; no write was performed",
                         retryable=True,
                         context={
                             "current_file_etag": current_etag,
                             "expected_file_etag": expected_etag,
-                            "current_file_bytes": len(current_raw),
+                            "memory_path": str(path),
                         },
-                    )
-                try:
-                    _windows_atomic_replace(temporary_name, path)
+                    ) from exc
                 except OSError as exc:
                     raise MemoryBoundaryError(
-                        "replace_failed",
-                        "memory file could not be atomically replaced; no write was confirmed",
+                        "cas_unavailable",
+                        "Windows compare-and-swap create could not be completed safely; no write was performed",
                         retryable=True,
-                        context={"memory_path": str(path)},
+                        context={"memory_path": str(path), "expected_file_etag": expected_etag},
                     ) from exc
+                os.unlink(temporary_name)
                 temporary_name = None
+            else:
+                with _windows_cas_guard(path) as guard:
+                    current_raw = guard.read() if guard is not None else b""
+                    current_etag = _file_etag(current_raw)
+                    if current_etag != expected_etag:
+                        raise MemoryBoundaryError(
+                            "file_changed_outside_lock",
+                            "memory file changed before atomic replace; no write was performed",
+                            retryable=True,
+                            context={
+                                "current_file_etag": current_etag,
+                                "expected_file_etag": expected_etag,
+                                "current_file_bytes": len(current_raw),
+                            },
+                        )
+                    try:
+                        _windows_atomic_replace(temporary_name, path)
+                    except OSError as exc:
+                        raise MemoryBoundaryError(
+                            "replace_failed",
+                            "memory file could not be atomically replaced; no write was confirmed",
+                            retryable=True,
+                            context={
+                                "memory_path": str(path),
+                                "current_file_etag": current_etag,
+                                "expected_file_etag": expected_etag,
+                            },
+                        ) from exc
+                    temporary_name = None
         elif expected_etag is not None and os.name != "nt":
             if _conditional_replace_posix(temporary_name, path, expected_etag):
                 temporary_name = None
@@ -1172,6 +1227,7 @@ def _conditional_replace_posix(temporary_name: str, path: Path, expected_etag: s
     renameat2.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint]
     renameat2.restype = ctypes.c_int
     exchange = 2  # RENAME_EXCHANGE
+    candidate_etag = _file_etag(Path(temporary_name).read_bytes())
     result = renameat2(
         -100,
         os.fsencode(temporary_name),
@@ -1195,9 +1251,55 @@ def _conditional_replace_posix(temporary_name: str, path: Path, expected_etag: s
                 retryable=True,
                 context={"memory_path": str(path)},
             )
-        raise OSError(error_number, os.strerror(error_number))
+        try:
+            _, current_etag = _read_snapshot(path)
+        except MemoryBoundaryError:
+            current_etag = ""
+        raise MemoryBoundaryError(
+            "cas_replace_failed",
+            "POSIX compare-and-swap failed with an unexpected operating-system error",
+            retryable=True,
+            context={
+                "memory_path": str(path),
+                "errno": error_number,
+                "current_file_etag": current_etag,
+                "expected_file_etag": expected_etag,
+            },
+        )
     _, previous_etag = _read_snapshot(Path(temporary_name))
     if previous_etag != expected_etag:
+        try:
+            _, current_after_exchange = _read_snapshot(path)
+        except MemoryBoundaryError as exc:
+            raise MemoryBoundaryError(
+                "cas_restore_failed",
+                "memory file changed before atomic replace and its current state could not be inspected",
+                retryable=True,
+                context={
+                    "memory_path": str(path),
+                    "current_file_etag": "",
+                    "expected_file_etag": expected_etag,
+                    "previous_file_etag": previous_etag,
+                    "candidate_file_etag": candidate_etag,
+                },
+            ) from exc
+        if current_after_exchange != candidate_etag:
+            try:
+                os.unlink(temporary_name)
+            except FileNotFoundError:
+                pass
+            raise MemoryBoundaryError(
+                "file_changed_outside_lock",
+                "memory file was externally rewritten during compare-and-swap; external content was preserved",
+                retryable=True,
+                context={
+                    "memory_path": str(path),
+                    "current_file_etag": current_after_exchange,
+                    "expected_file_etag": expected_etag,
+                    "previous_file_etag": previous_etag,
+                    "candidate_file_etag": candidate_etag,
+                },
+            )
         restore = renameat2(
             -100,
             os.fsencode(temporary_name),
@@ -1206,11 +1308,18 @@ def _conditional_replace_posix(temporary_name: str, path: Path, expected_etag: s
             exchange,
         )
         if restore != 0:
+            restore_errno = ctypes.get_errno()
             raise MemoryBoundaryError(
                 "cas_restore_failed",
                 "memory file changed before atomic replace and the original file could not be restored",
                 retryable=True,
-                context={"memory_path": str(path)},
+                context={
+                    "memory_path": str(path),
+                    "errno": restore_errno,
+                    "current_file_etag": candidate_etag,
+                    "expected_file_etag": expected_etag,
+                    "previous_file_etag": previous_etag,
+                },
             )
         raise MemoryBoundaryError(
             "file_changed_outside_lock",
@@ -1219,6 +1328,8 @@ def _conditional_replace_posix(temporary_name: str, path: Path, expected_etag: s
             context={
                 "current_file_etag": previous_etag,
                 "expected_file_etag": expected_etag,
+                "previous_file_etag": previous_etag,
+                "candidate_file_etag": candidate_etag,
             },
         )
     os.unlink(temporary_name)
@@ -1469,9 +1580,7 @@ def _find_entry_reference(document: ParsedMemory, reference: str) -> Entry:
     normalized = _recall_normalize(locator_fragment)
     if not normalized:
         raise MemoryBoundaryError("entry_reference_required", "entry reference must not be empty")
-    if reference.startswith("nm_"):
-        if not _is_valid_stable_id(reference):
-            raise MemoryBoundaryError("invalid_stable_id", "entry_id must be an nm_ UUID4 ID")
+    if _is_valid_stable_id(reference):
         matches = [entry for entry in document.entries if entry.entry_id == reference]
     else:
         if _is_valid_stable_id(locator_fragment):
@@ -1483,6 +1592,8 @@ def _find_entry_reference(document: ParsedMemory, reference: str) -> Entry:
                 if any(_recall_normalize(alias) == normalized for alias in entry.legacy_aliases)
                 or _recall_normalize(entry.title) == normalized
             ]
+        if not matches and reference.startswith("nm_"):
+            raise MemoryBoundaryError("invalid_stable_id", "entry_id must be an nm_ UUID4 ID")
     if not matches:
         raise MemoryBoundaryError("not_found", "memory entry reference was not found")
     if len(matches) > 1:
@@ -2037,6 +2148,21 @@ def _migrate_one(
             except FileNotFoundError:
                 pass
             raise
+        except OSError as exc:
+            try:
+                backup.unlink()
+            except FileNotFoundError:
+                pass
+            raise MemoryBoundaryError(
+                "replace_failed",
+                "memory migration replacement failed; the original file was preserved and retry is allowed",
+                retryable=True,
+                context={
+                    "memory_path": str(path),
+                    "current_file_etag": snapshot_etag,
+                    "expected_file_etag": snapshot_etag,
+                },
+            ) from exc
         written_text, file_etag = _read_snapshot(path)
         return {
             "ok": True,
@@ -2557,6 +2683,9 @@ def _response_budget_error(
     for diagnostic in diagnostics:
         code = diagnostic.get("code") or diagnostic.get("rule") or "diagnostic"
         compact = {"code": str(code)}
+        identity = diagnostic.get("workflow_dir") or diagnostic.get("memory_path")
+        if identity:
+            compact["workflow_dir"] = str(identity)
         candidate = {**response, "error": {**error, "diagnostics": [*error["diagnostics"], compact]}}
         if len(json.dumps(candidate, ensure_ascii=False, separators=(",", ":")).encode("utf-8")) > max_bytes:
             break
@@ -2565,7 +2694,12 @@ def _response_budget_error(
     # RECALL_MIN_BYTES leaves room for at least one compact code. Keep the
     # structural field for defensive callers that bypass the public limit.
     if diagnostics and not error["diagnostics"]:
-        error["diagnostics"].append({"code": str(diagnostics[0].get("code") or diagnostics[0].get("rule") or "diagnostic")})
+        first = diagnostics[0]
+        compact = {"code": str(first.get("code") or first.get("rule") or "diagnostic")}
+        identity = first.get("workflow_dir") or first.get("memory_path")
+        if identity:
+            compact["workflow_dir"] = str(identity)
+        error["diagnostics"].append(compact)
     return response
 
 
@@ -2660,7 +2794,7 @@ def command_memory_recall(
                 "diagnostics": diagnostics,
             }
             if len(json.dumps(trial, ensure_ascii=False, separators=(",", ":")).encode("utf-8")) > max_bytes:
-                continue
+                break
             result_records.append(candidate)
         response = {
             "ok": True,
@@ -2686,10 +2820,7 @@ def command_memory_recall(
                 if len(json.dumps(trial, ensure_ascii=False, separators=(",", ":")).encode("utf-8")) <= max_bytes:
                     compact = trial
                     continue
-                compact_candidate = dict(candidate)
-                trial = {**compact, "results": [*compact["results"], compact_candidate]}
-                if len(json.dumps(trial, ensure_ascii=False, separators=(",", ":")).encode("utf-8")) <= max_bytes:
-                    compact = trial
+                break
             return compact
         return response
     except MemoryBoundaryError as exc:
@@ -2721,6 +2852,24 @@ def command_memory_recall_all(
         workflows = _workflow_dirs_with_memory(
             workflow_base, scope=scope, project_root=root, diagnostics=scan_diagnostics
         )
+        locator = _locator_parts(query)
+        if locator is not None:
+            raw_path, _ = locator
+            locator_path = Path(raw_path).expanduser()
+            if not locator_path.is_absolute():
+                locator_path = root / locator_path
+            locator_path = locator_path.resolve(strict=False)
+            workflows = [
+                workflow
+                for workflow in workflows
+                if _memory_path(workflow, scope).resolve(strict=False) == locator_path
+            ]
+            if not workflows:
+                raise MemoryBoundaryError(
+                    "locator_workflow_mismatch",
+                    "memory locator belongs to a different workflow or scope",
+                    context={"locator_path": raw_path},
+                )
         combined: list[dict[str, Any]] = []
         diagnostics: list[dict[str, Any]] = [item["error"] | {"workflow_dir": item["workflow_dir"], "memory_path": item["memory_path"]} for item in scan_diagnostics]
         for workflow in workflows:
@@ -2730,7 +2879,7 @@ def command_memory_recall_all(
                 scope,
                 query,
                 top_k=top_k,
-                max_bytes=max_bytes,
+                max_bytes=RECALL_MAX_BYTES,
                 filters=filters,
             )
             if not result.get("ok"):
@@ -3193,7 +3342,13 @@ def command_memory_touch(
         errors = [item for item in document.diagnostics if item["severity"] == SEVERITY_ERROR]
         if errors:
             raise MemoryBoundaryError(errors[0]["code"], errors[0]["detail"])
+        _validate_locator_path(project_root, path, entry_id)
         entry = _find_entry_reference(document, entry_id)
+        if entry.metadata.get("lifecycle", "active") != "active":
+            raise MemoryBoundaryError(
+                "invalid_lifecycle_transition",
+                "only active entries can be touched",
+            )
         start, end, raw_lines = _entry_bounds(text, entry)
         rewritten_lines = list(raw_lines)
         stamped = now_utc()
@@ -3257,6 +3412,23 @@ def _resolve_agents_path(raw: str | None, *, base: Path) -> Path:
         path = base / path
     lexical = Path(os.path.abspath(str(path)))
     _assert_within(lexical, base, "AGENTS.md path")
+    current = base
+    try:
+        relative_parts = lexical.relative_to(base).parts[:-1]
+    except ValueError as exc:
+        raise MemoryBoundaryError("path_outside_project", "AGENTS.md path must stay within project_root") from exc
+    for part in relative_parts:
+        current = current / part
+        try:
+            resolved_parent = current.resolve(strict=False)
+        except OSError as exc:
+            raise MemoryBoundaryError("agents_path_unreadable", "AGENTS.md parent directory could not be inspected", retryable=True) from exc
+        if current.is_symlink() or resolved_parent != current:
+            raise MemoryBoundaryError("path_symlink_escape", "AGENTS.md parent directories must not be symlinks")
+        try:
+            _assert_within(resolved_parent, base, "AGENTS.md parent directory")
+        except NatureProgressError as exc:
+            raise MemoryBoundaryError("path_symlink_escape", "AGENTS.md parent directory must stay within project_root") from exc
     if lexical.exists() and not lexical.is_file():
         raise MemoryBoundaryError("agents_path_not_regular_file", "AGENTS.md path must be a regular file")
     _reject_unsafe_regular_file(lexical, label="AGENTS.md")
@@ -3265,12 +3437,21 @@ def _resolve_agents_path(raw: str | None, *, base: Path) -> Path:
 
 def _replace_sentinel(existing: str, section: str | None = None) -> str:
     """Install only the fixed section after validating exact-line markers."""
-    lines = existing.splitlines()
-    start_positions = [index for index, line in enumerate(lines) if line == SENTINEL_START]
-    end_positions = [index for index, line in enumerate(lines) if line == SENTINEL_END]
+    lines = existing.splitlines(keepends=True)
+
+    def line_text(raw: str) -> str:
+        if raw.endswith("\r\n"):
+            return raw[:-2]
+        if raw.endswith(("\n", "\r")):
+            return raw[:-1]
+        return raw
+
+    plain_lines = [line_text(line) for line in lines]
+    start_positions = [index for index, line in enumerate(plain_lines) if line == SENTINEL_START]
+    end_positions = [index for index, line in enumerate(plain_lines) if line == SENTINEL_END]
     marker_substrings = [
         index
-        for index, line in enumerate(lines)
+        for index, line in enumerate(plain_lines)
         if (SENTINEL_START in line and line != SENTINEL_START)
         or (SENTINEL_END in line and line != SENTINEL_END)
     ]
@@ -3280,10 +3461,18 @@ def _replace_sentinel(existing: str, section: str | None = None) -> str:
             "AGENTS.md contains a non-exact Nature memory marker line",
             context={"marker_positions": {"substring_lines": [index + 1 for index in marker_substrings]}},
         )
+    newline = "\r\n" if any(line.endswith("\r\n") for line in lines) else "\n"
+    fixed = FIXED_AGENTS_SECTION.replace("\n", newline)
     if not start_positions and not end_positions:
-        outer = existing.rstrip()
+        outer = existing
+        if outer and not outer.endswith(("\n", "\r")):
+            outer += newline
+        if outer and not outer.endswith(newline + newline):
+            outer += newline
+        return f"{outer}{fixed}{newline}" if outer else f"{fixed}{newline}"
     elif len(start_positions) == 1 and len(end_positions) == 1 and start_positions[0] < end_positions[0]:
-        outer = "\n".join(lines[: start_positions[0]] + lines[end_positions[0] + 1 :]).strip()
+        outer = "".join(lines[: start_positions[0]] + lines[end_positions[0] + 1 :])
+        return f"{''.join(lines[:start_positions[0]])}{fixed}{''.join(lines[end_positions[0] + 1:])}"
     else:
         raise MemoryBoundaryError(
             "malformed_sentinel",
@@ -3295,8 +3484,7 @@ def _replace_sentinel(existing: str, section: str | None = None) -> str:
                 }
             },
         )
-    fixed = FIXED_AGENTS_SECTION.rstrip()
-    return f"{outer}\n\n{fixed}\n" if outer else f"{fixed}\n"
+    return outer
 
 
 def _backup_agents(path: Path) -> Path | None:

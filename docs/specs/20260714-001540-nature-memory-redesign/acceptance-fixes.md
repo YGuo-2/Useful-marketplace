@@ -1,7 +1,7 @@
 # Acceptance Fixes
 
 > **Source:** E:/CodeProject/Useful-marketplace/docs/specs/20260714-001540-nature-memory-redesign/acceptance_state.json
-> **Round:** 4
+> **Round:** 5
 > **Policy:** rounds 1-3 fix all actionable issues; round 4+ auto-fix P0-P2 only
 > **Original tasks:** 12 frozen tasks; do not append acceptance fixes to tasks.md
 
@@ -151,6 +151,26 @@
 | F-140 | I-144 | P2 | U-008 | done | Migration backup OSError is converted to structured migration_backup_failed and all-workflows continues per-workflow isolation; migration regressions and full memory suite pass. |
 | F-141 | I-146 | P2 | U-009 | done | Facade missing or nonexistent project_root returns structured project_root_not_found context through JSON-RPC; progress and MCP suites pass. |
 | F-142 | I-147 | P2 | U-009 | done | Facade schemas and dispatch enforce top_k 1..5 and max_bytes 256..4096, with structured -32602 errors; progress 27/27 and MCP 9/9 pass. Low-budget facade payload is bounded. |
+| F-143 | I-148 | P1 | U-001 | done | touch now validates locator workflow ownership; cross-workflow touch returns locator_workflow_mismatch without changing bytes; lifecycle/locator regressions pass. |
+| F-144 | I-149 | P1 | U-003 | done | Windows first-create CAS now refuses an external file appearing after the empty snapshot instead of overwriting it; first-create regression passes. |
+| F-145 | I-150 | P1 | U-003 | done | POSIX CAS recovery now detects a post-exchange external rewrite before restore and preserves the external result; race regression/WSL coverage passes. |
+| F-146 | I-151 | P2 | U-004 | done | touch enforces active-only lifecycle mutation and rejects archived/superseded entries with zero write; MCP smoke expectation corrected and full script suite passes. |
+| F-147 | I-152 | P1 | U-006 | done | AGENTS resolution rejects parent-directory symlink escapes before read/backup/write; WSL/safety regression passes. |
+| F-148 | I-153 | P2 | U-006 | done | AGENTS repair preserves CRLF, trailing whitespace, marker-outside bytes and outer layout while replacing only the sentinel block; formatting regression passes. |
+| F-149 | I-154 | P2 | U-007 | done | recall budget fallback preserves ordered complete-record semantics and does not substitute a lower-ranked record after an oversized higher-ranked candidate. |
+| F-150 | I-155 | P2 | U-007 | done | all-workflows recall dispatches valid locators to the encoded workflow instead of failing on an earlier workflow mismatch; locator regression passes. |
+| F-151 | I-156 | P1 | U-009 | done | facade broad exception paths remain bounded by requested max_bytes and preserve compact structured error identity; progress tests pass. |
+| F-152 | I-157 | P2 | U-009 | done | required facade/MCP string and scope validation returns stable -32602 structured data with code/context/retryability. |
+| F-153 | I-158 | P2 | U-009 | done | real JSON-RPC post-commit failure and resume verification regressions prove progress_committed/unavailable semantics and bounded review payload. |
+| F-154 | I-159 | P2 | U-010 | done | agent eval imports external reviewer_verdicts.json with hash/disagreement checks, records independent verdict evidence, and explicitly sets connected_model_evaluation=false; eval 5 tests and both eval modes pass. |
+| F-155 | I-160 | P2 | U-001 | done | unique titles beginning with nm_ remain title-resolvable rather than being unconditionally parsed as stable IDs; regression passes. |
+| F-156 | I-161 | P1 | U-002 | done | memory reads revalidate target identity against the opened file to reject hardlink replacement races; safety regression passes. |
+| F-157 | I-162 | P2 | U-002 | done | missing workflow roots are structured and fail closed across check/list/recall/migrate/touch compatibility paths; progress 32 tests pass. |
+| F-158 | I-163 | P2 | U-002 | done | minimum response diagnostics retain compact workflow/path identity where budget permits and preserve structured unsafe-path errors; full suite passes. |
+| F-159 | I-164 | P2 | U-003 | done | unexpected renameat2 errno is converted to structured retryable CAS error with ETag context; regression passes. |
+| F-160 | I-165 | P2 | U-003 | done | CAS restore failures include current/expected ETag context and preserve auditable zero-write behavior; focused concurrency/safety tests pass. |
+| F-161 | I-166 | P1 | U-008 | done | all-workflows migration converts replacement OSError to structured per-workflow failure, cleans operation backup, preserves bytes, and permits retry; migration regressions pass. |
+| F-162 | I-167 | P1 | U-010 | active | pending |
 
 ## Deferred Issues
 

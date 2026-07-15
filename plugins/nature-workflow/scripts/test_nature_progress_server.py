@@ -303,6 +303,26 @@ class ServerEncodingSmokeTest(unittest.TestCase):
                 self.assertEqual(reply["error"]["data"]["code"], expected_code, reply)
                 self.assertFalse(reply["error"]["data"]["retryable"], reply)
 
+    def test_required_string_and_scope_errors_are_structured(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = {"project_root": tmp, "workflow_dir": "docs/nature-workflows/wf"}
+            cases = [
+                ({**base, "scope": "shared"}, "missing_query"),
+                ({**base, "scope": "invalid", "query": "query"}, "invalid_scope"),
+                ({**base, "scope": "shared", "query": 7}, "invalid_query"),
+            ]
+            requests = [
+                _tool_call(index, "nature_memory_recall", arguments)
+                for index, (arguments, _) in enumerate(cases, start=1)
+            ]
+            replies = _run_rpc(requests)
+            for request_id, (_, expected_code) in enumerate(cases, start=1):
+                reply = replies[request_id]
+                self.assertEqual(reply["error"]["code"], -32602, reply)
+                self.assertEqual(reply["error"]["data"]["code"], expected_code, reply)
+                self.assertIn("detail", reply["error"]["data"], reply)
+                self.assertFalse(reply["error"]["data"]["retryable"], reply)
+
     def test_new_memory_tools_round_trip_real_json_rpc_calls(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             create_requests = "\n".join(
@@ -514,6 +534,10 @@ class ServerEncodingSmokeTest(unittest.TestCase):
             for reply in final_replies:
                 if reply.get("id") == 1:
                     continue
+                if reply.get("id") == 23:
+                    self.assertIn("error", reply, reply)
+                    self.assertEqual(reply["error"]["data"]["code"], "invalid_lifecycle_transition", reply)
+                    continue
                 self.assertNotIn("error", reply, reply)
                 payload = json.loads(reply["result"]["content"][0]["text"])
                 self.assertTrue(payload.get("ok"), (reply.get("id"), payload))
@@ -574,6 +598,92 @@ class ServerEncodingSmokeTest(unittest.TestCase):
             )
             missing_reply = json.loads(next(line for line in missing.stdout.splitlines() if line.strip()))
             self.assertIn("error", missing_reply)
+
+    def test_real_rpc_preserves_committed_progress_when_memory_review_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            def create_workflow(slug: str) -> str:
+                reply = _run_rpc([
+                    _tool_call(1, "nature_new_workflow", {
+                        "project_root": tmp,
+                        "slug": slug,
+                        "title": slug,
+                        "tasks": ["T1: facade failure"],
+                    })
+                ])[1]
+                payload = json.loads(reply["result"]["content"][0]["text"])
+                return payload["workflow_dir"]
+
+            workflow_dir = create_workflow("post-commit-failure")
+            memory_path = Path(workflow_dir) / "memory.md"
+            memory_path.mkdir()
+            complete = _run_rpc([
+                _tool_call(2, "nature_start_task", {
+                    "project_root": tmp, "workflow_dir": workflow_dir, "task_id": "T1",
+                }),
+                _tool_call(3, "nature_complete_with_memory_review", {
+                    "project_root": tmp,
+                    "workflow_dir": workflow_dir,
+                    "scope": "shared",
+                    "task_id": "T1",
+                    "evidence": "committed before review",
+                    "max_bytes": 256,
+                }),
+            ])[3]
+            self.assertNotIn("error", complete, complete)
+            payload = json.loads(complete["result"]["content"][0]["text"])
+            self.assertTrue(payload["progress_committed"], payload)
+            self.assertEqual(payload["memory_review"]["status"], "unavailable", payload)
+            self.assertEqual(payload["memory_review"]["error"]["code"], "memory_path_not_regular_file", payload)
+            self.assertLessEqual(
+                len(json.dumps(payload["memory_review"], ensure_ascii=False, separators=(",", ":")).encode("utf-8")),
+                256,
+                payload,
+            )
+            resume_reply = _run_rpc([
+                _tool_call(8, "nature_resume_with_memory", {
+                    "project_root": tmp,
+                    "workflow_dir": workflow_dir,
+                    "scope": "shared",
+                    "query": "post-commit",
+                    "max_bytes": 256,
+                }),
+            ])[8]
+            resume_payload = json.loads(resume_reply["result"]["content"][0]["text"])
+            self.assertEqual(resume_payload["memory_context"]["status"], "unavailable", resume_payload)
+            self.assertLessEqual(
+                len(json.dumps(resume_payload["memory_context"], ensure_ascii=False, separators=(",", ":")).encode("utf-8")),
+                256,
+                resume_payload,
+            )
+
+            lost_response_workflow = create_workflow("response-loss")
+            lost_memory_path = Path(lost_response_workflow) / "memory.md"
+            lost_memory_path.mkdir()
+            _run_rpc([
+                _tool_call(4, "nature_start_task", {
+                    "project_root": tmp, "workflow_dir": lost_response_workflow, "task_id": "T1",
+                }),
+                _tool_call(5, "nature_complete_with_memory_review", {
+                    "project_root": tmp,
+                    "workflow_dir": lost_response_workflow,
+                    "scope": "shared",
+                    "task_id": "T1",
+                    "evidence": "response was lost after commit",
+                }),
+            ])
+            recovery = _run_rpc([
+                _tool_call(6, "nature_status", {
+                    "project_root": tmp, "workflow_dir": lost_response_workflow,
+                }),
+                _tool_call(7, "nature_resume", {
+                    "project_root": tmp, "workflow_dir": lost_response_workflow,
+                }),
+            ])
+            status_payload = json.loads(recovery[6]["result"]["content"][0]["text"])
+            resume_payload = json.loads(recovery[7]["result"]["content"][0]["text"])
+            self.assertEqual(status_payload["status"], "completed", status_payload)
+            self.assertEqual(status_payload["task_counts"]["completed"], 1, status_payload)
+            self.assertEqual(resume_payload["resume_state"], "completed", resume_payload)
 
 
 if __name__ == "__main__":

@@ -56,9 +56,16 @@ def _memory_failure(error: dict[str, Any] | None = None) -> dict[str, Any]:
 
 def _exception_error(exc: Exception) -> dict[str, Any]:
     code = getattr(exc, "code", None) or "memory_review_internal_error"
+    detail = getattr(exc, "detail", str(exc))
+    # MemoryBoundaryError calls its base constructor after assigning its
+    # fields, so recover the stable code/detail from its serialized message.
+    if isinstance(exc, memory.MemoryBoundaryError) and code == "nature_progress_error":
+        message = str(exc)
+        if ": " in message:
+            code, detail = message.split(": ", 1)
     return {
         "code": code,
-        "detail": getattr(exc, "detail", str(exc)),
+        "detail": detail,
         "retryable": bool(getattr(exc, "retryable", False)),
         "exception_type": type(exc).__name__,
         **dict(getattr(exc, "context", {}) or {}),
@@ -177,9 +184,9 @@ def resume_with_memory(
             max_bytes=max_bytes,
         )
     except progress.NatureProgressError as exc:
-        context = _memory_failure(_exception_error(exc))
+        context = _bounded_payload(_memory_failure(_exception_error(exc)), max_bytes)
     except Exception as exc:
-        context = _memory_failure(_exception_error(exc))
+        context = _bounded_payload(_memory_failure(_exception_error(exc)), max_bytes)
     return {
         "ok": True,
         "action": "resume_with_memory",
@@ -214,9 +221,9 @@ def _review_after_progress(
             "error": context.get("error"),
         }, max_bytes)
     except progress.NatureProgressError as exc:
-        return _memory_failure(_exception_error(exc))
+        return _bounded_payload(_memory_failure(_exception_error(exc)), max_bytes)
     except Exception as exc:
-        return _memory_failure(_exception_error(exc))
+        return _bounded_payload(_memory_failure(_exception_error(exc)), max_bytes)
 
 
 def complete_with_memory_review(

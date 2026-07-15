@@ -29,10 +29,89 @@ import nature_progress as progress  # noqa: E402
 FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures"
 RECALL_FIXTURE = FIXTURE_DIR / "recall_cases.json"
 AGENT_FIXTURE = FIXTURE_DIR / "agent_scenarios.json"
+REVIEWER_FIXTURE = FIXTURE_DIR / "reviewer_verdicts.json"
 
 
 def load_json(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def load_reviewer_verdicts(path: Path, scenario_ids: list[str]) -> dict[str, Any]:
+    """Load reviewer decisions as external input, never derive them in the harness."""
+    payload = load_json(path)
+    if payload.get("version") != 1 or payload.get("artifact_type") != "independent_reviewer_verdicts":
+        raise ValueError("reviewer verdict artifact schema is unsupported")
+    if payload.get("evaluation_scope") != "offline_fixture_policy":
+        raise ValueError("reviewer verdict artifact must be scoped to offline_fixture_policy")
+    if payload.get("connected_model_evaluation") is not False:
+        raise ValueError("offline reviewer artifact must not claim connected model evaluation")
+    if payload.get("source") != "external_reviewer_input":
+        raise ValueError("reviewer verdicts must identify an external input source")
+    reviewers = payload.get("reviewers")
+    if not isinstance(reviewers, list) or len(reviewers) != 2:
+        raise ValueError("reviewer verdict artifact must contain exactly two reviewers")
+    reviewer_ids = [item.get("id") for item in reviewers if isinstance(item, dict)]
+    if len(reviewer_ids) != 2 or len(set(reviewer_ids)) != 2:
+        raise ValueError("reviewer verdict artifact must contain two distinct reviewer IDs")
+    if any(item.get("independent_of_harness") is not True for item in reviewers):
+        raise ValueError("reviewers must declare independence from the harness")
+
+    expected_pairs = {(scenario_id, reviewer_id) for scenario_id in scenario_ids for reviewer_id in reviewer_ids}
+    verdicts = payload.get("verdicts")
+    if not isinstance(verdicts, list):
+        raise ValueError("reviewer verdict artifact must contain a verdict list")
+    records: dict[tuple[str, str], dict[str, Any]] = {}
+    for record in verdicts:
+        if not isinstance(record, dict):
+            raise ValueError("reviewer verdict records must be objects")
+        scenario_id = record.get("scenario_id")
+        reviewer_id = record.get("reviewer_id")
+        pair = (scenario_id, reviewer_id)
+        if pair not in expected_pairs or pair in records:
+            raise ValueError("reviewer verdict coverage contains an unknown or duplicate scenario/reviewer pair")
+        if record.get("verdict") not in {"pass", "fail"}:
+            raise ValueError("reviewer verdict must be pass or fail")
+        if not isinstance(record.get("rationale"), str) or not record["rationale"].strip():
+            raise ValueError("reviewer verdict must include rationale")
+        evidence_refs = record.get("evidence_refs")
+        if not isinstance(evidence_refs, list) or not evidence_refs or not all(isinstance(ref, str) and ref for ref in evidence_refs):
+            raise ValueError("reviewer verdict must include evidence_refs")
+        records[pair] = record
+    if set(records) != expected_pairs:
+        raise ValueError("reviewer verdict artifact does not cover every scenario with both reviewers")
+    return {
+        "path": path,
+        "payload": payload,
+        "reviewer_ids": reviewer_ids,
+        "records": records,
+        "artifact_sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+    }
+
+
+def reviewer_evidence(artifact: dict[str, Any], scenario_id: str) -> dict[str, Any]:
+    """Copy external verdicts into the trace without adding harness conclusions."""
+    records = [artifact["records"][(scenario_id, reviewer_id)] for reviewer_id in artifact["reviewer_ids"]]
+    verdicts = [record["verdict"] for record in records]
+    return {
+        "source": "external_reviewer_input",
+        "artifact": artifact["path"].as_posix(),
+        "artifact_sha256": artifact["artifact_sha256"],
+        "evaluation_scope": artifact["payload"]["evaluation_scope"],
+        "connected_model_evaluation": False,
+        "reviewers": [
+            {
+                "id": record["reviewer_id"],
+                "verdict": record["verdict"],
+                "rationale": record["rationale"],
+                "evidence_refs": list(record["evidence_refs"]),
+            }
+            for record in records
+        ],
+        "agreement": {
+            "verdicts": verdicts,
+            "disagreement": len(set(verdicts)) > 1,
+        },
+    }
 
 
 def _project_snapshot(root: Path) -> dict[str, Any]:
@@ -456,9 +535,12 @@ def deterministic_admission_policy(scenario: dict[str, Any]) -> str:
     return "remember"
 
 
-def agent_case(index: int) -> dict[str, Any]:
+def agent_case(index: int, reviewer_verdicts_path: Path | None = None) -> dict[str, Any]:
     fixture = load_json(AGENT_FIXTURE)
     scenario = fixture["scenarios"][index]
+    reviewer_path = reviewer_verdicts_path or REVIEWER_FIXTURE
+    reviewer_artifact = load_reviewer_verdicts(reviewer_path, [item["id"] for item in fixture["scenarios"]])
+    imported_reviewer_evidence = reviewer_evidence(reviewer_artifact, scenario["id"])
     policy_action = deterministic_admission_policy(scenario)
     expected_locator_ids = list(scenario.get("expected_locator_ids", []))
     with tempfile.TemporaryDirectory() as tmp:
@@ -471,7 +553,8 @@ def agent_case(index: int) -> dict[str, Any]:
             "plugin_version": fixture.get("plugin_version"),
             "allowed_tools": fixture.get("allowed_tools", []),
             "tool_calls": [],
-            "reviewer_evidence": {"reviewers": ["write-contract", "privacy-contract"], "checks": []},
+            "reviewer_evidence": imported_reviewer_evidence,
+            "deterministic_checks": [],
         }
         created = progress.command_new_workflow(
             "docs/nature-workflows",
@@ -598,7 +681,7 @@ def agent_case(index: int) -> dict[str, Any]:
                 "fresh_process": True,
             })
         trace["project_snapshot_after"] = _project_snapshot(root)
-        trace["reviewer_evidence"]["checks"] = [
+        trace["deterministic_checks"] = [
             {"name": "write_expectation", "passed": correct_write},
             {"name": "recall_expectation", "passed": correct_recall},
             {"name": "no_write_boundary", "passed": no_write_violation},
@@ -606,10 +689,12 @@ def agent_case(index: int) -> dict[str, Any]:
             {"name": "locator_valid", "passed": cited},
             {"name": "citation_status", "passed": citation_status in {"validated", "not_applicable"}},
         ]
+        deterministic_checks_passed = all(item["passed"] for item in trace["deterministic_checks"])
+        reviewer_passed = all(item["verdict"] == "pass" for item in imported_reviewer_evidence["reviewers"])
         allowed_tools = set(fixture.get("allowed_tools", []))
         unauthorized_tools = [item["tool"] for item in trace["tool_calls"] if item["tool"] not in allowed_tools]
         return {
-            "ok": correct_write and correct_recall and no_write_violation and not forbidden_leak and fresh_process.returncode == 0 and cited,
+            "ok": deterministic_checks_passed and reviewer_passed and fresh_process.returncode == 0,
             "scenario": scenario["id"],
             "expected_write": expected_write,
             "workflow_steps": ["new", policy_action, "fresh_resume", "recall", "cite"],
@@ -624,21 +709,34 @@ def agent_case(index: int) -> dict[str, Any]:
             "security_failures": 1 if forbidden_leak or unauthorized_write else 0,
             "fresh_process": fresh_process.returncode == 0,
             "fresh_error": fresh_process.stderr.strip()[:400] if fresh_process.returncode else None,
+            "deterministic_checks_passed": deterministic_checks_passed,
+            "reviewer_verdicts_passed": reviewer_passed,
             "trace": trace,
             "unauthorized_tool_calls": unauthorized_tools,
         }
 
 
-def agent_eval(runs: int) -> dict[str, Any]:
+def agent_eval(runs: int, reviewer_verdicts_path: Path | None = None) -> dict[str, Any]:
     fixture = load_json(AGENT_FIXTURE)
     if len(fixture["scenarios"]) < 20:
         raise RuntimeError("agent fixture does not meet the 20 scenario minimum")
+    reviewer_path = reviewer_verdicts_path or REVIEWER_FIXTURE
+    reviewer_artifact = load_reviewer_verdicts(reviewer_path, [item["id"] for item in fixture["scenarios"]])
     cases: list[dict[str, Any]] = []
     script = Path(__file__).resolve()
     for run in range(runs):
         for index in range(len(fixture["scenarios"])):
             process = subprocess.run(
-                [sys.executable, str(script), "--mode", "agent-case", "--index", str(index)],
+                [
+                    sys.executable,
+                    str(script),
+                    "--mode",
+                    "agent-case",
+                    "--index",
+                    str(index),
+                    "--reviewer-verdicts",
+                    str(reviewer_path),
+                ],
                 capture_output=True,
                 text=True,
                 check=False,
@@ -660,9 +758,26 @@ def agent_eval(runs: int) -> dict[str, Any]:
     security_failures = sum(item.get("security_failures", 0) for item in cases)
     locator_valid = all(item.get("locator_valid", False) for item in cases)
     unauthorized_tool_calls = sum(len(item.get("unauthorized_tool_calls", [])) for item in cases)
-    trace_complete = all(bool(item.get("trace", {}).get("tool_calls")) and bool(item.get("trace", {}).get("reviewer_evidence", {}).get("checks")) for item in cases)
+    trace_complete = all(
+        bool(item.get("trace", {}).get("tool_calls"))
+        and bool(item.get("trace", {}).get("deterministic_checks"))
+        and len(item.get("trace", {}).get("reviewer_evidence", {}).get("reviewers", [])) == 2
+        and "checks" not in item.get("trace", {}).get("reviewer_evidence", {})
+        for item in cases
+    )
+    reviewer_disagreements = sum(
+        bool(item.get("trace", {}).get("reviewer_evidence", {}).get("agreement", {}).get("disagreement"))
+        for item in cases
+    )
+    reviewer_verdicts_passed = all(item.get("reviewer_verdicts_passed", False) for item in cases)
+    reviewer_input_complete = all(
+        item.get("trace", {}).get("reviewer_evidence", {}).get("source") == "external_reviewer_input"
+        and item.get("trace", {}).get("reviewer_evidence", {}).get("artifact_sha256") == reviewer_artifact["artifact_sha256"]
+        and item.get("trace", {}).get("reviewer_evidence", {}).get("connected_model_evaluation") is False
+        for item in cases
+    )
     snapshots_complete = all("project_snapshot_before" in item.get("trace", {}) and "project_snapshot_after" in item.get("trace", {}) for item in cases)
-    passed = precision >= 0.90 and recall >= 0.80 and locator_valid and security_failures == 0 and unauthorized_writes == 0 and unauthorized_tool_calls == 0 and trace_complete and snapshots_complete and all(item.get("ok") for item in cases)
+    passed = precision >= 0.90 and recall >= 0.80 and locator_valid and security_failures == 0 and unauthorized_writes == 0 and unauthorized_tool_calls == 0 and trace_complete and snapshots_complete and reviewer_verdicts_passed and reviewer_input_complete and all(item.get("ok") for item in cases)
     return {
         "ok": passed,
         "mode": "agent",
@@ -670,7 +785,18 @@ def agent_eval(runs: int) -> dict[str, Any]:
         "model": fixture["model"],
         "metrics": {"write_precision": precision, "write_recall": recall, "locator_valid": locator_valid, "security_failures": security_failures, "unauthorized_writes": unauthorized_writes, "unauthorized_tool_calls": unauthorized_tool_calls, "trace_complete": trace_complete, "snapshots_complete": snapshots_complete, "actual_writes": actual_writes},
         "thresholds": {"write_precision": 0.90, "write_recall": 0.80, "security_failures": 0},
-        "rubric": {"reviewers": ["write-contract", "privacy-contract"], "disagreements": 0, "evidence": "per-case trace reviewer checks", "note": "offline fixture policy harness; connected model evaluation is not claimed"},
+        "rubric": {
+            "source": "external_reviewer_input",
+            "artifact": reviewer_path.as_posix(),
+            "artifact_sha256": reviewer_artifact["artifact_sha256"],
+            "reviewers": reviewer_artifact["reviewer_ids"],
+            "disagreements": reviewer_disagreements,
+            "all_verdicts_pass": reviewer_verdicts_passed,
+            "evidence": "per-case imported reviewer verdicts with evidence references",
+            "evaluation_scope": "offline_fixture_policy",
+            "connected_model_evaluation": False,
+            "note": "This run does not claim connected model evaluation; connected results require their own external reviewer artifact.",
+        },
         "cases": cases,
     }
 
@@ -684,17 +810,18 @@ def main() -> int:
     parser.add_argument("--workflow")
     parser.add_argument("--query")
     parser.add_argument("--locator")
+    parser.add_argument("--reviewer-verdicts")
     args = parser.parse_args()
     if args.mode == "deterministic":
         result = deterministic_eval()
     elif args.mode == "agent":
-        result = agent_eval(args.runs)
+        result = agent_eval(args.runs, Path(args.reviewer_verdicts) if args.reviewer_verdicts else None)
     elif args.mode == "fresh-resume":
         result = fresh_resume_case(Path(args.root), Path(args.workflow), args.query or "nature workflow")
     elif args.mode == "fresh-cite":
         result = fresh_cite_case(Path(args.root), Path(args.workflow), args.locator or "")
     else:
-        result = agent_case(args.index)
+        result = agent_case(args.index, Path(args.reviewer_verdicts) if args.reviewer_verdicts else None)
     print(json.dumps(result, ensure_ascii=False, indent=2))
     return 0 if result.get("ok") else 1
 

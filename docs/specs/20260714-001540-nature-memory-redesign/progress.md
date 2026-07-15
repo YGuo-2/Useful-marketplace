@@ -7,7 +7,7 @@
 > **Approval:** approved
 > **Last Checkpoint:** 2026-07-15 06:05:06
 > **Branch:** explore/nature-memory-redesign
-> **Last Known Commit:** 95289d7
+> **Last Known Commit:** 3d2f152
 
 ## Resume Summary
 - Goal: 同步文档、hook、manifest 并执行发布前全量验证

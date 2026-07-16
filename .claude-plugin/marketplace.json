@@ -1,0 +1,24 @@
+{
+  "name": "useful-marketplace",
+  "owner": {
+    "name": "YGuo-2"
+  },
+  "metadata": {
+    "description": "Claude Code plugin marketplace for spec-workflow and nature-workflow."
+  },
+  "plugins": [
+    {
+      "name": "spec-workflow",
+      "source": "./plugins/spec-workflow",
+      "description": "Spec-first development workflow for complex code changes.",
+      "category": "Developer Tools"
+    },
+    {
+      "name": "nature-workflow",
+      "source": "./plugins/nature-workflow",
+      "version": "0.2.0",
+      "description": "Nature research skills packaged with lightweight workflow progress tracking.",
+      "category": "Education"
+    }
+  ]
+}

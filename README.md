@@ -1,6 +1,17 @@
 # Useful-marketplace
 
-This repository provides Codex plugin marketplace entries for `spec-workflow` and `nature-workflow`.
+This repository provides plugin marketplace entries for `spec-workflow` and `nature-workflow`, usable from both Codex and Claude Code.
+
+## Import in Claude Code
+
+Add this repository as a plugin marketplace, then install a plugin:
+
+```bash
+/plugin marketplace add YGuo-2/Useful-marketplace
+/plugin install nature-workflow@useful-marketplace
+```
+
+Claude Code reads the marketplace manifest at `.claude-plugin/marketplace.json` (repo root) and each plugin manifest at `plugins/<name>/.claude-plugin/plugin.json`. Skills under `plugins/<name>/skills/` are auto-discovered, and the bundled MCP server is wired through `${CLAUDE_PLUGIN_ROOT}` in `.mcp.json`. For `nature-workflow`, the memory discovery index is written to `CLAUDE.md` (set via `NATURE_WORKFLOW_MEMORY_INDEX_FILE` in `.mcp.json`), the file Claude Code auto-reads.
 
 ## Import in Codex
 
@@ -10,8 +21,7 @@ Use the Codex "Add plugin marketplace" dialog:
 - Git ref: `main`
 - Sparse path: leave empty
 
-Codex expects the marketplace manifest at `.agents/plugins/marketplace.json`.
-Plugin sources live under `plugins/`.
+Codex expects the marketplace manifest at `.agents/plugins/marketplace.json` and each plugin manifest at `plugins/<name>/.codex-plugin/plugin.json`. On Codex the memory discovery index stays in `AGENTS.md`. Plugin sources live under `plugins/`.
 
 ## Plugins
 

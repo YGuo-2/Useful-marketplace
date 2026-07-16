@@ -1,0 +1,22 @@
+{
+  "name": "nature-workflow",
+  "version": "0.2.0",
+  "description": "Nature research skills packaged with lightweight workflow progress tracking.",
+  "author": {
+    "name": "Yuan1z0825 and Useful-marketplace"
+  },
+  "homepage": "https://github.com/Yuan1z0825/nature-skills",
+  "repository": "https://github.com/YGuo-2/Useful-marketplace",
+  "license": "MIT",
+  "keywords": [
+    "nature",
+    "academic",
+    "research",
+    "writing",
+    "citation",
+    "workflow",
+    "memory",
+    "mcp"
+  ],
+  "mcpServers": "./.mcp.json"
+}

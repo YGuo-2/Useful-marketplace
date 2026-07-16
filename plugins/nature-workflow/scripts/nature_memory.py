@@ -3661,8 +3661,17 @@ def _entry_hook(entries: list[Entry]) -> str:
     return "; ".join(entry.title for entry in entries[:3])
 
 
+def _default_memory_index_filename() -> str:
+    # ponytail: env override so Codex keeps AGENTS.md while Claude Code can point
+    # the discovery sentinel at CLAUDE.md (the file each host auto-reads).
+    name = os.environ.get("NATURE_WORKFLOW_MEMORY_INDEX_FILE", "AGENTS.md").strip()
+    if not name or "/" in name or "\\" in name or name in (".", ".."):
+        return "AGENTS.md"
+    return name
+
+
 def _resolve_agents_path(raw: str | None, *, base: Path) -> Path:
-    path = Path(raw).expanduser() if raw else base / "AGENTS.md"
+    path = Path(raw).expanduser() if raw else base / _default_memory_index_filename()
     if not path.is_absolute():
         path = base / path
     lexical = Path(os.path.abspath(str(path)))
@@ -3836,7 +3845,7 @@ def command_memory_index(
             "ok": False,
             "action": "memory_index",
             "workflow_root": str(root),
-            "agents_path": str(agents_path) if agents_path else str(project_root / "AGENTS.md"),
+            "agents_path": str(agents_path) if agents_path else str(project_root / _default_memory_index_filename()),
             "backup_path": None,
             "error": {
                 "code": exc.code,

@@ -4,20 +4,20 @@
     "name": "YGuo-2"
   },
   "metadata": {
-    "description": "Claude Code plugin marketplace for spec-workflow and nature-workflow."
+    "description": "面向 Claude Code 的插件市场,收录 spec-workflow 与 nature-workflow。"
   },
   "plugins": [
     {
       "name": "spec-workflow",
       "source": "./plugins/spec-workflow",
-      "description": "Spec-first development workflow for complex code changes.",
+      "description": "规范先行的开发工作流,面向复杂代码改动:澄清、分流、实现、验收。",
       "category": "Developer Tools"
     },
     {
       "name": "nature-workflow",
       "source": "./plugins/nature-workflow",
       "version": "0.2.0",
-      "description": "Nature research skills packaged with lightweight workflow progress tracking.",
+      "description": "打包 Nature 科研技能,并附带轻量的工作流进度跟踪。",
       "category": "Education"
     }
   ]

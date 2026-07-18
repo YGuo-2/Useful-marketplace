@@ -59,6 +59,8 @@ Use an explicit project root and workflow directory for every style operation; n
 recent workflow. The style CLI and MCP tools share the same state:
 
 - CLI: `python plugins/nature-workflow/scripts/nature_style.py <command> --project-root <root> --workflow <workflow-dir>`
+  (exception: the `index` command takes only the explicit project root — `--project-root <root>` — and
+  reconciles all workflows under its configured workflow root, so it does not accept `--workflow`)
 - MCP: `nature_style_validate`, `nature_style_register`, `nature_style_select`,
   `nature_style_resolve`, `nature_style_audit`, `nature_style_disable`, and `nature_style_index`
 

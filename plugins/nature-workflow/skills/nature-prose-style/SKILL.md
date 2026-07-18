@@ -1,6 +1,8 @@
 ---
 name: nature-prose-style
 description: Create, validate, register, calibrate, select, inspect, or disable persistent prose-style profiles for a Nature workflow. Use only when the user explicitly asks to generate or save a 文风画像, learn a reusable style from a full article or article set, keep writing in the user's own style, write by a named existing profile, or persist the style of a specified article, author, or journal corpus. Do not invoke for ordinary writing or polishing, generic "Nature style", requests merely to be concise/formal/natural, routine nature-journal style learning, or a one-time imitation the user says not to save; keep those transient and create no profile document.
+metadata:
+  version: 0.1.0
 ---
 
 # Nature Prose Style - Router

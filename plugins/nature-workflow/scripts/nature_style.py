@@ -25,6 +25,7 @@ import nature_progress as progress
 
 STYLE_SCHEMA_VERSION = 1
 PROFILE_DIR = "prose-profiles"
+# Path convention only: calibration records are maintained by hand by the agent; this tool never writes here.
 CALIBRATION_DIR = "style-calibration"
 RECEIPT_DIR = "style-receipts"
 PROFILE_FILE_STATUSES = {"draft", "ready", "calibrated", "invalid"}

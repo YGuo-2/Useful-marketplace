@@ -11,7 +11,7 @@ Add this repository as a plugin marketplace, then install a plugin:
 /plugin install nature-workflow@useful-marketplace
 ```
 
-Claude Code reads the marketplace manifest at `.claude-plugin/marketplace.json` (repo root) and each plugin manifest at `plugins/<name>/.claude-plugin/plugin.json`. Skills under `plugins/<name>/skills/` are auto-discovered, and the bundled MCP server is wired through `${CLAUDE_PLUGIN_ROOT}` in the root `.mcp.json`. For `nature-workflow`, that host-specific config writes the memory discovery index and optional prose-style bootstrap to `CLAUDE.md`.
+Claude Code reads the marketplace manifest at `.claude-plugin/marketplace.json` (repo root) and each plugin manifest at `plugins/<name>/.claude-plugin/plugin.json`. Skills under `plugins/<name>/skills/` are auto-discovered, and the bundled MCP server is wired through `${CLAUDE_PLUGIN_ROOT}` in the plugin's `.mcp.json` (`plugins/<name>/.mcp.json`). For `nature-workflow`, that host-specific config writes the memory discovery index and optional prose-style bootstrap to `CLAUDE.md`.
 
 ## Import in Codex
 

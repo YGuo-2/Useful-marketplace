@@ -1,5 +1,5 @@
 name: nature-orchestrator
-version: 0.1.0
+version: 0.2.0
 description: >
   Declarative manifest for the manuscript orchestrator. SKILL.md uses this to
   load the core orchestration layer and the genre template for the detected
@@ -11,6 +11,7 @@ always_load:
   # Shared layer — genre vocabulary and ethics, reused across nature-* skills
   - ../_shared/core/paper-type-taxonomy.md
   - ../_shared/core/ethics.md
+  - ../_shared/core/prose-profile-contract.md
   # Skill-local core
   - static/core/stance.md
   - static/core/workflow.md

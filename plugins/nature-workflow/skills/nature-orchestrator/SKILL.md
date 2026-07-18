@@ -1,8 +1,8 @@
 ---
 name: nature-orchestrator
-description: Drive a full manuscript lifecycle from topic to submission by turning a genre template into a deterministic task sequence and delegating each step to the right nature-* skill. Use when the user wants to write a whole paper or review from scratch, be walked through the end-to-end workflow, or resume a manuscript-wide project rather than run a single isolated skill. Trigger on end-to-end framings such as "从头写一篇论文/综述", "带我走完整个流程", "论文从0到1", "投稿全流程", "orchestrate a manuscript", "paper workflow from topic to submission". For a single, isolated task (only draft an abstract, only make a figure, only verify a citation) route directly to that nature-* skill instead.
+description: Drive a full manuscript lifecycle from topic to submission by turning a genre template into a deterministic task sequence and delegating each step to the right nature-* skill. Use when the user wants to write a whole paper or review from scratch, be walked through the end-to-end workflow, or resume a manuscript-wide project rather than run a single isolated skill. Trigger on end-to-end framings such as "从头写一篇论文/综述", "带我走完整个流程", "论文从0到1", "投稿全流程", "orchestrate a manuscript", "paper workflow from topic to submission". Persistent 文风画像 is an optional, explicitly requested nature-prose-style delegate; once registered, its resolver, audit, and completion guard apply to downstream prose tasks. For a single, isolated task (only draft an abstract, only make a figure, only verify a citation) route directly to that nature-* skill instead.
 metadata:
-  version: 0.1.0
+  version: 0.2.0
   author: Useful-marketplace, fusing SCI从0-1workflow orchestration into nature-workflow
 ---
 
@@ -32,8 +32,9 @@ Follow these steps every time the skill is invoked.
 
 Read [manifest.yaml](manifest.yaml). It declares the `paper_type` axis, its allowed
 values, and the template file each value maps to. Read every file under
-`always_load`: the shared paper-type taxonomy and ethics, plus this skill's
-`core/stance.md`, `core/workflow.md`, and `core/decision.md`.
+`always_load`: the shared paper-type taxonomy, ethics, and prose-profile execution
+contract, plus this skill's `core/stance.md`, `core/workflow.md`, and
+`core/decision.md`.
 
 ### 2. Detect or ask the genre (paper_type)
 
@@ -65,6 +66,13 @@ runs this step, or run it if it is you) → on a real deliverable, `complete` it
 an `evidence` path → if stuck, `block` it with a reason. At decision forks, apply
 the lightweight option protocol in `core/decision.md`. Surface progress by echoing
 the engine's `status`/`progress.md`, never by reciting step numbers from memory.
+
+`nature-prose-style` is optional and must never be seeded by default. Add it only when the user
+explicitly asks to generate or persist a reusable profile. Once a usable profile is registered,
+pass the exact project root, workflow directory, prose task ID, section, source, and evidence path to
+`nature-writing` or `nature-polishing`. Those consumers resolve before prose and audit afterward. If
+resolution requires a choice, apply the mandatory ambiguity rule in `core/decision.md`. Complete a
+guarded prose task only with the receipt bound to its exact evidence file.
 
 ## Why this shape
 

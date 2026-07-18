@@ -10,6 +10,17 @@ Only at decision steps flagged in the genre template (typically topic selection,
 outline/framing, target-journal selection). Routine execution steps (search,
 read, draft, polish) do not get an options menu — just run them.
 
+### Mandatory prose-profile ambiguity
+
+`prose_style_choice_required` is an execution precondition, not an optional manuscript-strategy menu,
+so it is the one exception to the flagged-step rule. Stop the current prose task immediately, show the
+exact usable profile IDs and scopes returned by the resolver, and ask which one to use. Never rank,
+merge, fuzzy-match, or infer a profile from manuscript content.
+
+Offer the user a persistent selection through `nature_style_select` or, when they explicitly say the
+choice is for this turn only, pass that exact profile ID to one resolution without changing the saved
+default. If the named ID is missing or non-unique, ask again rather than guessing.
+
 ## How to offer options
 
 - Give **2–4 options**, not a fixed count. Fewer is fine when the space is small.
@@ -26,6 +37,8 @@ read, draft, polish) do not get an options menu — just run them.
 
 - Record the decision as the step's `evidence` (or a note) so it persists and a
   resumed session sees why the path was taken.
+- For prose-profile selection, let `nature_style_select` persist the profile choice and inventory ETag;
+  a workflow note may explain the rationale but is not selection authority.
 - Do not silently auto-advance past a decision step unless the user explicitly
   asked to proceed without being consulted.
 

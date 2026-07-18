@@ -1,8 +1,8 @@
 ---
 name: nature-writing
-description: Draft, restructure, or plan Nature-style manuscript sections from author-provided claims, results, figures, notes, or Chinese drafts. Use when the user wants to write or rebuild an abstract, introduction, related-work, method, experiments, discussion, conclusion, title, or full manuscript argument rather than only polish finished prose. Also trigger on general academic-writing requests even without the word "Nature", such as writing a paper from scratch, drafting a manuscript/section, structuring a paper, and Chinese phrasings like 学术写作、科研写作、论文写作、写论文、写paper、SCI写作、帮我写论文、搭论文框架、起草论文、写引言/摘要/讨论.
+description: Draft, restructure, or plan Nature-style manuscript sections from author-provided claims, results, figures, notes, or Chinese drafts. Use when the user wants to write or rebuild an abstract, introduction, related-work, method, experiments, discussion, conclusion, title, or full manuscript argument rather than only polish finished prose. Also trigger on general academic-writing requests even without the word "Nature", such as writing a paper from scratch, drafting a manuscript/section, structuring a paper, and Chinese phrasings like 学术写作、科研写作、论文写作、写论文、写paper、SCI写作、帮我写论文、搭论文框架、起草论文、写引言/摘要/讨论. If the user explicitly asks to generate, save, or reuse a persistent 文风画像, route that profile operation through nature-prose-style before drafting; generic Nature style or a one-turn concise/formal/natural request remains ordinary writing and must not create a profile.
 metadata:
-  version: 1.0.0
+  version: 1.1.0
   author: Community contribution, refactored into static/dynamic layers
 ---
 
@@ -23,7 +23,7 @@ Follow these five steps every time the skill is invoked.
 
 Read [manifest.yaml](manifest.yaml). It declares the axes (`paper_type`, `section`, `language`, `journal`), the allowed values, and the file paths each value maps to.
 
-Also read every file listed under `always_load`. These hold the default stance, writing workflow, and output format that apply to every drafting job.
+Also read every file listed under `always_load`. These hold the default stance, writing workflow, output format, and optional prose-profile execution contract that apply to every drafting job.
 
 ### 2. Detect the axis values for this request
 
@@ -42,19 +42,32 @@ For each axis value, Read the file mapped in the manifest. Skip the `section` ax
 
 Do **not** read every fragment in `static/`. Load only what step 2 selected.
 
-### 4. Draft using the loaded material
+### 4. Resolve optional persistent prose style, then draft
+
+Persistent profile creation is an explicit opt-in. If the user asks to generate, learn, save, or update a reusable 文风画像, hand that operation to `nature-prose-style` first. Do not create a profile for ordinary drafting, generic "Nature style", or a one-turn request to be concise, formal, or natural.
+
+For manuscript prose bound to a Nature workflow, follow the preflight in `core/workflow.md` before generating text. Pin the exact `project_root`, `workflow_dir`, task ID, section, and final evidence path; never guess the latest workflow. Call `nature_style_resolve` and handle its result exactly:
+
+- `not_configured` or `not_applicable` — keep the existing drafting path and create no receipt.
+- `prose_style_choice_required` — stop before drafting, show the exact candidate IDs and scopes, and ask the user. Never rank, merge, fuzzy-match, or infer a choice.
+- `resolved` — apply only the returned validated traits for the current section; retain the selection mode, every returned ETag, and the exact profile ID for a one-turn audit.
+- invalid, stale, mismatched, or scope-conflicting state — fail visibly; do not silently fall back.
+
+If the task is not bound to an explicit workflow and the user did not name an existing paper-scoped profile, continue with ordinary writing. Do not discover or select a workflow by recency.
 
 Apply the loaded fragments in this priority order:
 
-1. Core stance + intake (`core/stance.md`) — surface missing claim / evidence / boundary before drafting.
-2. Paper-type playbook — argument chain, drafting order.
-3. Section-specific drafting rules and structure.
-4. Journal-specific framing and constraints.
-5. Language-specific sentence and paragraph rules (apply last).
+1. Facts, evidence, citations, ethics, and the user's current-turn instructions.
+2. Core stance + intake (`core/stance.md`) — surface missing claim / evidence / boundary before drafting.
+3. Paper-type playbook and section-specific structure.
+4. Journal hard constraints and language-specific rules.
+5. The selected prose profile, when resolved, as a soft style layer above skill defaults.
 
-Run the 8-step workflow in `core/workflow.md` end-to-end. Do not skip steps 1-3 (planning) just because the user asked for prose immediately — write the one-sentence argument first.
+Run the workflow in `core/workflow.md` end-to-end. Do not skip steps 1-3 (planning) just because the user asked for prose immediately — write the one-sentence argument first. A profile may change voice and rhythm, but never facts, numbers, citations, terminology, causal direction, scope, limitations, or evidence strength.
 
 If essential evidence or boundary is missing, write a placeholder and list it under `Assumptions or missing inputs:` instead of inventing content.
+
+When the resolver returned `resolved`, write the final prose to the pinned evidence path, perform the semantic style and invariant review, and call `nature_style_audit` against that exact file with `operation: writing`, explicit `style_checks: passed` and `content_invariants: passed`, and the retained one-turn profile ID when applicable. Return the tool-created receipt path with the output. Do not hand-author or reuse receipts.
 
 ### 5. Reach for references only when needed
 

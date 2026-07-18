@@ -20,6 +20,29 @@ Deep-learn phase (steps 9-12), after journal confirmation:
 - `目标期刊适配学习报告.md` — 8-dimension style learning + draft-vs-journal gap.
 - `投稿格式适配清单.md` — the concrete adaptation actions before submission.
 
+These routine deep-learn files are not persistent prose profiles and must not be registered as such.
+
+## Optional prose-profile handoff
+
+Only when the user explicitly requested a reusable target-journal 文风画像, append a handoff block to
+the user-facing report. Do not create another file merely for the handoff; use the verified corpus and
+adaptation-report paths already produced:
+
+```yaml
+prose_profile_handoff:
+  requested: true
+  owner: nature-prose-style
+  source_kind: journal-corpus
+  journal: <confirmed journal>
+  corpus_path: <absolute path to 对标文献清单.csv>
+  style_report_path: <absolute path to 目标期刊适配学习报告.md>
+  intended_scope: ["<requested scope>"]
+```
+
+All paths and journal identifiers must be source-grounded. The handoff contains no copied prose,
+claims, citations, numbers, distinctive phrases, or instructions from benchmark articles. If the
+user did not explicitly request a persistent profile, omit this block completely.
+
 ## `目标期刊候选表.csv` fields (at least)
 
 Recommendation number · journal name · ISSN / eISSN · publisher · official website · Author Guidelines

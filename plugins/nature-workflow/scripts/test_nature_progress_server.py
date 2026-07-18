@@ -479,6 +479,318 @@ class ServerEncodingSmokeTest(unittest.TestCase):
             self.assertTrue(all_recall_payload["ok"], all_recall_payload)
             self.assertTrue(all_recall_payload["all_workflows"])
 
+    def test_style_rpc_register_resolve_audit_and_completion_receipt_guard(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            created_reply = _run_rpc(
+                [
+                    _tool_call(
+                        1,
+                        "nature_new_workflow",
+                        {
+                            "project_root": tmp,
+                            "slug": "style-rpc",
+                            "title": "Style RPC",
+                            "tasks": ["draft: manuscript prose"],
+                        },
+                    )
+                ]
+            )[1]
+            self.assertNotIn("error", created_reply, created_reply)
+            created = json.loads(created_reply["result"]["content"][0]["text"])
+            workflow_dir = created["workflow_dir"]
+            workflow = Path(workflow_dir)
+
+            profile_dir = workflow / "prose-profiles"
+            profile_dir.mkdir()
+            profile_payload = {
+                "schema_version": 1,
+                "id": "author-main",
+                "status": "ready",
+                "source_kind": "author-draft",
+                "source_fingerprint": "sha256:" + "0" * 64,
+                "language": "en",
+                "scopes": ["global"],
+                "traits": [
+                    {
+                        "name": "voice",
+                        "value": "active-we",
+                        "scope": ["global"],
+                        "confidence": "high",
+                        "support": 5,
+                        "source_refs": ["train:intro:p001", "train:results:p002", "train:discussion:p003"],
+                        "strength": "soft",
+                    }
+                ],
+                "exclusions": ["source facts", "source numbers", "source citations", "claim strength"],
+            }
+            profile_path = profile_dir / "author-main.md"
+            profile_path.write_text(
+                "# Prose Profile\n\n```json\n"
+                + json.dumps(profile_payload, ensure_ascii=False, indent=2)
+                + "\n```\n",
+                encoding="utf-8",
+            )
+            output_path = workflow / "draft.md"
+            output_path.write_text("We observed a 12% increase [1].\n", encoding="utf-8")
+            evidence = output_path.relative_to(Path(tmp)).as_posix()
+
+            prepared = _run_rpc(
+                [
+                    _tool_call(
+                        2,
+                        "nature_style_register",
+                        {
+                            "project_root": tmp,
+                            "workflow_dir": workflow_dir,
+                            "profile_path": "prose-profiles/author-main.md",
+                        },
+                    ),
+                    _tool_call(
+                        3,
+                        "nature_style_resolve",
+                        {
+                            "project_root": tmp,
+                            "workflow_dir": workflow_dir,
+                            "section": "results",
+                            "task_id": "draft",
+                        },
+                    ),
+                    _tool_call(
+                        4,
+                        "nature_start_task",
+                        {"project_root": tmp, "workflow_dir": workflow_dir, "task_id": "draft"},
+                    ),
+                    _tool_call(
+                        5,
+                        "nature_complete_task",
+                        {
+                            "project_root": tmp,
+                            "workflow_dir": workflow_dir,
+                            "task_id": "draft",
+                            "evidence": evidence,
+                        },
+                    ),
+                    _tool_call(
+                        6,
+                        "nature_status",
+                        {"project_root": tmp, "workflow_dir": workflow_dir},
+                    ),
+                ]
+            )
+            register_payload = json.loads(prepared[2]["result"]["content"][0]["text"])
+            resolve_payload = json.loads(prepared[3]["result"]["content"][0]["text"])
+            self.assertEqual(register_payload["selection_status"], "auto_single", register_payload)
+            self.assertEqual(register_payload["selected_profile_id"], "author-main", register_payload)
+            self.assertEqual(resolve_payload["status"], "resolved", resolve_payload)
+            self.assertEqual(resolve_payload["profile_id"], "author-main", resolve_payload)
+            self.assertEqual(prepared[5]["error"]["data"]["code"], "style_receipt_not_found", prepared[5])
+            guarded_status = json.loads(prepared[6]["result"]["content"][0]["text"])
+            self.assertEqual(guarded_status["status"], "open", guarded_status)
+            self.assertEqual(guarded_status["active_task"], "draft", guarded_status)
+            self.assertEqual(guarded_status["task_counts"]["active"], 1, guarded_status)
+            self.assertEqual(guarded_status["task_counts"].get("completed", 0), 0, guarded_status)
+
+            finished = _run_rpc(
+                [
+                    _tool_call(
+                        7,
+                        "nature_style_audit",
+                        {
+                            "project_root": tmp,
+                            "workflow_dir": workflow_dir,
+                            "task_id": "draft",
+                            "output_path": evidence,
+                            "section": "results",
+                            "profile_id": resolve_payload["profile_id"],
+                            "profile_etag": resolve_payload["profile_etag"],
+                            "resolution_etag": resolve_payload["resolution_etag"],
+                            "operation": "writing",
+                            "style_checks": "passed",
+                            "content_invariants": "passed",
+                        },
+                    ),
+                    _tool_call(
+                        8,
+                        "nature_complete_task",
+                        {
+                            "project_root": tmp,
+                            "workflow_dir": workflow_dir,
+                            "task_id": "draft",
+                            "evidence": evidence,
+                            "style_receipt": "style-receipts/draft.json",
+                        },
+                    ),
+                    _tool_call(
+                        9,
+                        "nature_status",
+                        {"project_root": tmp, "workflow_dir": workflow_dir},
+                    ),
+                ]
+            )
+            self.assertNotIn("error", finished[7], finished[7])
+            audit_payload = json.loads(finished[7]["result"]["content"][0]["text"])
+            self.assertTrue(audit_payload["ok"], audit_payload)
+            self.assertEqual(audit_payload["profile_id"], "author-main", audit_payload)
+            self.assertNotIn("error", finished[8], finished[8])
+            complete_payload = json.loads(finished[8]["result"]["content"][0]["text"])
+            self.assertEqual(complete_payload["status"], "completed", complete_payload)
+            final_status = json.loads(finished[9]["result"]["content"][0]["text"])
+            self.assertEqual(final_status["status"], "completed", final_status)
+            self.assertEqual(final_status["task_counts"]["completed"], 1, final_status)
+
+    def test_style_rpc_multiple_profiles_require_choice_and_support_section_binding(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            created_reply = _run_rpc(
+                [
+                    _tool_call(
+                        1,
+                        "nature_new_workflow",
+                        {
+                            "project_root": tmp,
+                            "slug": "style-choice-rpc",
+                            "title": "Style choice RPC",
+                            "tasks": ["draft: manuscript prose"],
+                        },
+                    )
+                ]
+            )[1]
+            created = json.loads(created_reply["result"]["content"][0]["text"])
+            workflow_dir = created["workflow_dir"]
+            profile_dir = Path(workflow_dir) / "prose-profiles"
+            profile_dir.mkdir()
+
+            def write_profile(profile_id: str, fingerprint_char: str) -> None:
+                payload = {
+                    "schema_version": 1,
+                    "id": profile_id,
+                    "status": "ready",
+                    "source_kind": "author-draft",
+                    "source_fingerprint": "sha256:" + fingerprint_char * 64,
+                    "language": "en",
+                    "scopes": ["global"],
+                    "traits": [
+                        {
+                            "name": "voice",
+                            "value": "active-we",
+                            "scope": ["global"],
+                            "confidence": "high",
+                            "support": 5,
+                            "source_refs": ["train:intro:p001", "train:results:p002", "train:discussion:p003"],
+                            "strength": "soft",
+                        }
+                    ],
+                    "exclusions": [
+                        "source facts",
+                        "source numbers",
+                        "source citations",
+                        "claim strength",
+                    ],
+                }
+                (profile_dir / f"{profile_id}.md").write_text(
+                    "# Prose Profile\n\n```json\n"
+                    + json.dumps(payload, ensure_ascii=False, indent=2)
+                    + "\n```\n",
+                    encoding="utf-8",
+                )
+
+            write_profile("author-main", "1")
+            write_profile("journal-target", "2")
+            replies = _run_rpc(
+                [
+                    _tool_call(
+                        2,
+                        "nature_style_register",
+                        {
+                            "project_root": tmp,
+                            "workflow_dir": workflow_dir,
+                            "profile_path": "prose-profiles/author-main.md",
+                        },
+                    ),
+                    _tool_call(
+                        3,
+                        "nature_style_register",
+                        {
+                            "project_root": tmp,
+                            "workflow_dir": workflow_dir,
+                            "profile_path": "prose-profiles/journal-target.md",
+                        },
+                    ),
+                    _tool_call(
+                        4,
+                        "nature_style_resolve",
+                        {
+                            "project_root": tmp,
+                            "workflow_dir": workflow_dir,
+                            "section": "discussion",
+                            "task_id": "draft",
+                        },
+                    ),
+                    _tool_call(
+                        5,
+                        "nature_style_select",
+                        {
+                            "project_root": tmp,
+                            "workflow_dir": workflow_dir,
+                            "profile_id": "author-main",
+                            "section": "discussion",
+                        },
+                    ),
+                    _tool_call(
+                        6,
+                        "nature_style_resolve",
+                        {
+                            "project_root": tmp,
+                            "workflow_dir": workflow_dir,
+                            "section": "discussion",
+                            "task_id": "draft",
+                        },
+                    ),
+                    _tool_call(
+                        7,
+                        "nature_style_resolve",
+                        {
+                            "project_root": tmp,
+                            "workflow_dir": workflow_dir,
+                            "section": "results",
+                            "task_id": "draft",
+                        },
+                    ),
+                    _tool_call(
+                        8,
+                        "nature_style_resolve",
+                        {
+                            "project_root": tmp,
+                            "workflow_dir": workflow_dir,
+                            "section": "results",
+                            "profile_id": "journal-target",
+                            "task_id": "draft",
+                        },
+                    ),
+                ]
+            )
+
+            first = json.loads(replies[2]["result"]["content"][0]["text"])
+            second = json.loads(replies[3]["result"]["content"][0]["text"])
+            selected = json.loads(replies[5]["result"]["content"][0]["text"])
+            discussion = json.loads(replies[6]["result"]["content"][0]["text"])
+            explicit = json.loads(replies[8]["result"]["content"][0]["text"])
+            self.assertEqual(first["selection_status"], "auto_single", first)
+            self.assertEqual(second["selection_status"], "needs_choice", second)
+            self.assertEqual(
+                replies[4]["error"]["data"]["code"],
+                "prose_style_choice_required",
+                replies[4],
+            )
+            self.assertEqual(selected["selection_status"], "needs_choice", selected)
+            self.assertEqual(selected["section"], "discussion", selected)
+            self.assertEqual(discussion["profile_id"], "author-main", discussion)
+            self.assertEqual(
+                replies[7]["error"]["data"]["code"],
+                "prose_style_choice_required",
+                replies[7],
+            )
+            self.assertEqual(explicit["profile_id"], "journal-target", explicit)
+
     def test_all_declared_tools_round_trip_over_real_json_rpc(self) -> None:
         def rpc(request_id: int, name: str, arguments: dict | None = None) -> dict:
             return {
@@ -512,13 +824,27 @@ class ServerEncodingSmokeTest(unittest.TestCase):
             expected_names = {
                 "nature_new_workflow", "nature_discover_workflows", "nature_status", "nature_resume",
                 "nature_start_task", "nature_complete_task", "nature_block_task", "nature_log_note",
-                "nature_spec", "nature_memory_check", "nature_memory_touch", "nature_memory_index",
+                "nature_spec", "nature_genre", "nature_add_task", "nature_remove_task",
+                "nature_style_validate", "nature_style_register", "nature_style_select",
+                "nature_style_resolve", "nature_style_audit", "nature_style_disable",
+                "nature_style_index", "nature_memory_check", "nature_memory_touch", "nature_memory_index",
                 "nature_memory_list", "nature_memory_remember", "nature_memory_recall", "nature_memory_show",
                 "nature_memory_forget", "nature_memory_supersede", "nature_memory_consolidate_plan",
                 "nature_memory_consolidate_apply", "nature_memory_migrate", "nature_resume_with_memory",
                 "nature_complete_with_memory_review", "nature_block_with_memory_review",
             }
             self.assertEqual(declared, expected_names)
+            audit_tool = next(
+                tool for tool in listed["result"]["tools"] if tool["name"] == "nature_style_audit"
+            )
+            audit_schema = audit_tool["inputSchema"]
+            self.assertTrue(
+                {"operation", "style_checks", "content_invariants"}.issubset(
+                    audit_schema["required"]
+                )
+            )
+            self.assertEqual(audit_schema["properties"]["operation"]["enum"], ["writing", "polishing"])
+            self.assertEqual(audit_schema["properties"]["content_invariants"]["enum"], ["passed"])
             created = json.loads(next(reply for reply in replies if reply.get("id") == 3)["result"]["content"][0]["text"])
             workflow_dir = created["workflow_dir"]
 

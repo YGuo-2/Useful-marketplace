@@ -1,0 +1,4 @@
+interface:
+  display_name: "Nature Prose Style"
+  short_description: "Create reusable prose profiles from manuscripts"
+  default_prompt: "Use $nature-prose-style to create a reusable prose profile from my full English manuscript."

@@ -6,8 +6,8 @@
         "${CLAUDE_PLUGIN_ROOT}/mcp/nature_progress_server.py"
       ],
       "env": {
-        "NATURE_WORKFLOW_VERSION": "0.2.0",
-        "NATURE_WORKFLOW_MEMORY_INDEX_FILE": "CLAUDE.md"
+        "NATURE_WORKFLOW_VERSION": "0.3.0",
+        "NATURE_WORKFLOW_HOST": "claude"
       }
     }
   }

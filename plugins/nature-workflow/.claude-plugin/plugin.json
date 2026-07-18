@@ -1,7 +1,7 @@
 {
   "name": "nature-workflow",
-  "version": "0.2.0",
-  "description": "打包 Nature 科研技能,并附带轻量的工作流进度跟踪。",
+  "version": "0.3.0",
+  "description": "打包 Nature 科研技能，并附带轻量工作流、论文记忆与可选的可复用文风画像。",
   "author": {
     "name": "Yuan1z0825 and Useful-marketplace"
   },
@@ -16,6 +16,8 @@
     "citation",
     "workflow",
     "memory",
+    "prose-style",
+    "style-profile",
     "mcp"
   ],
   "mcpServers": "./.mcp.json"

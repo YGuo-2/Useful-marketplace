@@ -11,7 +11,7 @@ from typing import Any
 
 
 SCRIPT_DIR = Path(__file__).resolve().parents[1] / "scripts"
-SERVER_VERSION = os.environ.get("NATURE_WORKFLOW_VERSION", "0.2.0")
+SERVER_VERSION = os.environ.get("NATURE_WORKFLOW_VERSION", "0.3.0")
 sys.path.insert(0, str(SCRIPT_DIR))
 
 from nature_progress import (  # noqa: E402
@@ -55,6 +55,15 @@ from nature_memory import (  # noqa: E402
     command_memory_show,
     command_memory_supersede,
     command_memory_touch,
+)
+from nature_style import (  # noqa: E402
+    command_style_audit,
+    command_style_disable,
+    command_style_index,
+    command_style_register,
+    command_style_resolve,
+    command_style_select,
+    command_style_validate,
 )
 
 
@@ -165,6 +174,7 @@ TOOLS = [
                 "task_id": {"type": "string"},
                 "evidence": {"type": "string"},
                 "notes": {"type": "string"},
+                "style_receipt": {"type": "string"},
             },
             "required": ["task_id", "evidence"],
         },
@@ -256,6 +266,109 @@ TOOLS = [
                 "task_id": {"type": "string"},
             },
             "required": ["task_id"],
+        },
+    },
+    {
+        "name": "nature_style_validate",
+        "description": "Validate one paper-scoped prose-style profile without registering it.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "project_root": {"type": "string"},
+                "workflow_dir": {"type": "string"},
+                "profile_path": {"type": "string"},
+            },
+            "required": ["project_root", "workflow_dir", "profile_path"],
+        },
+    },
+    {
+        "name": "nature_style_register",
+        "description": "Register a ready/calibrated prose profile; auto-select one profile or require a choice for many.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "project_root": {"type": "string"},
+                "workflow_dir": {"type": "string"},
+                "profile_path": {"type": "string"},
+            },
+            "required": ["project_root", "workflow_dir", "profile_path"],
+        },
+    },
+    {
+        "name": "nature_style_select",
+        "description": "Persist the user's choice among multiple usable prose-style profiles.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "project_root": {"type": "string"},
+                "workflow_dir": {"type": "string"},
+                "profile_id": {"type": "string"},
+                "section": {"type": "string"},
+            },
+            "required": ["project_root", "workflow_dir", "profile_id"],
+        },
+    },
+    {
+        "name": "nature_style_resolve",
+        "description": "Resolve the selected applicable prose profile, returning its selection mode and binding ETags or a structured choice error.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "project_root": {"type": "string"},
+                "workflow_dir": {"type": "string"},
+                "section": {"type": "string"},
+                "profile_id": {"type": "string"},
+                "task_id": {"type": "string"},
+                "mode": {"type": "string", "enum": ["prose", "layout-only"]},
+            },
+            "required": ["project_root", "workflow_dir"],
+        },
+    },
+    {
+        "name": "nature_style_audit",
+        "description": "Audit a styled output after explicit semantic checks and write a receipt bound to the exact selection and output hash; polishing requires normalized UTF-8 source.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "project_root": {"type": "string"},
+                "workflow_dir": {"type": "string"},
+                "task_id": {"type": "string"},
+                "output_path": {"type": "string"},
+                "source_path": {"type": "string"},
+                "section": {"type": "string"},
+                "profile_id": {"type": "string"},
+                "profile_etag": {"type": "string"},
+                "resolution_etag": {"type": "string"},
+                "operation": {"type": "string", "enum": ["writing", "polishing"]},
+                "style_checks": {"type": "string", "enum": ["passed"]},
+                "content_invariants": {"type": "string", "enum": ["passed"]},
+            },
+            "required": ["project_root", "workflow_dir", "task_id", "output_path", "profile_etag", "resolution_etag", "operation", "style_checks", "content_invariants"],
+        },
+    },
+    {
+        "name": "nature_style_disable",
+        "description": "Disable one registered prose profile and recompute automatic selection.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "project_root": {"type": "string"},
+                "workflow_dir": {"type": "string"},
+                "profile_id": {"type": "string"},
+            },
+            "required": ["project_root", "workflow_dir", "profile_id"],
+        },
+    },
+    {
+        "name": "nature_style_index",
+        "description": "Install or remove the fixed project agent bootstrap based on usable prose profiles.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "project_root": {"type": "string"},
+                "workflow_root": {"type": "string"},
+            },
+            "required": ["project_root"],
         },
     },
     {
@@ -459,6 +572,7 @@ TOOLS.extend(
                     "task_id": {"type": "string"},
                     "evidence": {"type": "string"},
                     "notes": {"type": "string"},
+                    "style_receipt": {"type": "string"},
                     "top_k": {"type": "integer", "minimum": 1, "maximum": 5},
                     "max_bytes": {"type": "integer", "minimum": 256, "maximum": 4096},
                 },
@@ -663,6 +777,7 @@ def call_tool(name: str, args: dict[str, Any]) -> Any:
             _required_string(args, "task_id"),
             _required_string(args, "evidence"),
             _optional_string(args, "notes", ""),
+            _optional_string(args, "style_receipt"),
             base=base,
         )
     if name == "nature_block_task":
@@ -692,6 +807,57 @@ def call_tool(name: str, args: dict[str, Any]) -> Any:
         )
     if name == "nature_remove_task":
         return command_remove_task(_root(args), _workflow(args), _required_string(args, "task_id"), base=base)
+    if name == "nature_style_validate":
+        return command_style_validate(
+            _project_root_required(args),
+            _required_string(args, "workflow_dir"),
+            _required_string(args, "profile_path"),
+        )
+    if name == "nature_style_register":
+        return command_style_register(
+            _project_root_required(args),
+            _required_string(args, "workflow_dir"),
+            _required_string(args, "profile_path"),
+        )
+    if name == "nature_style_select":
+        return command_style_select(
+            _project_root_required(args),
+            _required_string(args, "workflow_dir"),
+            _required_string(args, "profile_id"),
+            section=_optional_string(args, "section") or None,
+        )
+    if name == "nature_style_resolve":
+        return command_style_resolve(
+            _project_root_required(args),
+            _required_string(args, "workflow_dir"),
+            section=_optional_string(args, "section") or None,
+            profile_id=_optional_string(args, "profile_id") or None,
+            task_id=_optional_string(args, "task_id") or None,
+            mode=_optional_string(args, "mode", "prose") or "prose",
+        )
+    if name == "nature_style_audit":
+        return command_style_audit(
+            _project_root_required(args),
+            _required_string(args, "workflow_dir"),
+            _required_string(args, "task_id"),
+            _required_string(args, "output_path"),
+            section=_optional_string(args, "section") or None,
+            profile_id=_optional_string(args, "profile_id") or None,
+            profile_etag=_required_string(args, "profile_etag"),
+            resolution_etag=_required_string(args, "resolution_etag"),
+            source_path=_optional_string(args, "source_path") or None,
+            operation=_required_string(args, "operation"),
+            style_checks=_required_string(args, "style_checks"),
+            content_invariants=_required_string(args, "content_invariants"),
+        )
+    if name == "nature_style_disable":
+        return command_style_disable(
+            _project_root_required(args),
+            _required_string(args, "workflow_dir"),
+            _required_string(args, "profile_id"),
+        )
+    if name == "nature_style_index":
+        return command_style_index(_project_root_required(args), workflow_root=_root(args))
     if name == "nature_memory_check":
         workflow_dir, all_workflows = _workflow_selection(args)
         return command_memory_check(
@@ -827,6 +993,7 @@ def call_tool(name: str, args: dict[str, Any]) -> Any:
             _required_string(args, "task_id"),
             _required_string(args, "evidence"),
             _optional_string(args, "notes", ""),
+            _optional_string(args, "style_receipt"),
             project_root=_project_root_required(args),
             scope=_required_scope(args),
             top_k=top_k,

@@ -1,5 +1,5 @@
 name: nature-polishing
-version: 6.1.0
+version: 6.2.0
 description: >
   Declarative manifest for the static/dynamic split. SKILL.md uses this to
   decide which fragments to load for a given polishing request.
@@ -10,9 +10,11 @@ always_load:
   - ../_shared/core/paper-type-taxonomy.md
   - ../_shared/core/ethics.md
   - ../_shared/core/terminology-ledger.md
+  - ../_shared/core/prose-profile-contract.md
   # Skill-local core
   - static/core/stance.md
   - static/core/failure-modes.md
+  - static/core/workflow.md
   - static/core/output-format.md
 
 axes:

@@ -4,14 +4,31 @@
 from __future__ import annotations
 
 import argparse
+import errno
+import hashlib
 import json
+import math
 import os
 import re
+import stat
 import sys
 import tempfile
-from datetime import datetime, timezone
+import threading
+import time
+from contextlib import contextmanager
+from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
+
+import nature_atomic
+
+
+# When this file is executed as a script, nature_style imports
+# ``nature_progress`` by module name. Reuse this module instance so both sides
+# raise and catch the same NatureProgressError class.
+if __name__ == "__main__":
+    sys.modules["nature_progress"] = sys.modules[__name__]
 
 
 DEFAULT_ROOT = "docs/nature-workflows"
@@ -19,6 +36,29 @@ SCHEMA_VERSION = 1
 TASK_ID_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.-]{0,31}$")
 SPEC_STATES = {"unset", "skipped", "ready"}
 SPEC_SOURCES = {"template", "dictation"}
+WORKFLOW_STATE_LOCK_FILE = ".nature-workflow-state.lock"
+WORKFLOW_STATE_LOCK_TIMEOUT = 5.0
+
+
+class WorkflowRecord(dict[str, Any]):
+    """A JSON-compatible workflow record carrying its load-time snapshot ETag."""
+
+    def __init__(self, *args: Any, snapshot_etag: str | None = None, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.snapshot_etag = snapshot_etag
+
+
+@dataclass(frozen=True)
+class _WorkflowFileSnapshot:
+    raw: bytes
+    etag: str
+    exists: bool
+    mode: int | None
+
+
+_WORKFLOW_THREAD_LOCKS: dict[str, threading.Lock] = {}
+_WORKFLOW_THREAD_LOCKS_GUARD = threading.Lock()
+_WORKFLOW_LOCK_STATE = threading.local()
 
 
 def default_spec() -> dict[str, Any]:
@@ -326,28 +366,684 @@ def parse_tasks(task_texts: list[str] | None) -> list[dict[str, Any]]:
     return tasks
 
 
-def load_record(workflow_dir: Path) -> dict[str, Any]:
+def _workflow_state_etag(raw: bytes) -> str:
+    return "sha256:" + hashlib.sha256(raw).hexdigest()
+
+
+def _workflow_file_error(
+    code: str,
+    detail: str,
+    path: Path,
+    *,
+    retryable: bool,
+) -> NatureProgressError:
+    return NatureProgressError(
+        detail,
+        code=code,
+        retryable=retryable,
+        context={"path": str(path)},
+    )
+
+
+def _read_workflow_file_snapshot(path: Path, *, state_file: bool) -> _WorkflowFileSnapshot:
+    unsafe_code = "workflow_state_path_unsafe" if state_file else "workflow_mirror_path_unsafe"
+    unreadable_code = "workflow_state_unreadable" if state_file else "workflow_mirror_unreadable"
+    try:
+        entry = os.lstat(path)
+    except FileNotFoundError:
+        return _WorkflowFileSnapshot(b"", _workflow_state_etag(b""), False, None)
+    except OSError as exc:
+        raise _workflow_file_error(
+            unreadable_code,
+            "workflow file could not be inspected",
+            path,
+            retryable=True,
+        ) from exc
+    if (
+        stat.S_ISLNK(entry.st_mode)
+        or not stat.S_ISREG(entry.st_mode)
+        or getattr(entry, "st_nlink", 1) != 1
+    ):
+        raise _workflow_file_error(
+            unsafe_code,
+            "workflow files must be private regular files",
+            path,
+            retryable=False,
+        )
+
+    fd = -1
+    try:
+        flags = os.O_RDONLY
+        if hasattr(os, "O_BINARY"):
+            flags |= os.O_BINARY
+        if hasattr(os, "O_NOFOLLOW"):
+            flags |= os.O_NOFOLLOW
+        fd = os.open(path, flags)
+        with os.fdopen(fd, "rb") as handle:
+            fd = -1
+            opened = os.fstat(handle.fileno())
+            current = os.lstat(path)
+            if (
+                not stat.S_ISREG(opened.st_mode)
+                or not stat.S_ISREG(current.st_mode)
+                or getattr(opened, "st_nlink", 1) != 1
+                or getattr(current, "st_nlink", 1) != 1
+                or getattr(opened, "st_dev", None) != getattr(current, "st_dev", None)
+                or getattr(opened, "st_ino", None) != getattr(current, "st_ino", None)
+            ):
+                raise _workflow_file_error(
+                    unsafe_code,
+                    "workflow file changed or became unsafe while it was read",
+                    path,
+                    retryable=False,
+                )
+            raw = handle.read()
+    except NatureProgressError:
+        raise
+    except OSError as exc:
+        if exc.errno == errno.ELOOP:
+            raise _workflow_file_error(
+                unsafe_code,
+                "workflow files must not be symbolic links",
+                path,
+                retryable=False,
+            ) from exc
+        raise _workflow_file_error(
+            unreadable_code,
+            "workflow file could not be read",
+            path,
+            retryable=True,
+        ) from exc
+    finally:
+        if fd != -1:
+            os.close(fd)
+
+    try:
+        raw.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise _workflow_file_error(
+            unreadable_code,
+            "workflow files must be valid UTF-8",
+            path,
+            retryable=False,
+        ) from exc
+    return _WorkflowFileSnapshot(
+        raw,
+        _workflow_state_etag(raw),
+        True,
+        stat.S_IMODE(opened.st_mode),
+    )
+
+
+def _read_state_snapshot(state_path: Path) -> tuple[bytes, str]:
+    snapshot = _read_workflow_file_snapshot(state_path, state_file=True)
+    return snapshot.raw, snapshot.etag
+
+
+def _workflow_thread_lock(lock_path: Path) -> threading.Lock:
+    key = _workflow_lock_key(lock_path)
+    with _WORKFLOW_THREAD_LOCKS_GUARD:
+        return _WORKFLOW_THREAD_LOCKS.setdefault(key, threading.Lock())
+
+
+def _workflow_lock_key(lock_path: Path) -> str:
+    return os.path.normcase(str(lock_path.resolve(strict=False)))
+
+
+def _held_workflow_locks() -> set[str]:
+    held = getattr(_WORKFLOW_LOCK_STATE, "held", None)
+    if held is None:
+        held = set()
+        _WORKFLOW_LOCK_STATE.held = held
+    return held
+
+
+def _state_lock_error(
+    code: str,
+    detail: str,
+    workflow_dir: Path,
+    lock_path: Path,
+    *,
+    retryable: bool = True,
+    timeout: float | None = None,
+) -> NatureProgressError:
+    context: dict[str, Any] = {
+        "workflow_dir": str(workflow_dir),
+        "lock_path": str(lock_path),
+    }
+    if timeout is not None:
+        context["timeout_seconds"] = max(0.0, timeout)
+    return NatureProgressError(detail, code=code, retryable=retryable, context=context)
+
+
+def _lock_is_busy(exc: OSError) -> bool:
+    return exc.errno in {errno.EACCES, errno.EAGAIN, errno.EWOULDBLOCK} or getattr(
+        exc, "winerror", None
+    ) in {32, 33}
+
+
+def _check_state_lock_path(lock_path: Path, workflow_dir: Path) -> None:
+    try:
+        info = os.lstat(lock_path)
+    except FileNotFoundError:
+        return
+    except OSError as exc:
+        raise _state_lock_error(
+            "workflow_state_lock_unavailable",
+            "workflow state lock could not be inspected",
+            workflow_dir,
+            lock_path,
+        ) from exc
+    if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode) or getattr(info, "st_nlink", 1) != 1:
+        raise _state_lock_error(
+            "workflow_state_lock_unsafe",
+            "workflow state lock must be a private regular file",
+            workflow_dir,
+            lock_path,
+            retryable=False,
+        )
+
+
+def _assert_open_lock_identity(handle: Any, lock_path: Path, workflow_dir: Path) -> None:
+    try:
+        opened = os.fstat(handle.fileno())
+        current = os.stat(lock_path, follow_symlinks=False)
+    except OSError as exc:
+        raise _state_lock_error(
+            "workflow_state_lock_unavailable",
+            "workflow state lock could not be inspected while held",
+            workflow_dir,
+            lock_path,
+        ) from exc
+    if (
+        not stat.S_ISREG(opened.st_mode)
+        or not stat.S_ISREG(current.st_mode)
+        or getattr(opened, "st_nlink", 1) != 1
+        or getattr(current, "st_nlink", 1) != 1
+        or getattr(opened, "st_dev", None) != getattr(current, "st_dev", None)
+        or getattr(opened, "st_ino", None) != getattr(current, "st_ino", None)
+    ):
+        raise _state_lock_error(
+            "workflow_state_lock_replaced",
+            "workflow state lock was replaced while it was held",
+            workflow_dir,
+            lock_path,
+            retryable=False,
+        )
+
+
+@contextmanager
+def workflow_state_lock(
+    workflow_dir: str | Path,
+    timeout: float = WORKFLOW_STATE_LOCK_TIMEOUT,
+):
+    """Serialize workflow state writes across threads and processes."""
+    workflow = Path(workflow_dir).expanduser().resolve(strict=False)
+    if not workflow.is_dir():
+        raise NatureProgressError(
+            "workflow directory must exist before locking state",
+            code="invalid_workflow_dir",
+            context={"workflow_dir": str(workflow)},
+        )
+    lock_path = workflow / WORKFLOW_STATE_LOCK_FILE
+    try:
+        timeout = float(timeout)
+    except (TypeError, ValueError) as exc:
+        raise _state_lock_error(
+            "workflow_state_lock_timeout_invalid",
+            "workflow state lock timeout must be a finite number",
+            workflow,
+            lock_path,
+            retryable=False,
+        ) from exc
+    if not math.isfinite(timeout) or timeout > threading.TIMEOUT_MAX:
+        raise _state_lock_error(
+            "workflow_state_lock_timeout_invalid",
+            "workflow state lock timeout must be a finite, platform-supported number",
+            workflow,
+            lock_path,
+            retryable=False,
+        )
+    timeout = max(0.0, timeout)
+    deadline = time.monotonic() + timeout
+    local_lock = _workflow_thread_lock(lock_path)
+    if not local_lock.acquire(timeout=timeout):
+        raise _state_lock_error(
+            "workflow_state_lock_timeout",
+            "workflow state lock timed out; retry with bounded backoff",
+            workflow,
+            lock_path,
+            timeout=timeout,
+        )
+
+    handle = None
+    acquired = False
+    try:
+        _check_state_lock_path(lock_path, workflow)
+        try:
+            flags = os.O_RDWR | os.O_CREAT
+            if hasattr(os, "O_BINARY"):
+                flags |= os.O_BINARY
+            if hasattr(os, "O_NOFOLLOW"):
+                flags |= os.O_NOFOLLOW
+            handle = os.fdopen(os.open(lock_path, flags, 0o600), "r+b")
+        except OSError as exc:
+            if exc.errno == errno.ELOOP:
+                raise _state_lock_error(
+                    "workflow_state_lock_unsafe",
+                    "workflow state lock must not be a symbolic link",
+                    workflow,
+                    lock_path,
+                    retryable=False,
+                ) from exc
+            raise _state_lock_error(
+                "workflow_state_lock_unavailable",
+                "workflow state lock could not be opened",
+                workflow,
+                lock_path,
+            ) from exc
+
+        _assert_open_lock_identity(handle, lock_path, workflow)
+
+        remaining = max(0.0, deadline - time.monotonic())
+        if os.name == "nt":
+            import msvcrt
+
+            try:
+                handle.seek(0, os.SEEK_END)
+                if handle.tell() == 0:
+                    handle.write(b"0")
+                    handle.flush()
+                handle.seek(0)
+            except OSError as exc:
+                raise _state_lock_error(
+                    "workflow_state_lock_unavailable",
+                    "workflow state lock could not be initialized",
+                    workflow,
+                    lock_path,
+                ) from exc
+            while True:
+                try:
+                    msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+                    acquired = True
+                    break
+                except OSError as exc:
+                    if not _lock_is_busy(exc):
+                        raise _state_lock_error(
+                            "workflow_state_lock_unavailable",
+                            "workflow state lock backend failed",
+                            workflow,
+                            lock_path,
+                        ) from exc
+                    if time.monotonic() >= deadline:
+                        break
+                    time.sleep(min(0.025, remaining))
+                    remaining = max(0.0, deadline - time.monotonic())
+        else:
+            import fcntl
+
+            while True:
+                try:
+                    fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    acquired = True
+                    break
+                except OSError as exc:
+                    if not _lock_is_busy(exc):
+                        raise _state_lock_error(
+                            "workflow_state_lock_unavailable",
+                            "workflow state lock backend failed",
+                            workflow,
+                            lock_path,
+                        ) from exc
+                    if time.monotonic() >= deadline:
+                        break
+                    time.sleep(min(0.025, remaining))
+                    remaining = max(0.0, deadline - time.monotonic())
+        if not acquired:
+            raise _state_lock_error(
+                "workflow_state_lock_timeout",
+                "workflow state lock timed out; retry with bounded backoff",
+                workflow,
+                lock_path,
+                timeout=timeout,
+            )
+        lock_key = _workflow_lock_key(lock_path)
+        held_locks = _held_workflow_locks()
+        held_locks.add(lock_key)
+        try:
+            yield lock_path
+            _assert_open_lock_identity(handle, lock_path, workflow)
+        finally:
+            held_locks.discard(lock_key)
+    finally:
+        if acquired and handle is not None:
+            try:
+                if os.name == "nt":
+                    import msvcrt
+
+                    handle.seek(0)
+                    msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+                else:
+                    import fcntl
+
+                    fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+            except OSError:
+                pass
+        if handle is not None:
+            handle.close()
+        local_lock.release()
+
+
+def load_record(workflow_dir: Path) -> WorkflowRecord:
     state_path = workflow_dir / "nature.yml"
-    if not state_path.exists():
+    snapshot = _read_workflow_file_snapshot(state_path, state_file=True)
+    if not snapshot.exists:
         raise NatureProgressError(f"Missing nature.yml in {workflow_dir}")
     try:
-        data = json.loads(state_path.read_text(encoding="utf-8"))
+        data = json.loads(snapshot.raw.decode("utf-8"))
+    except UnicodeDecodeError as exc:
+        raise NatureProgressError("nature.yml must be valid UTF-8") from exc
     except json.JSONDecodeError as exc:
         raise NatureProgressError(f"Invalid nature.yml JSON/YAML-compatible state: {exc}") from exc
     if not isinstance(data, dict):
         raise NatureProgressError("nature.yml must contain an object")
-    return data
+    return WorkflowRecord(data, snapshot_etag=snapshot.etag)
 
 
-def save_record(workflow_dir: Path, record: dict[str, Any]) -> None:
-    record["updated_at"] = now_utc()
-    workflow_dir.mkdir(parents=True, exist_ok=True)
-    _atomic_write_text(
-        workflow_dir / "nature.yml",
-        json.dumps(record, ensure_ascii=False, indent=2) + "\n",
+def _next_record_updated_at(previous: Any) -> str:
+    candidate = datetime.now(timezone.utc).replace(microsecond=0)
+    if isinstance(previous, str):
+        try:
+            parsed = datetime.fromisoformat(previous.replace("Z", "+00:00"))
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=timezone.utc)
+            parsed = parsed.astimezone(timezone.utc).replace(microsecond=0)
+            if parsed >= candidate:
+                candidate = parsed + timedelta(seconds=1)
+        except (OverflowError, ValueError):
+            pass
+    return candidate.isoformat().replace("+00:00", "Z")
+
+
+def _prefixed_file_etag(value: Any) -> str | None:
+    if not isinstance(value, str) or not value:
+        return None
+    return value if value.startswith("sha256:") else f"sha256:{value}"
+
+
+def _conditional_replace_workflow_text(
+    path: Path,
+    text: str,
+    *,
+    expected_etag: str,
+    file_mode: int | None,
+    state_file: bool,
+) -> None:
+    try:
+        nature_atomic.atomic_replace_text(
+            path,
+            text,
+            expected_etag=expected_etag.removeprefix("sha256:"),
+            mutation_context={"workflow_path": str(path)},
+            file_mode=file_mode,
+        )
+    except nature_atomic.AtomicReplaceError as exc:
+        conflict = exc.code == "file_changed_outside_lock"
+        if state_file and conflict:
+            code = "workflow_state_conflict"
+            detail = "workflow state changed after it was loaded; reload and retry"
+        elif conflict:
+            code = "workflow_mirror_conflict"
+            detail = "workflow mirror changed during state commit; reload and retry"
+        else:
+            code = "workflow_state_write_failed" if state_file else "workflow_mirror_write_failed"
+            detail = "workflow state could not be committed atomically"
+        context = {
+            "path": str(path),
+            "expected_etag": expected_etag,
+            "cause_code": exc.code,
+            **dict(exc.context),
+        }
+        actual = _prefixed_file_etag(exc.context.get("current_file_etag"))
+        if actual is not None:
+            context["actual_etag"] = actual
+        raise NatureProgressError(
+            detail,
+            code=code,
+            retryable=conflict or exc.retryable,
+            context=context,
+        ) from exc
+    except OSError as exc:
+        raise NatureProgressError(
+            "workflow state could not be committed atomically",
+            code="workflow_state_write_failed" if state_file else "workflow_mirror_write_failed",
+            retryable=True,
+            context={"path": str(path), "expected_etag": expected_etag},
+        ) from exc
+
+
+def _conditional_remove_workflow_file(path: Path, *, expected_etag: str) -> None:
+    current = _read_workflow_file_snapshot(path, state_file=False)
+    if not current.exists:
+        return
+    if current.etag != expected_etag:
+        raise NatureProgressError(
+            "workflow mirror changed before rollback; external content was preserved",
+            code="workflow_mirror_conflict",
+            retryable=True,
+            context={
+                "path": str(path),
+                "expected_etag": expected_etag,
+                "actual_etag": current.etag,
+            },
+        )
+
+    fd, recovery_name = tempfile.mkstemp(
+        dir=str(path.parent),
+        prefix=f".{path.name}.",
+        suffix=".rollback",
     )
-    _atomic_write_text(workflow_dir / "progress.md", render_progress(record))
-    _atomic_write_text(workflow_dir / "tasks.md", render_tasks(record))
+    os.close(fd)
+    os.unlink(recovery_name)
+    recovery_path = Path(recovery_name)
+    try:
+        os.replace(path, recovery_path)
+    except FileNotFoundError:
+        return
+    except OSError as exc:
+        raise NatureProgressError(
+            "new workflow mirror could not be removed during rollback",
+            code="workflow_state_rollback_failed",
+            retryable=True,
+            context={"path": str(path)},
+        ) from exc
+
+    moved = _read_workflow_file_snapshot(recovery_path, state_file=False)
+    if moved.etag != expected_etag:
+        if not path.exists():
+            try:
+                os.replace(recovery_path, path)
+            except OSError as exc:
+                raise NatureProgressError(
+                    "externally changed mirror could not be restored after rollback conflict",
+                    code="workflow_state_rollback_failed",
+                    retryable=True,
+                    context={"path": str(path), "recovery_path": str(recovery_path)},
+                ) from exc
+        raise NatureProgressError(
+            "workflow mirror changed during rollback; external content was preserved",
+            code="workflow_mirror_conflict",
+            retryable=True,
+            context={"path": str(path)},
+        )
+    recovery_path.unlink()
+
+
+def _rollback_workflow_mirrors(
+    applied: list[tuple[Path, _WorkflowFileSnapshot, str]],
+    *,
+    cause: BaseException,
+) -> None:
+    failures: list[dict[str, Any]] = []
+    for path, original, written_etag in reversed(applied):
+        try:
+            if original.exists:
+                _conditional_replace_workflow_text(
+                    path,
+                    original.raw.decode("utf-8"),
+                    expected_etag=written_etag,
+                    file_mode=original.mode,
+                    state_file=False,
+                )
+            else:
+                _conditional_remove_workflow_file(path, expected_etag=written_etag)
+        except NatureProgressError as exc:
+            failures.append({"path": str(path), "code": exc.code})
+    if failures:
+        raise NatureProgressError(
+            "workflow state commit failed and one or more mirror files could not be restored",
+            code="workflow_state_rollback_failed",
+            retryable=True,
+            context={"failures": failures},
+        ) from cause
+
+
+def _save_record_locked(workflow_dir: Path, record: dict[str, Any]) -> None:
+    state_path = workflow_dir / "nature.yml"
+    progress_path = workflow_dir / "progress.md"
+    tasks_path = workflow_dir / "tasks.md"
+    snapshots = {
+        state_path: _read_workflow_file_snapshot(state_path, state_file=True),
+        progress_path: _read_workflow_file_snapshot(progress_path, state_file=False),
+        tasks_path: _read_workflow_file_snapshot(tasks_path, state_file=False),
+    }
+    state_snapshot = snapshots[state_path]
+
+    if isinstance(record, WorkflowRecord):
+        expected_etag = record.snapshot_etag
+        if expected_etag is None:
+            raise NatureProgressError(
+                "workflow records without a load-time snapshot cannot overwrite state",
+                code="workflow_state_snapshot_required",
+                retryable=False,
+                context={"state_path": str(state_path)},
+            )
+    elif state_snapshot.exists:
+        raise NatureProgressError(
+            "load the workflow record before saving existing state",
+            code="workflow_state_snapshot_required",
+            retryable=False,
+            context={"state_path": str(state_path)},
+        )
+    else:
+        expected_etag = _workflow_state_etag(b"")
+
+    if state_snapshot.etag != expected_etag:
+        raise NatureProgressError(
+            "workflow state changed after it was loaded; reload and retry",
+            code="workflow_state_conflict",
+            retryable=True,
+            context={
+                "workflow_dir": str(workflow_dir),
+                "state_path": str(state_path),
+                "expected_etag": expected_etag,
+                "actual_etag": state_snapshot.etag,
+            },
+        )
+
+    had_updated_at = "updated_at" in record
+    original_updated_at = record.get("updated_at")
+    committed = False
+    applied: list[tuple[Path, _WorkflowFileSnapshot, str]] = []
+    try:
+        record["updated_at"] = _next_record_updated_at(original_updated_at)
+        state_text = json.dumps(record, ensure_ascii=False, indent=2) + "\n"
+        rendered = {
+            progress_path: render_progress(record),
+            tasks_path: render_tasks(record),
+        }
+        state_bytes = state_text.encode("utf-8")
+
+        for path in (progress_path, tasks_path):
+            text = rendered[path]
+            original = snapshots[path]
+            written_etag = _workflow_state_etag(text.encode("utf-8"))
+            if written_etag == original.etag:
+                continue
+            _conditional_replace_workflow_text(
+                path,
+                text,
+                expected_etag=original.etag,
+                file_mode=original.mode,
+                state_file=False,
+            )
+            applied.append((path, original, written_etag))
+
+        expected_mirror_etags = {
+            path: next(
+                (written_etag for applied_path, _, written_etag in applied if applied_path == path),
+                snapshots[path].etag,
+            )
+            for path in (progress_path, tasks_path)
+        }
+        for path, expected_mirror_etag in expected_mirror_etags.items():
+            current = _read_workflow_file_snapshot(path, state_file=False)
+            if current.etag != expected_mirror_etag:
+                raise NatureProgressError(
+                    "workflow mirror changed before the state commit; reload and retry",
+                    code="workflow_mirror_conflict",
+                    retryable=True,
+                    context={
+                        "path": str(path),
+                        "expected_etag": expected_mirror_etag,
+                        "actual_etag": current.etag,
+                    },
+                )
+
+        _conditional_replace_workflow_text(
+            state_path,
+            state_text,
+            expected_etag=state_snapshot.etag,
+            file_mode=state_snapshot.mode,
+            state_file=True,
+        )
+        committed = True
+        if isinstance(record, WorkflowRecord):
+            record.snapshot_etag = _workflow_state_etag(state_bytes)
+    except BaseException as exc:
+        _rollback_workflow_mirrors(applied, cause=exc)
+        raise
+    finally:
+        if not committed:
+            if had_updated_at:
+                record["updated_at"] = original_updated_at
+            else:
+                record.pop("updated_at", None)
+
+
+def save_record(
+    workflow_dir: Path,
+    record: dict[str, Any],
+    *,
+    already_locked: bool = False,
+    lock_timeout: float = WORKFLOW_STATE_LOCK_TIMEOUT,
+) -> None:
+    workflow_dir.mkdir(parents=True, exist_ok=True)
+    if already_locked:
+        lock_key = _workflow_lock_key(workflow_dir / WORKFLOW_STATE_LOCK_FILE)
+        if lock_key not in _held_workflow_locks():
+            raise NatureProgressError(
+                "already_locked requires the current thread to hold the workflow state lock",
+                code="workflow_state_lock_required",
+                context={
+                    "workflow_dir": str(workflow_dir),
+                    "lock_path": str(workflow_dir / WORKFLOW_STATE_LOCK_FILE),
+                },
+            )
+        _save_record_locked(workflow_dir, record)
+        return
+    with workflow_state_lock(workflow_dir, timeout=lock_timeout):
+        _save_record_locked(workflow_dir, record)
 
 
 def _atomic_write_text(path: Path, text: str) -> None:
@@ -453,7 +1149,7 @@ def summarize(record: dict[str, Any], workflow_dir: Path) -> dict[str, Any]:
         or next((task for task in tasks if task.get("status") == "pending"), None)
         or next((task for task in tasks if task.get("status") == "blocked"), None)
     )
-    return {
+    summary = {
         "workflow_dir": str(workflow_dir),
         "title": record.get("title", ""),
         "slug": record.get("slug", ""),
@@ -469,6 +1165,11 @@ def summarize(record: dict[str, Any], workflow_dir: Path) -> dict[str, Any]:
             "tasks": str(workflow_dir / "tasks.md"),
         },
     }
+    if "prose_style" in record:
+        from nature_style import style_summary
+
+        summary["prose_style"] = style_summary(record)
+    return summary
 
 
 def render_progress(record: dict[str, Any]) -> str:
@@ -492,6 +1193,13 @@ def render_progress(record: dict[str, Any]) -> str:
         "## Tasks",
         "",
     ]
+    if "prose_style" in record:
+        from nature_style import style_summary
+
+        prose_style = style_summary(record) or {}
+        selection = prose_style.get("selection_status", "none")
+        selected = prose_style.get("selected_profile_id") or "none"
+        lines[8:8] = [f"- Prose style: {selection} ({selected})"]
     for task in record.get("tasks", []):
         lines.append(f"- {task.get('id')} [{task.get('status')}] {task.get('title')}")
         if task.get("evidence"):
@@ -628,25 +1336,74 @@ def command_complete(
     task_id: str,
     evidence: str,
     notes: str = "",
+    style_receipt: str | None = None,
     *,
     base: Path | None = None,
 ) -> dict[str, Any]:
     if not evidence.strip():
         raise NatureProgressError("Completion evidence is required")
     workflow_dir = checked_workflow_dir(workflow, workflow_root, base=base)
-    record = load_record(workflow_dir)
-    task = find_task(record, task_id)
-    task["status"] = "completed"
-    task["completed_at"] = now_utc()
-    task["evidence"] = evidence.strip()
-    task["notes"] = notes.strip()
-    task["blocker"] = ""
-    task["blocked_at"] = None
-    if record.get("active_task") == task_id:
-        record["active_task"] = None
-    append_log(record, "complete", evidence.strip(), task_id)
-    update_workflow_status(record)
-    save_record(workflow_dir, record)
+    project_root = _checked_base(base)
+    with workflow_state_lock(workflow_dir):
+        record = load_record(workflow_dir)
+        task = find_task(record, task_id)
+        original_record = json.loads(json.dumps(record, ensure_ascii=False))
+        style_guard = None
+        if "prose_style" in record:
+            from nature_style import assert_style_completion_allowed
+
+            style_guard = assert_style_completion_allowed
+            style_guard(
+                project_root,
+                workflow_dir,
+                record,
+                task,
+                evidence,
+                style_receipt,
+            )
+        task["status"] = "completed"
+        task["completed_at"] = now_utc()
+        task["evidence"] = evidence.strip()
+        task["notes"] = notes.strip()
+        task["blocker"] = ""
+        task["blocked_at"] = None
+        if record.get("active_task") == task_id:
+            record["active_task"] = None
+        append_log(record, "complete", evidence.strip(), task_id)
+        update_workflow_status(record)
+        if style_guard is not None:
+            style_guard(
+                project_root,
+                workflow_dir,
+                record,
+                task,
+                evidence,
+                style_receipt,
+            )
+        save_record(workflow_dir, record, already_locked=True)
+        if style_guard is not None:
+            try:
+                style_guard(
+                    project_root,
+                    workflow_dir,
+                    record,
+                    task,
+                    evidence,
+                    style_receipt,
+                )
+            except BaseException as exc:
+                try:
+                    record.clear()
+                    record.update(original_record)
+                    save_record(workflow_dir, record, already_locked=True)
+                except BaseException as rollback_exc:
+                    raise NatureProgressError(
+                        "completion evidence changed and task state could not be rolled back",
+                        code="workflow_completion_rollback_failed",
+                        retryable=True,
+                        context={"workflow_dir": str(workflow_dir), "task_id": task_id},
+                    ) from rollback_exc
+                raise
     return {"ok": True, "action": "complete", **summarize(record, workflow_dir)}
 
 
@@ -847,6 +1604,7 @@ def build_parser() -> argparse.ArgumentParser:
     complete.add_argument("task_id")
     complete.add_argument("--evidence", required=True)
     complete.add_argument("--notes", default="")
+    complete.add_argument("--style-receipt", default="")
     complete.add_argument("--root", default=DEFAULT_ROOT)
     complete.add_argument("--workflow", default="")
 
@@ -899,7 +1657,14 @@ def dispatch(args: argparse.Namespace) -> dict[str, Any]:
     if args.command == "start":
         return command_start(args.root, args.workflow or None, args.task_id)
     if args.command == "complete":
-        return command_complete(args.root, args.workflow or None, args.task_id, args.evidence, args.notes)
+        return command_complete(
+            args.root,
+            args.workflow or None,
+            args.task_id,
+            args.evidence,
+            args.notes,
+            args.style_receipt or None,
+        )
     if args.command == "block":
         return command_block(args.root, args.workflow or None, args.task_id, args.reason)
     if args.command == "log":

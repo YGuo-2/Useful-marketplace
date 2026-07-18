@@ -110,6 +110,24 @@ compare the current draft item by item and list what must adapt (title, abstract
 figures/tables, references, length, language, submission files). **Deliverable:**
 `目标期刊适配学习报告.md` and `投稿格式适配清单.md`.
 
+### 11b. Optional persistent prose-profile handoff (explicit request only)
+
+Do not run this handoff during routine deep-learning. Run it only when the user explicitly asks to
+generate, save, or reuse a target-journal 文风画像.
+
+Prepare a bounded handoff from the already verified materials:
+
+- `source_kind: journal-corpus` and the confirmed journal identity;
+- absolute paths to `对标文献清单.csv` and `目标期刊适配学习报告.md`;
+- the benchmark article source locators and access dates;
+- intended profile scope and language;
+- only abstracted prose-style observations supported across the corpus.
+
+Do not create `prose-profiles/`, mutate style state, or install the project bootstrap here. Delegate
+the handoff to `nature-prose-style`, which creates a draft, validates it, registers a usable profile,
+and resolves the single-versus-multiple selection rule. If profile generation was not explicitly
+requested, omit the handoff entirely and continue to step 12.
+
 ### 12. Report with evidence paths
 
 Return the user-facing report from `core/output-contract.md` with the deliverable file paths first, so

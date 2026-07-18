@@ -75,15 +75,23 @@ Steps 2, 6, 9 are decision forks — apply `core/decision.md` before advancing.
 
 ## Optional delegates (inject with add-task)
 
-Not seeded by default; insert on demand with `add-task` (its output feeds no later
-step, so it stays out of the fixed sequence). The delegate is documented here so the
-orchestrator inserts from the template, not from memory.
+Not seeded by default; insert on demand with `add-task`. These delegates stay out of
+the fixed genre sequence because they require an explicit user request. The delegate
+is documented here so the orchestrator inserts from the template, not from memory.
 
 | task `id: title` | Owner (delegate) | Evidence | When |
 |---|---|---|---|
+| `prose-style: 文风画像生成与注册` | **nature-prose-style** | validated `ready`/`calibrated` profile path + registration result | only after an explicit request for a persistent profile; before the next writing/polishing task |
 | `reviewer: 投稿前预审` | **nature-reviewer** | reviewer report path (3 reports + cross-review synthesis) | pre-submission self-review, after the manuscript is polished |
 
 ```bash
+# recommended before the first prose-producing step; never add by default
+python plugins/nature-workflow/scripts/nature_progress.py add-task "prose-style: 文风画像生成与注册" --after read
+
 # after step 10 polish, before the submission-packaging tail
 python plugins/nature-workflow/scripts/nature_progress.py add-task "reviewer: 投稿前预审" --after polish
 ```
+
+Registering one usable profile immediately selects it as `auto_single`. Registering two or more
+requires an exact user choice before any downstream prose task continues. The profile task's evidence
+does not replace the audit receipt required for each later guarded prose output.

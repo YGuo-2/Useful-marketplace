@@ -4,7 +4,10 @@
       "command": "python",
       "args": [
         "${CLAUDE_PLUGIN_ROOT}/mcp/spec_progress_server.py"
-      ]
+      ],
+      "env": {
+        "SPEC_WORKFLOW_MCP_IDLE_TIMEOUT_SECONDS": "300"
+      }
     }
   }
 }

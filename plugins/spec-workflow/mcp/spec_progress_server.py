@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -41,6 +42,67 @@ from spec_progress import (  # noqa: E402
     command_status,
     specs_path,
 )
+
+
+DEFAULT_IDLE_TIMEOUT_SECONDS = 300.0
+IDLE_TIMEOUT_ENV = "SPEC_WORKFLOW_MCP_IDLE_TIMEOUT_SECONDS"
+LEGACY_IDLE_TIMEOUT_ENV = "SPEC_CODING_MCP_IDLE_TIMEOUT_SECONDS"
+
+
+def _idle_timeout_seconds() -> float:
+    raw = os.environ.get(IDLE_TIMEOUT_ENV) or os.environ.get(LEGACY_IDLE_TIMEOUT_ENV)
+    if raw is None:
+        return DEFAULT_IDLE_TIMEOUT_SECONDS
+    try:
+        return max(0.0, float(raw))
+    except ValueError:
+        print(
+            f"Ignoring invalid {IDLE_TIMEOUT_ENV} value {raw!r}; "
+            f"using {DEFAULT_IDLE_TIMEOUT_SECONDS:g} seconds.",
+            file=sys.stderr,
+            flush=True,
+        )
+        return DEFAULT_IDLE_TIMEOUT_SECONDS
+
+
+class IdleShutdownTimer:
+    """Terminate a stdio server whose client keeps an unused pipe open."""
+
+    def __init__(self, timeout_seconds: float) -> None:
+        self.timeout_seconds = timeout_seconds
+        self._generation = 0
+        self._lock = threading.Lock()
+        self._timer: threading.Timer | None = None
+
+    def arm(self) -> None:
+        if self.timeout_seconds <= 0:
+            return
+        with self._lock:
+            self._generation += 1
+            generation = self._generation
+            if self._timer is not None:
+                self._timer.cancel()
+            timer = threading.Timer(self.timeout_seconds, self._expire, args=(generation,))
+            timer.daemon = True
+            self._timer = timer
+            timer.start()
+
+    def pause(self) -> None:
+        with self._lock:
+            self._generation += 1
+            if self._timer is not None:
+                self._timer.cancel()
+                self._timer = None
+
+    def _expire(self, generation: int) -> None:
+        with self._lock:
+            if generation != self._generation:
+                return
+            self._timer = None
+        # stdin may be blocked forever while the host retains the pipe. This
+        # server is stateless, so an immediate exit is the portable way to
+        # release it on Windows and POSIX without interrupting active tools.
+        os._exit(0)
 
 
 def _base_dir() -> Path:
@@ -376,7 +438,7 @@ def handle(message: dict[str, Any]) -> dict[str, Any] | None:
             {
                 "protocolVersion": "2024-11-05",
                 "capabilities": {"tools": {}},
-                "serverInfo": {"name": "spec-workflow-progress", "version": "0.1.0"},
+                "serverInfo": {"name": "spec-workflow-progress", "version": "0.2.2"},
             },
         )
     if method == "notifications/initialized":
@@ -394,28 +456,37 @@ def handle(message: dict[str, Any]) -> dict[str, Any] | None:
 
 
 def main() -> int:
-    for line in sys.stdin:
-        if not line.strip():
-            continue
-        request_id: Any = None
-        try:
-            message = json.loads(line)
-            request_id = message.get("id")
-            reply = handle(message)
-            if reply is not None:
-                print(json.dumps(reply, ensure_ascii=False), flush=True)
-        except Exception as exc:  # Keep MCP server alive for debuggable tool errors.
-            print(
-                json.dumps(
-                    {
-                        "jsonrpc": "2.0",
-                        "id": request_id,
-                        "error": {"code": -32099, "message": str(exc)},
-                    },
-                    ensure_ascii=False,
-                ),
-                flush=True,
-            )
+    idle_shutdown = IdleShutdownTimer(_idle_timeout_seconds())
+    idle_shutdown.arm()
+    try:
+        for line in sys.stdin:
+            idle_shutdown.pause()
+            try:
+                if not line.strip():
+                    continue
+                request_id: Any = None
+                try:
+                    message = json.loads(line)
+                    request_id = message.get("id")
+                    reply = handle(message)
+                    if reply is not None:
+                        print(json.dumps(reply, ensure_ascii=False), flush=True)
+                except Exception as exc:  # Keep MCP server alive for debuggable tool errors.
+                    print(
+                        json.dumps(
+                            {
+                                "jsonrpc": "2.0",
+                                "id": request_id,
+                                "error": {"code": -32099, "message": str(exc)},
+                            },
+                            ensure_ascii=False,
+                        ),
+                        flush=True,
+                    )
+            finally:
+                idle_shutdown.arm()
+    finally:
+        idle_shutdown.pause()
     return 0
 
 

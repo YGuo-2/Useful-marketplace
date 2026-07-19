@@ -21,11 +21,11 @@ Use the Codex "Add plugin marketplace" dialog:
 - Git ref: `main`
 - Sparse path: leave empty
 
-Codex expects the marketplace manifest at `.agents/plugins/marketplace.json` and each plugin manifest at `plugins/<name>/.codex-plugin/plugin.json`. `nature-workflow` declares its Codex-specific MCP entry inline, resolves the server relative to the installed plugin root, and keeps the memory index and optional prose-style bootstrap in `AGENTS.md`. Plugin sources live under `plugins/`.
+Codex expects the marketplace manifest at `.agents/plugins/marketplace.json` and each plugin manifest at `plugins/<name>/.codex-plugin/plugin.json`. Both plugins declare their Codex-specific MCP entries inline and resolve servers relative to the installed plugin root. `nature-workflow` also keeps the memory index and optional prose-style bootstrap in `AGENTS.md`. Plugin sources live under `plugins/`.
 
 ## Plugins
 
-- `spec-workflow`: spec-first development workflow for complex code changes.
+- `spec-workflow`: explicitly invoked, spec-first development workflow for complex code changes.
 - `nature-workflow`: Nature research skills with lightweight workflow tracking, paper memory, and optional reusable prose-style profiles.
 
 ## Nature Workflow
@@ -154,6 +154,10 @@ blocks a commit.
 
 `spec-workflow` is a spec-first workflow for changes where correctness, scope control, resumability, and reviewability matter more than speed.
 
+## Explicit Activation
+
+`spec-workflow` is opt-in only. It runs when the user explicitly names `spec-workflow` / `Spec workflow`, explicitly asks to use or start the plugin, or continues a workflow they previously started explicitly. Generic requests such as "write a spec", "clarify requirements", "design first", "fix this bug", "review this change", or "handle a complex refactor" do not activate the plugin by themselves. After explicit activation, the router may hand off to internal branch skills without requiring the user to repeat the plugin name.
+
 It includes seven skills:
 
 - `spec-intake`: inspect context first, then run a multi-round clarification gate with an explicit handoff.
@@ -164,7 +168,7 @@ It includes seven skills:
 - `spec-bugfix`: create evidence-led bugfix specs before code changes.
 - `spec-acceptance`: run final multi-agent acceptance after all approved tasks are complete.
 
-Use it for complex features, cross-module refactors, design-first work, regressions, production fixes, or high-risk changes. For tiny local edits, the workflow can be heavier than the task; low-risk work can opt into Quick Plan only with explicit human authorization.
+Explicitly invoke it for complex features, cross-module refactors, design-first work, regressions, production fixes, or high-risk changes. For tiny local edits, the workflow can be heavier than the task; low-risk work can opt into Quick Plan only with explicit human authorization.
 
 ## Workflow
 
@@ -254,7 +258,7 @@ After approval, primary spec artifacts and the task plan are immutable. Progress
 
 ## MCP Tools
 
-The plugin includes `.mcp.json` and a stdio server at `mcp/spec_progress_server.py`. The MCP tools wrap the same state machine as the CLI:
+The plugin registers the same stdio MCP server through `.codex-plugin/plugin.json` for Codex and `.mcp.json` for Claude Code. The server lives at `mcp/spec_progress_server.py`, and its tools wrap the same state machine as the CLI:
 
 - `spec_status`
 - `spec_resume`
@@ -279,6 +283,8 @@ The plugin includes `.mcp.json` and a stdio server at `mcp/spec_progress_server.
 Agents should use MCP task tools when available. The CLI is the fallback and remains the canonical implementation.
 
 When launching the Spec MCP server outside the Codex plugin runtime, set `SPEC_WORKFLOW_BASE_DIR` to the project root so relative `specs_dir` values resolve under the target project rather than the plugin directory. The legacy `SPEC_CODING_BASE_DIR` variable is still accepted as a compatibility fallback.
+
+The stdio server exits after 300 seconds without input so task-scoped hosts cannot accumulate idle Python processes. Set `SPEC_WORKFLOW_MCP_IDLE_TIMEOUT_SECONDS` to another number of seconds, or `0` to disable idle shutdown. The legacy `SPEC_CODING_MCP_IDLE_TIMEOUT_SECONDS` name remains supported. The timer is paused while a request is being handled and restarts only after its response is flushed.
 
 ## Hook Guard
 

@@ -1,11 +1,15 @@
 ---
 name: spec-acceptance
-description: Use after Spec workflow implementation tasks are complete to run final acceptance against the selected tasks.md. Trigger when a Requirements-First, Design-First, or Bugfix branch has no unchecked tasks and needs final multi-agent acceptance, adversarial review, completion checks, over-fallback checks, strict spec-adherence checks, and Bugfix rerouting for confirmed issues.
+description: Explicit activation only. Internal final step of a user-invoked spec-workflow. Select only after the active branch hands off, or when the user explicitly names spec-acceptance and thereby opts into the plugin; otherwise do not select.
 ---
 
 # Spec workflow Acceptance
 
 Use this as the final step after a Spec workflow branch finishes every task in `<specs_dir>/tasks.md`. Its job is to verify the whole workflow outcome. It does not create `<specs_dir>/acceptance.md`; resumable acceptance state lives in `<specs_dir>/acceptance_state.json`, and acceptance repair work lives in `<specs_dir>/acceptance-fixes.md`.
+
+## Activation Boundary
+
+This skill may run only inside a user-initiated spec-workflow run. If named directly, enter through the `spec-workflow` router and resume gates before acceptance. Generic review or verification requests must not activate it.
 
 ## Required Announcement
 

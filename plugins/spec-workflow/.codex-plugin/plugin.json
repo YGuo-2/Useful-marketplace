@@ -1,7 +1,7 @@
 {
   "name": "spec-workflow",
-  "version": "0.2.0",
-  "description": "Spec-first workflows with Kiro-compatible indexes, requirements analysis, task graphs, resumable progress, MCP task and acceptance updates, hook guards, and bounded layered acceptance.",
+  "version": "0.2.2",
+  "description": "Explicitly invoked spec-first workflows with Kiro-compatible indexes, requirements analysis, task graphs, resumable progress, MCP task and acceptance updates, hook guards, and bounded layered acceptance.",
   "author": {
     "name": "TriciaDoctor"
   },
@@ -29,8 +29,8 @@
   "skills": "./skills/",
   "interface": {
     "displayName": "Spec workflow",
-    "shortDescription": "Clarify, route, implement, and accept complex coding work through approved specs.",
-    "longDescription": "Spec workflow adds intake-first clarification, Kiro-style requirements analysis, spec.yml/progress.md state files, structured task graphs, MCP-backed task and acceptance updates, hook guard templates, controlled implementation, local pre-acceptance, and strict resumable final acceptance with review/adversarial agents, isolated acceptance fixes, and bounded retry policy before reporting completion.",
+    "shortDescription": "Explicit opt-in workflow for approved spec-driven coding work.",
+    "longDescription": "Spec workflow runs only when the user explicitly invokes it. It adds intake-first clarification, Kiro-style requirements analysis, spec.yml/progress.md state files, structured task graphs, MCP-backed task and acceptance updates, hook guard templates, controlled implementation, local pre-acceptance, and strict resumable final acceptance with review/adversarial agents, isolated acceptance fixes, and bounded retry policy before reporting completion.",
     "developerName": "TriciaDoctor",
     "category": "Developer Tools",
     "capabilities": [
@@ -41,12 +41,24 @@
     "composerIcon": "./assets/icon.png",
     "logo": "./assets/logo.png",
     "defaultPrompt": [
-      "Clarify this request before writing the spec.",
-      "Create a spec before implementing this feature.",
-      "Plan this design-first change before coding.",
-      "Write a bugfix spec for this regression.",
-      "Run final acceptance for this completed spec workflow.",
-      "Resume this interrupted spec workflow from docs/specs/progress.md."
+      "Use spec-workflow to clarify this request before writing the spec.",
+      "Use spec-workflow to create a spec before implementing this feature.",
+      "Use spec-workflow to plan this design-first change before coding.",
+      "Use spec-workflow to write a bugfix spec for this regression.",
+      "Use spec-workflow to run final acceptance for this completed workflow.",
+      "Use spec-workflow to resume this interrupted workflow from docs/specs/progress.md."
     ]
+  },
+  "mcpServers": {
+    "spec_workflow_progress": {
+      "command": "python",
+      "args": [
+        "./mcp/spec_progress_server.py"
+      ],
+      "cwd": ".",
+      "env": {
+        "SPEC_WORKFLOW_MCP_IDLE_TIMEOUT_SECONDS": "300"
+      }
+    }
   }
 }

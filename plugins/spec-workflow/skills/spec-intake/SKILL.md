@@ -1,11 +1,15 @@
 ---
 name: spec-intake
-description: Use at the start of Spec workflow runs to clarify user intent before routing to Requirements-First, Design-First, or Bugfix. Runs a repo-grounded, multi-round clarification gate with explicit handoff status before any spec artifact generation.
+description: Explicit activation only. Internal step of a user-invoked spec-workflow. Select only after the active spec-workflow router hands off, or when the user explicitly names spec-intake and thereby opts into the plugin; otherwise do not select.
 ---
 
 # Spec workflow Intake
 
 Use this as the first step in the Spec workflow plugin after `<specs_dir>` is selected. Its job is to turn a vague request into a route-ready, spec-ready handoff. It does not generate source code and does not create a standalone `<specs_dir>/intake.md`; the handoff must be carried into the selected branch's primary spec artifact.
+
+## Activation Boundary
+
+This skill may run only inside a user-initiated spec-workflow run. If the user explicitly names `spec-intake` directly, treat that as plugin opt-in but enter through the `spec-workflow` router and directory-selection gate first. Generic clarification requests must not activate it.
 
 ## Required Announcement
 

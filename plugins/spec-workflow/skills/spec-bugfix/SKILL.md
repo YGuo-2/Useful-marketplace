@@ -1,11 +1,15 @@
 ---
 name: spec-bugfix
-description: Use for Spec workflow Bugfix work when the user asks to fix, investigate, reproduce, roll back, or handle a regression, failing behavior, production issue, incorrect result, or data inconsistency. Generates bugfix.md, design.md, and tasks.md before implementation.
+description: Explicit activation only. Internal branch of a user-invoked spec-workflow. Select only after the active router hands off, or when the user explicitly names spec-bugfix and thereby opts into the plugin; otherwise do not select.
 ---
 
 # Spec workflow Bugfix
 
 Use this branch to restore existing expected behavior with evidence, root-cause analysis, and minimal safe implementation.
+
+## Activation Boundary
+
+This branch may run only inside a user-initiated spec-workflow run. If named directly, enter through the `spec-workflow` router and intake gates first. Generic bug reports and fix requests must not activate it.
 
 If the entry router has not already printed the announcement, print:
 

@@ -1,11 +1,18 @@
 ---
 name: spec-workflow
-description: 当用户要求先写 spec、先澄清需求、先做设计、design-first、tech design first、复杂功能开发、多文件或跨模块重构、脚手架搭建、回归排查、复杂 Bug 修复、高风险改动或最终验收时使用。作为 Spec workflow 插件入口，先通过 spec-intake 澄清需求，再分流到 Requirements-First、Design-First 或 Bugfix，分支任务完成后进入 spec-acceptance 结尾验收，并在规范批准前禁止业务代码。
+description: Explicit activation only. 仅当用户明确点名 spec-workflow、Spec workflow，或明确要求使用、走或启动该插件时选择；不得根据请求内容或任务类型推断触发。作为用户显式启动后的插件入口，负责目录选择、intake、分支路由与 acceptance。
 ---
 
 # Spec workflow Router
 
 This is the lightweight entrypoint for the Spec workflow plugin. Keep this file small: select an isolated workflow directory first, run intake, classify the request, announce the route, hand off to the branch skill, then run pre-acceptance and final acceptance when branch tasks are complete.
+
+## Explicit Activation Gate
+
+- Activate only when the user explicitly names `spec-workflow` / `Spec workflow`, explicitly asks to use or start this plugin, or continues a workflow that they previously started explicitly.
+- Do not infer activation from task shape or keywords. Requests such as "write a spec", "clarify requirements", "design first", "fix this bug", "review this change", or "handle a high-risk refactor" are not activation by themselves.
+- Once the gate is satisfied, router-to-branch handoffs may use the internal skills without asking the user to repeat the plugin name.
+- If the gate is not satisfied, do not print the workflow announcement, create workflow artifacts, call progress MCP tools, or ask workflow-specific intake questions.
 
 ## Required Announcement
 

@@ -1,15 +1,19 @@
 ---
 name: spec-requirements-analysis
 description: >
-  Use before Spec workflow artifact generation to run Kiro-style Analyze Requirements
-  across ambiguity, conflicts, missing boundaries, undefined concepts, failure paths,
-  permissions, concurrency, data consistency, and risk checks. Results must be
-  recorded inside product.md or requirements.md rather than a standalone file.
+  Explicit activation only. Internal step of a user-invoked spec-workflow.
+  Select only after the active router or branch hands off, or when the user
+  explicitly names spec-requirements-analysis and thereby opts into the plugin;
+  otherwise do not select.
 ---
 
 # Spec workflow Requirements Analysis
 
 Use this as the Kiro-style Analyze Requirements step before generating or finalizing Requirements-First `product.md` or Design-First `requirements.md`.
+
+## Activation Boundary
+
+This skill may run only inside a user-initiated spec-workflow run. If named directly, enter through the `spec-workflow` router and intake gates before applying this analysis. Generic analysis requests must not activate it.
 
 ## Hard Rules
 

@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -1062,6 +1063,37 @@ class ValidatorRegressionTests(unittest.TestCase):
         self.assertIn("Do not resume an old workflow automatically", router)
         self.assertIn("open_workflows", router)
 
+    def test_all_workflow_skills_require_explicit_activation(self) -> None:
+        skill_files = sorted((PLUGIN_ROOT / "skills").glob("*/SKILL.md"))
+        self.assertEqual(len(skill_files), 7)
+        for skill_file in skill_files:
+            with self.subTest(skill=skill_file.parent.name):
+                text = skill_file.read_text(encoding="utf-8")
+                frontmatter = text.split("---", 2)[1]
+                self.assertIn("Explicit activation only.", frontmatter)
+                if skill_file.parent.name == "spec-workflow":
+                    self.assertIn("不得根据请求内容或任务类型推断触发", frontmatter)
+                else:
+                    self.assertIn("otherwise do not select", frontmatter)
+
+        router = (PLUGIN_ROOT / "skills" / "spec-workflow" / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("## Explicit Activation Gate", router)
+        self.assertIn("Do not infer activation from task shape or keywords", router)
+        self.assertIn("do not print the workflow announcement", router)
+
+        codex_manifest = json.loads(
+            (PLUGIN_ROOT / ".codex-plugin" / "plugin.json").read_text(encoding="utf-8")
+        )
+        claude_manifest = json.loads(
+            (PLUGIN_ROOT / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(codex_manifest["version"], "0.2.2")
+        self.assertEqual(claude_manifest["version"], "0.2.2")
+        self.assertIn("explicit", codex_manifest["description"].lower())
+        self.assertTrue(
+            all(prompt.startswith("Use spec-workflow") for prompt in codex_manifest["interface"]["defaultPrompt"])
+        )
+
     def test_block_records_blocker_without_completing(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             specs_dir = Path(tmp)
@@ -1228,6 +1260,81 @@ class ValidatorRegressionTests(unittest.TestCase):
         self.assertIn("spec_approve", names)
         self.assertIn("spec_discover_workflows", names)
         self.assertIn("spec_new_workflow", names)
+
+    def test_plugin_manifests_register_mcp_idle_timeout(self) -> None:
+        codex_manifest = json.loads(
+            (PLUGIN_ROOT / ".codex-plugin" / "plugin.json").read_text(encoding="utf-8")
+        )
+        claude_config = json.loads((PLUGIN_ROOT / ".mcp.json").read_text(encoding="utf-8"))
+
+        codex_server = codex_manifest["mcpServers"]["spec_workflow_progress"]
+        claude_server = claude_config["mcpServers"]["spec_workflow_progress"]
+        self.assertEqual(codex_server["args"], ["./mcp/spec_progress_server.py"])
+        self.assertEqual(codex_server["cwd"], ".")
+        self.assertEqual(codex_server["env"]["SPEC_WORKFLOW_MCP_IDLE_TIMEOUT_SECONDS"], "300")
+        self.assertEqual(claude_server["env"]["SPEC_WORKFLOW_MCP_IDLE_TIMEOUT_SECONDS"], "300")
+
+    def test_mcp_exits_after_idle_timeout_with_open_stdin(self) -> None:
+        env = os.environ.copy()
+        env["SPEC_WORKFLOW_MCP_IDLE_TIMEOUT_SECONDS"] = "0.2"
+        process = subprocess.Popen(
+            [sys.executable, str(MCP_SERVER)],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            env=env,
+        )
+        try:
+            self.assertEqual(process.wait(timeout=3), 0)
+        finally:
+            if process.poll() is None:
+                process.kill()
+                process.wait(timeout=3)
+            if process.stdin is not None:
+                process.stdin.close()
+            if process.stdout is not None:
+                process.stdout.close()
+            if process.stderr is not None:
+                process.stderr.close()
+
+    def test_mcp_request_resets_idle_timeout(self) -> None:
+        env = os.environ.copy()
+        env["SPEC_WORKFLOW_MCP_IDLE_TIMEOUT_SECONDS"] = "0.6"
+        process = subprocess.Popen(
+            [sys.executable, str(MCP_SERVER)],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            env=env,
+        )
+        try:
+            time.sleep(0.35)
+            self.assertIsNotNone(process.stdin)
+            process.stdin.write(json.dumps({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}}) + "\n")
+            process.stdin.flush()
+            self.assertIsNotNone(process.stdout)
+            reply = json.loads(process.stdout.readline())
+            self.assertEqual(reply["id"], 1)
+
+            time.sleep(0.35)
+            self.assertIsNone(process.poll())
+            self.assertEqual(process.wait(timeout=3), 0)
+        finally:
+            if process.poll() is None:
+                process.kill()
+                process.wait(timeout=3)
+            if process.stdin is not None:
+                process.stdin.close()
+            if process.stdout is not None:
+                process.stdout.close()
+            if process.stderr is not None:
+                process.stderr.close()
 
     def test_mcp_directory_tools_smoke(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

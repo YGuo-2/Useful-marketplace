@@ -1,11 +1,15 @@
 ---
 name: spec-design-first
-description: Use for Spec workflow Feature / Design-First work when the user explicitly starts from technical design, architecture constraints, ADRs, high-level design, low-level design, or a fixed implementation approach. Generates design.md, requirements.md, and tasks.md before implementation.
+description: Explicit activation only. Internal branch of a user-invoked spec-workflow. Select only after the active router hands off, or when the user explicitly names spec-design-first and thereby opts into the plugin; otherwise do not select.
 ---
 
 # Spec workflow Design-First
 
 Use this branch when the technical design is the starting point and requirements must be derived from that design.
+
+## Activation Boundary
+
+This branch may run only inside a user-initiated spec-workflow run. If named directly, enter through the `spec-workflow` router and intake gates first. Generic technical-design requests must not activate it.
 
 If the entry router has not already printed the announcement, print:
 

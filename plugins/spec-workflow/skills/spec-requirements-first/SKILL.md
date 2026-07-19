@@ -1,11 +1,15 @@
 ---
 name: spec-requirements-first
-description: Use for Spec workflow Feature / Requirements-First work when the user starts from product goals, user value, new capabilities, complex feature work, scaffolding, or cross-module refactors without a fixed technical design. Generates product.md, architecture.md, and tasks.md before implementation.
+description: Explicit activation only. Internal branch of a user-invoked spec-workflow. Select only after the active router hands off, or when the user explicitly names spec-requirements-first and thereby opts into the plugin; otherwise do not select.
 ---
 
 # Spec workflow Requirements-First
 
 Use this branch for feature work driven by requirements rather than a fixed technical design.
+
+## Activation Boundary
+
+This branch may run only inside a user-initiated spec-workflow run. If named directly, enter through the `spec-workflow` router and intake gates first. Generic product or feature requests must not activate it.
 
 If the entry router has not already printed the announcement, print:
 

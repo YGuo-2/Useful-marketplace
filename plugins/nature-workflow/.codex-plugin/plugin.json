@@ -1,7 +1,7 @@
 {
   "name": "nature-workflow",
-  "version": "0.2.0",
-  "description": "Nature research skills packaged with lightweight workflow progress tracking.",
+  "version": "0.3.0",
+  "description": "Nature research skills with lightweight workflow tracking, paper memory, and optional reusable prose-style profiles.",
   "author": {
     "name": "Yuan1z0825 and Useful-marketplace"
   },
@@ -16,13 +16,15 @@
     "citation",
     "workflow",
     "memory",
+    "prose-style",
+    "style-profile",
     "mcp"
   ],
   "skills": "./skills/",
   "interface": {
     "displayName": "Nature workflow",
-    "shortDescription": "Use Nature research skills with simple local progress state.",
-    "longDescription": "Nature workflow packages the usable skills from Yuan1z0825/nature-skills, preserves shared skill dependencies, and adds a small docs/nature-workflows state system for starting, resuming, blocking, completing, logging, and maintaining concise paper-level project memory for academic workflow tasks. Individual nature-* skills remain the primary entrypoints; the workflow tools only track local progress and memory.",
+    "shortDescription": "Nature research workflows with optional prose-style profiles.",
+    "longDescription": "Nature workflow packages the usable skills from Yuan1z0825/nature-skills, preserves shared skill dependencies, and adds a small docs/nature-workflows state system for progress, paper-level memory, and explicitly requested reusable prose-style profiles. A single usable profile is selected automatically; multiple profiles require the user to choose before writing or polishing continues. Individual nature-* skills remain the primary entrypoints.",
     "developerName": "Yuan1z0825 and Useful-marketplace",
     "category": "Education",
     "capabilities": [
@@ -35,8 +37,20 @@
     "defaultPrompt": [
       "Start a Nature workflow for this paper.",
       "Resume my Nature workflow.",
-      "Use the right nature skill for this academic task."
+      "Create an optional reusable prose-style profile from my full manuscript."
     ]
   },
-  "mcpServers": "./.mcp.json"
+  "mcpServers": {
+    "nature_workflow_progress": {
+      "command": "python",
+      "args": [
+        "./mcp/nature_progress_server.py"
+      ],
+      "cwd": ".",
+      "env": {
+        "NATURE_WORKFLOW_VERSION": "0.3.0",
+        "NATURE_WORKFLOW_HOST": "codex"
+      }
+    }
+  }
 }

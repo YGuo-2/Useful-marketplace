@@ -3662,9 +3662,19 @@ def _entry_hook(entries: list[Entry]) -> str:
 
 
 def _default_memory_index_filename() -> str:
-    # ponytail: env override so Codex keeps AGENTS.md while Claude Code can point
-    # the discovery sentinel at CLAUDE.md (the file each host auto-reads).
-    name = os.environ.get("NATURE_WORKFLOW_MEMORY_INDEX_FILE", "AGENTS.md").strip()
+    explicit = os.environ.get("NATURE_WORKFLOW_MEMORY_INDEX_FILE")
+    if explicit is not None:
+        name = explicit.strip()
+    elif os.environ.get("NATURE_WORKFLOW_HOST", "").strip().lower() == "claude":
+        name = "CLAUDE.md"
+    elif os.environ.get("NATURE_WORKFLOW_HOST", "").strip().lower() == "codex":
+        name = "AGENTS.md"
+    elif os.environ.get("CODEX_THREAD_ID") or os.environ.get("CODEX_SHELL") or os.environ.get("CODEX_CI"):
+        name = "AGENTS.md"
+    elif os.environ.get("CLAUDE_PLUGIN_ROOT"):
+        name = "CLAUDE.md"
+    else:
+        name = "AGENTS.md"
     if not name or "/" in name or "\\" in name or name in (".", ".."):
         return "AGENTS.md"
     return name

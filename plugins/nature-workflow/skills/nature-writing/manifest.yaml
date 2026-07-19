@@ -1,5 +1,5 @@
 name: nature-writing
-version: 1.0.0
+version: 1.1.0
 description: >
   Declarative manifest for the static/dynamic split. SKILL.md uses this to
   decide which fragments to load for a given drafting or restructuring request.
@@ -10,6 +10,7 @@ always_load:
   - ../_shared/core/paper-type-taxonomy.md
   - ../_shared/core/ethics.md
   - ../_shared/core/terminology-ledger.md
+  - ../_shared/core/prose-profile-contract.md
   # Skill-local core
   - static/core/stance.md
   - static/core/workflow.md

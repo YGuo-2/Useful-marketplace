@@ -21,6 +21,19 @@
 - When a step cannot proceed (missing input, external dependency, unresolved
   permission), `block` it with a concrete reason rather than faking progress.
 
+## Prose profiles are optional, but active profiles are enforced
+
+- Never seed or generate a prose profile by default. Add the `nature-prose-style` delegate only after
+  the user explicitly asks to generate, learn, save, or reuse a persistent 文风画像.
+- Ordinary Nature-style writing, concise/formal/natural wording, and routine journal style learning
+  do not create a profile or an optional task.
+- Once a usable profile is registered, downstream `nature-writing` and `nature-polishing` owners must
+  resolve before prose, ask on multi-profile ambiguity, and audit the exact final evidence file.
+- A guarded prose task is not complete merely because its manuscript file exists. Its current style
+  receipt must match the workflow, task, selected profile and inventory ETags, evidence path, and
+  output hash. Let the engine reject stale or missing receipts; never bypass the guard.
+- Layout-only LaTeX work does not consume prose profiles and requires no style receipt.
+
 ## Evidence and honesty carry through
 
 - Do not fabricate studies, DOIs, PMIDs, authors, journals, figure numbers,

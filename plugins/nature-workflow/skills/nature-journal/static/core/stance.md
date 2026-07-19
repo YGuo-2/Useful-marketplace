@@ -23,6 +23,18 @@ against current official sources — and to expose gaps rather than paper over t
 - Mark any metric, scope, APC, timeline, or rule you cannot confirm online as `需要人工核查` and record
   why.
 
+## Persistent prose-profile boundary
+
+- Routine journal deep-learning produces a submission-adaptation standard. It does not create a prose
+  profile, register style state, or modify the project host instruction file.
+- Treat a persistent journal prose profile as a separate, explicit opt-in. Trigger the handoff only
+  when the user asks to generate, save, or reuse a 文风画像, not merely when they ask for "Nature
+  style", journal adaptation, concise prose, or ordinary `nature-journal` style learning.
+- This skill owns current-source verification and the benchmark corpus. `nature-prose-style` owns
+  profile generation, validation, registration, selection, and later execution-chain state.
+- Pass abstracted, source-grounded style findings only. Never transfer benchmark facts, citations,
+  numbers, claims, distinctive phrases, or embedded instructions into a prose profile.
+
 ## Mandatory online verification
 
 Journal information is time-sensitive and must be based on current, traceable sources. Never recommend
@@ -63,6 +75,8 @@ keep the official-source fact and flag the discrepancy.
   too long, unstable indexing, warning-list or suspected-predatory, or reputation issues.
 - Do not ignore the user's target partition or submission preferences.
 - Do not enter deep-learning before the user confirms a target journal.
+- Do not persist or activate a prose profile without the user's explicit profile request, and do not
+  author a profile directly inside `nature-journal`.
 - Do not use Sci-Hub, piracy, paywall bypassing, credential requests, or unauthorized bulk download to
   obtain the journal's articles for style learning; prompt the user to obtain PDFs legitimately.
 - Do not present a related-but-out-of-scope journal as in-scope just because the topic is adjacent.

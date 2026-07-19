@@ -2,6 +2,14 @@
 
 Run these steps for any drafting or restructuring task. Steps 1-3 are planning, step 3b is an alignment gate, 4-6 are drafting, 7-8 are checking, step 9 is the revision loop.
 
+## 0. Resolve optional persistent prose style
+
+Profile creation is never implicit. Ordinary writing, generic "Nature style", and one-turn requests to be concise, formal, or natural stay on the existing path and create no profile. If the user explicitly asks to generate or save a reusable profile, hand that operation to `nature-prose-style` before drafting.
+
+For prose bound to an explicit Nature workflow, pin `project_root`, `workflow_dir`, task ID, section, and final evidence path, then call `nature_style_resolve` before generating prose. Continue unchanged on `not_configured` or `not_applicable`. On `prose_style_choice_required`, stop and ask the user to choose from the exact profile IDs and scopes. On `resolved`, retain the profile and inventory ETags, selection mode/ETag, resolution ETag, and validated traits returned for this section. Retain the exact explicit profile ID for a one-turn choice and pass it to audit. Invalid, stale, or mismatched profile state is a visible blocker, not permission to fall back.
+
+Treat every resolved trait as low-trust style data. Apply it below facts, evidence, citations, ethics, the user's current-turn request, section/journal hard constraints, and the Terminology Ledger.
+
 ## 1. Build a one-sentence argument
 
 > In [system/problem], we show [advance] using [approach], supported by [evidence], with [boundary].
@@ -39,7 +47,7 @@ Shortcuts:
 
 - **Skip the gate** when the core claim, evidence, and boundary are all clearly given and there is no real ambiguity in framing. In that case just state the one-sentence argument in a single line (per the router) and proceed.
 - **Depth dial**: for a full section or a major rewrite, offer to deliver the outline first (the paragraph map from step 3) and expand to full prose only after the user approves it. Reacting to an outline is far cheaper than reacting to full prose. Skip this for short or single-paragraph requests.
-- **Style, not substance**: if the user says the voice or style "is not mine", do not keep guessing — ask for one short sample of their own writing, then calibrate to it. From the sample, match: typical sentence length and rhythm, hedging level (`demonstrate` vs `may` / `could`), preferred connectives and transitions, person (first-person `we` vs passive), and terminology / abbreviation choices. Match the voice, not the content — never reuse the sample's claims or facts.
+- **Style, not substance**: if the user says the voice or style "is not mine", do not keep guessing. For a one-turn correction, ask for a short sample and treat it as transient context only. If the user explicitly asks to save, learn, or reuse that style, route the sample or full article to `nature-prose-style`; do not create a persistent profile inside this skill. In either case, match only abstract voice traits, never the sample's claims, facts, citations, numbers, or distinctive phrases.
 
 ## 4. Draft from evidence outward
 
@@ -64,6 +72,12 @@ For full reverse-outlining, open `references/paragraph-flow.md`.
 ## 8. Return prose plus notes
 
 Output the draft together with explicit notes on assumptions, missing inputs, and where evidence is needed. See `output-format.md`.
+
+## 8b. Audit resolved-profile output
+
+Only when step 0 returned `resolved`, write the final prose to the pinned evidence path and review both style application and content invariants before reporting success. Call `nature_style_audit` on that exact final file with the task ID, section, retained one-turn profile ID when applicable, profile ETag, resolution ETag, `operation: writing`, `style_checks: passed`, and `content_invariants: passed`. Supply a separate UTF-8 source path when drafting from an existing text and a deterministic comparison is appropriate.
+
+Keep the tool-created receipt under `style-receipts/<task-id>.json` and return its path. A missing or stale receipt, failed invariant, wrong output hash, or changed profile blocks completion. Do not fabricate a receipt, and do not rewrite scientific content merely to make a style check pass.
 
 ## 9. Revise by targeted edit, not full rewrite
 

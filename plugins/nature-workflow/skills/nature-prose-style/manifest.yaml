@@ -1,0 +1,21 @@
+name: nature-prose-style
+version: 0.1.0
+description: >
+  Declarative manifest for explicitly requested, paper-scoped prose-profile
+  generation, validation, registration, calibration, selection, inspection,
+  and disabling. The skill has no content axis; source provenance, scope, and
+  operation are runtime data.
+
+always_load:
+  # Shared execution contract consumed by generation and downstream prose skills.
+  - ../_shared/core/prose-profile-contract.md
+  - ../_shared/core/ethics.md
+  # Skill-local core.
+  - static/core/stance.md
+  - static/core/workflow.md
+  - static/core/output-contract.md
+
+references:
+  on_demand:
+    - condition: generating, updating, or calibrating a profile from one or more complete articles
+      path: references/profile-generation.md

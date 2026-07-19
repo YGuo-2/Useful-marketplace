@@ -5,8 +5,10 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import sys
 import tempfile
+import threading
 import unittest
 from unittest.mock import patch
 from pathlib import Path
@@ -19,6 +21,7 @@ if str(SCRIPT_DIR) not in sys.path:
 import nature_progress as np  # noqa: E402
 import nature_context as nc  # noqa: E402
 import nature_memory  # noqa: E402
+import nature_style  # noqa: E402
 
 
 def read_state(workflow_dir: str) -> dict:
@@ -38,6 +41,44 @@ class StateEngineTests(unittest.TestCase):
             None, "wf", "WF", tasks, base=self.base
         )
         return result["workflow_dir"]
+
+    def register_style_profile(self, workflow_dir: str, profile_id: str = "author-main") -> dict:
+        profile_dir = Path(workflow_dir) / nature_style.PROFILE_DIR
+        profile_dir.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "schema_version": 1,
+            "id": profile_id,
+            "status": "ready",
+            "source_kind": "author-draft",
+            "source_fingerprint": "sha256:" + "0" * 64,
+            "language": "en",
+            "scopes": ["global"],
+            "traits": [
+                {
+                    "name": "sentence_rhythm",
+                    "value": "medium-mixed",
+                    "scope": ["global"],
+                    "confidence": "high",
+                    "support": 8,
+                    "source_refs": ["train:results:p001", "train:discussion:p002", "train:intro:p003"],
+                    "strength": "soft",
+                }
+            ],
+            "exclusions": ["source facts", "source numbers", "source citations", "claim strength"],
+        }
+        profile_path = profile_dir / f"{profile_id}.md"
+        profile_path.write_text(
+            "# Prose Profile\n\n```json\n"
+            + json.dumps(payload, ensure_ascii=False, indent=2)
+            + "\n```\n",
+            encoding="utf-8",
+            newline="",
+        )
+        return nature_style.command_style_register(
+            self.base,
+            workflow_dir,
+            f"{nature_style.PROFILE_DIR}/{profile_id}.md",
+        )
 
     # --- basics ----------------------------------------------------------
 
@@ -106,6 +147,385 @@ class StateEngineTests(unittest.TestCase):
         self.assertFalse(payload["ok"])
         self.assertEqual(payload["error"]["code"], "workflow_root_not_found")
         self.assertEqual(payload["error"]["workflow_root"], str(missing))
+
+    def test_direct_script_style_guard_error_is_structured_json(self) -> None:
+        wf = self.make(["draft: Draft manuscript"])
+        self.register_style_profile(wf)
+        evidence = self.base / "draft.md"
+        evidence.write_text("Draft text.\n", encoding="utf-8")
+        env = os.environ.copy()
+        env["NATURE_WORKFLOW_BASE_DIR"] = str(self.base)
+
+        completed = subprocess.run(
+            [
+                sys.executable,
+                str(SCRIPT_DIR / "nature_progress.py"),
+                "complete",
+                "draft",
+                "--evidence",
+                str(evidence),
+                "--root",
+                str(self.base / "docs" / "nature-workflows"),
+                "--workflow",
+                wf,
+            ],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            env=env,
+            check=False,
+        )
+
+        self.assertEqual(completed.returncode, 2, completed.stderr)
+        self.assertNotIn("Traceback", completed.stderr)
+        payload = json.loads(completed.stdout)
+        self.assertFalse(payload["ok"])
+        self.assertIn(
+            payload["error"]["code"],
+            {"style_receipt_not_found", "style_receipt_directory_not_found"},
+        )
+
+    def test_stale_snapshot_conflict_preserves_new_prose_style(self) -> None:
+        wf = Path(self.make(["T1: first"]))
+        style_writer = np.load_record(wf)
+        stale_writer = np.load_record(wf)
+        style_writer["prose_style"] = nature_style.default_style_state()
+        np.save_record(wf, style_writer)
+
+        stale_writer["genre"] = "review"
+        with self.assertRaises(np.NatureProgressError) as raised:
+            np.save_record(wf, stale_writer)
+
+        error = raised.exception
+        self.assertEqual(error.code, "workflow_state_conflict")
+        self.assertTrue(error.retryable)
+        self.assertNotEqual(error.context["expected_etag"], error.context["actual_etag"])
+        disk = read_state(str(wf))
+        self.assertIn("prose_style", disk)
+        self.assertIsNone(disk["genre"])
+
+    def test_two_threads_from_one_snapshot_allow_only_one_save(self) -> None:
+        wf = Path(self.make(["T1: first"]))
+        records = [np.load_record(wf), np.load_record(wf)]
+        barrier = threading.Barrier(2)
+        outcomes: list[tuple[str, str]] = []
+        outcomes_lock = threading.Lock()
+
+        def save(worker: str, record: dict) -> None:
+            record["writer"] = worker
+            barrier.wait(timeout=2)
+            try:
+                np.save_record(wf, record)
+                outcome = ("saved", worker)
+            except np.NatureProgressError as exc:
+                outcome = (exc.code, worker)
+            with outcomes_lock:
+                outcomes.append(outcome)
+
+        threads = [
+            threading.Thread(target=save, args=(f"worker-{index}", record))
+            for index, record in enumerate(records, start=1)
+        ]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=5)
+
+        self.assertTrue(all(not thread.is_alive() for thread in threads))
+        self.assertEqual(sorted(item[0] for item in outcomes), ["saved", "workflow_state_conflict"])
+        winner = next(item[1] for item in outcomes if item[0] == "saved")
+        self.assertEqual(read_state(str(wf))["writer"], winner)
+
+    def test_two_processes_from_one_snapshot_allow_only_one_save(self) -> None:
+        wf = Path(self.make(["T1: first"]))
+        ready_dir = self.base / "ready"
+        ready_dir.mkdir()
+        worker_script = """
+import json
+import os
+import time
+from pathlib import Path
+import nature_progress as np
+
+workflow = Path(os.environ["NATURE_TEST_WORKFLOW"])
+ready = Path(os.environ["NATURE_TEST_READY"])
+worker = os.environ["NATURE_TEST_WORKER"]
+record = np.load_record(workflow)
+(ready / (worker + ".ready")).write_text("ready", encoding="utf-8")
+deadline = time.monotonic() + 5
+while len(list(ready.glob("*.ready"))) < 2 and time.monotonic() < deadline:
+    time.sleep(0.01)
+record["writer"] = worker
+try:
+    np.save_record(workflow, record)
+    print(json.dumps({"result": "saved", "worker": worker}))
+except np.NatureProgressError as exc:
+    print(json.dumps({"result": exc.code, "worker": worker}))
+"""
+        processes: list[subprocess.Popen[str]] = []
+        for worker in ("process-1", "process-2"):
+            env = os.environ.copy()
+            env["PYTHONPATH"] = os.pathsep.join(
+                [str(SCRIPT_DIR), env.get("PYTHONPATH", "")]
+            ).rstrip(os.pathsep)
+            env["NATURE_TEST_WORKFLOW"] = str(wf)
+            env["NATURE_TEST_READY"] = str(ready_dir)
+            env["NATURE_TEST_WORKER"] = worker
+            processes.append(
+                subprocess.Popen(
+                    [sys.executable, "-c", worker_script],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    encoding="utf-8",
+                    env=env,
+                )
+            )
+
+        outputs = [process.communicate(timeout=10) for process in processes]
+        self.assertTrue(all(process.returncode == 0 for process in processes), outputs)
+        payloads = [json.loads(stdout) for stdout, _ in outputs]
+        self.assertEqual(
+            sorted(payload["result"] for payload in payloads),
+            ["saved", "workflow_state_conflict"],
+        )
+        winner = next(payload["worker"] for payload in payloads if payload["result"] == "saved")
+        self.assertEqual(read_state(str(wf))["writer"], winner)
+
+    def test_save_record_can_reuse_an_already_held_state_lock(self) -> None:
+        wf = Path(self.make(["T1: first"]))
+        with np.workflow_state_lock(wf):
+            record = np.load_record(wf)
+            record["genre"] = "review"
+            np.save_record(wf, record, already_locked=True)
+
+        self.assertEqual(read_state(str(wf))["genre"], "review")
+
+    def test_repeated_save_record_timestamps_are_strictly_monotonic(self) -> None:
+        wf = Path(self.make(["T1: first"]))
+        record = np.load_record(wf)
+        timestamps = [record["updated_at"]]
+
+        for _ in range(3):
+            np.save_record(wf, record)
+            timestamps.append(record["updated_at"])
+
+        self.assertEqual(timestamps, sorted(set(timestamps)))
+
+    def test_plain_dict_cannot_overwrite_existing_workflow_state(self) -> None:
+        wf = Path(self.make(["T1: first"]))
+        record = dict(np.load_record(wf))
+        record["genre"] = "review"
+
+        with self.assertRaises(np.NatureProgressError) as raised:
+            np.save_record(wf, record)
+
+        self.assertEqual(raised.exception.code, "workflow_state_snapshot_required")
+        self.assertIsNone(read_state(str(wf))["genre"])
+
+    def test_invalid_mirror_target_is_rejected_before_any_write(self) -> None:
+        wf = Path(self.make(["T1: first"]))
+        progress_path = wf / "progress.md"
+        progress_path.unlink()
+        progress_path.mkdir()
+        before_state = (wf / "nature.yml").read_bytes()
+        before_tasks = (wf / "tasks.md").read_bytes()
+        record = np.load_record(wf)
+        original_updated_at = record["updated_at"]
+        record["genre"] = "review"
+
+        with self.assertRaises(np.NatureProgressError) as raised:
+            np.save_record(wf, record)
+
+        self.assertEqual(raised.exception.code, "workflow_mirror_path_unsafe")
+        self.assertEqual((wf / "nature.yml").read_bytes(), before_state)
+        self.assertEqual((wf / "tasks.md").read_bytes(), before_tasks)
+        self.assertTrue(progress_path.is_dir())
+        self.assertEqual(record["updated_at"], original_updated_at)
+
+    def test_state_cas_conflict_restores_mirrors_and_preserves_external_edit(self) -> None:
+        wf = Path(self.make(["T1: first"]))
+        record = np.load_record(wf)
+        record["genre"] = "review"
+        before_progress = (wf / "progress.md").read_bytes()
+        before_tasks = (wf / "tasks.md").read_bytes()
+        original_replace = np.nature_atomic.atomic_replace_text
+        external = dict(read_state(str(wf)))
+        external["external_writer"] = True
+        raced = False
+
+        def replace_with_race(path: Path, text: str, **kwargs: object) -> None:
+            nonlocal raced
+            if Path(path).name == "nature.yml" and not raced:
+                raced = True
+                Path(path).write_text(
+                    json.dumps(external, ensure_ascii=False, indent=2) + "\n",
+                    encoding="utf-8",
+                    newline="",
+                )
+            original_replace(path, text, **kwargs)
+
+        with patch.object(np.nature_atomic, "atomic_replace_text", side_effect=replace_with_race):
+            with self.assertRaises(np.NatureProgressError) as raised:
+                np.save_record(wf, record)
+
+        self.assertEqual(raised.exception.code, "workflow_state_conflict")
+        self.assertTrue(read_state(str(wf))["external_writer"])
+        self.assertIsNone(read_state(str(wf))["genre"])
+        self.assertEqual((wf / "progress.md").read_bytes(), before_progress)
+        self.assertEqual((wf / "tasks.md").read_bytes(), before_tasks)
+
+    def test_runtime_mirror_write_failure_rolls_back_prior_mirror(self) -> None:
+        wf = Path(self.make(["T1: first"]))
+        record = np.load_record(wf)
+        record["genre"] = "review"
+        record["tasks"][0]["title"] = "changed title"
+        before = {
+            name: (wf / name).read_bytes()
+            for name in ("nature.yml", "progress.md", "tasks.md")
+        }
+        original_replace = np.nature_atomic.atomic_replace_text
+        failed = False
+
+        def replace_with_failure(path: Path, text: str, **kwargs: object) -> None:
+            nonlocal failed
+            if Path(path).name == "tasks.md" and not failed:
+                failed = True
+                raise PermissionError("forced tasks mirror failure")
+            original_replace(path, text, **kwargs)
+
+        with patch.object(np.nature_atomic, "atomic_replace_text", side_effect=replace_with_failure):
+            with self.assertRaises(np.NatureProgressError) as raised:
+                np.save_record(wf, record)
+
+        self.assertEqual(raised.exception.code, "workflow_mirror_write_failed")
+        for name, raw in before.items():
+            self.assertEqual((wf / name).read_bytes(), raw)
+
+    def test_keyboard_interrupt_rolls_back_prior_mirror(self) -> None:
+        wf = Path(self.make(["T1: first"]))
+        record = np.load_record(wf)
+        record["tasks"][0]["title"] = "changed title"
+        before = {
+            name: (wf / name).read_bytes()
+            for name in ("nature.yml", "progress.md", "tasks.md")
+        }
+        original_replace = np.nature_atomic.atomic_replace_text
+
+        def replace_with_interrupt(path: Path, text: str, **kwargs: object) -> None:
+            if Path(path).name == "tasks.md":
+                raise KeyboardInterrupt()
+            original_replace(path, text, **kwargs)
+
+        with patch.object(np.nature_atomic, "atomic_replace_text", side_effect=replace_with_interrupt):
+            with self.assertRaises(KeyboardInterrupt):
+                np.save_record(wf, record)
+
+        for name, raw in before.items():
+            self.assertEqual((wf / name).read_bytes(), raw)
+
+    def test_mirror_etag_is_rechecked_before_state_commit(self) -> None:
+        wf = Path(self.make(["T1: first"]))
+        record = np.load_record(wf)
+        record["external_state_only"] = True
+        state_before = (wf / "nature.yml").read_bytes()
+        progress_before = (wf / "progress.md").read_bytes()
+        tasks_path = wf / "tasks.md"
+        external_tasks = b"external tasks edit\n"
+        original_snapshot = np._read_workflow_file_snapshot
+        tasks_reads = 0
+
+        def snapshot_with_race(path: Path, *, state_file: bool):
+            nonlocal tasks_reads
+            if Path(path) == tasks_path:
+                tasks_reads += 1
+                if tasks_reads == 2:
+                    tasks_path.write_bytes(external_tasks)
+            return original_snapshot(path, state_file=state_file)
+
+        with patch.object(np, "_read_workflow_file_snapshot", side_effect=snapshot_with_race):
+            with self.assertRaises(np.NatureProgressError) as raised:
+                np.save_record(wf, record)
+
+        self.assertEqual(raised.exception.code, "workflow_mirror_conflict")
+        self.assertEqual((wf / "nature.yml").read_bytes(), state_before)
+        self.assertEqual((wf / "progress.md").read_bytes(), progress_before)
+        self.assertEqual(tasks_path.read_bytes(), external_tasks)
+
+    def test_already_locked_requires_current_thread_to_hold_lock(self) -> None:
+        wf = Path(self.make(["T1: first"]))
+        record = np.load_record(wf)
+        record["genre"] = "review"
+
+        with self.assertRaises(np.NatureProgressError) as raised:
+            np.save_record(wf, record, already_locked=True)
+
+        self.assertEqual(raised.exception.code, "workflow_state_lock_required")
+        self.assertFalse(raised.exception.retryable)
+        self.assertIsNone(read_state(str(wf))["genre"])
+
+    def test_workflow_state_lock_rejects_non_finite_timeout_structurally(self) -> None:
+        wf = Path(self.make(["T1: first"]))
+        for timeout in (float("nan"), float("inf"), 1e100):
+            with self.subTest(timeout=timeout):
+                with self.assertRaises(np.NatureProgressError) as raised:
+                    with np.workflow_state_lock(wf, timeout=timeout):
+                        self.fail("invalid timeout unexpectedly acquired a lock")
+                self.assertEqual(
+                    raised.exception.code,
+                    "workflow_state_lock_timeout_invalid",
+                )
+                self.assertFalse(raised.exception.retryable)
+
+    def test_workflow_state_lock_timeout_is_structured(self) -> None:
+        wf = Path(self.make(["T1: first"]))
+        ready = threading.Event()
+        release = threading.Event()
+
+        def hold_lock() -> None:
+            with np.workflow_state_lock(wf):
+                ready.set()
+                release.wait(timeout=2)
+
+        holder = threading.Thread(target=hold_lock)
+        holder.start()
+        self.assertTrue(ready.wait(timeout=2))
+        try:
+            with self.assertRaises(np.NatureProgressError) as raised:
+                with np.workflow_state_lock(wf, timeout=0.05):
+                    self.fail("contended lock unexpectedly acquired")
+        finally:
+            release.set()
+            holder.join(timeout=2)
+
+        error = raised.exception
+        self.assertEqual(error.code, "workflow_state_lock_timeout")
+        self.assertTrue(error.retryable)
+        self.assertEqual(error.context["lock_path"], str(wf / np.WORKFLOW_STATE_LOCK_FILE))
+
+    def test_workflow_state_lock_detects_replaced_inode_on_exit(self) -> None:
+        wf = Path(self.make(["T1: first"]))
+        real_check = np._assert_open_lock_identity
+        checks = 0
+
+        def check_then_report_replacement(handle, lock_path: Path, workflow_dir: Path) -> None:
+            nonlocal checks
+            checks += 1
+            if checks == 2:
+                raise np.NatureProgressError(
+                    "workflow state lock was replaced while it was held",
+                    code="workflow_state_lock_replaced",
+                    context={"lock_path": str(lock_path), "workflow_dir": str(workflow_dir)},
+                )
+            real_check(handle, lock_path, workflow_dir)
+
+        with patch.object(np, "_assert_open_lock_identity", side_effect=check_then_report_replacement):
+            with self.assertRaises(np.NatureProgressError) as raised:
+                with np.workflow_state_lock(wf):
+                    pass
+
+        self.assertEqual(checks, 2)
+        self.assertEqual(raised.exception.code, "workflow_state_lock_replaced")
 
     # --- regression: issue #1, status/disk must not disagree ------------
 
@@ -191,6 +611,167 @@ class StateEngineTests(unittest.TestCase):
         # T2 still pending, no active task, workflow idle-open
         self.assertEqual(disk["status"], "open")
         self.assertIsNone(disk["active_task"])
+
+    def test_legacy_workflow_without_profile_keeps_prose_completion_unchanged(self) -> None:
+        wf = self.make(["draft: Draft manuscript prose"])
+        np.command_start(None, wf, "draft", base=self.base)
+
+        completed = np.command_complete(
+            None, wf, "draft", "legacy evidence", base=self.base
+        )
+
+        disk = read_state(wf)
+        self.assertEqual(completed["status"], "completed")
+        self.assertEqual(disk["tasks"][0]["status"], "completed")
+        self.assertNotIn("prose_style", disk)
+
+    def test_profiled_prose_completion_without_receipt_fails_before_mutation(self) -> None:
+        wf = self.make(["draft: Draft manuscript prose"])
+        self.register_style_profile(wf)
+        np.command_start(None, wf, "draft", base=self.base)
+        output = self.base / "styled.md"
+        output.write_text("Styled prose.\n", encoding="utf-8")
+        before = read_state(wf)
+
+        with self.assertRaises(np.NatureProgressError) as raised:
+            np.command_complete(None, wf, "draft", "styled.md", base=self.base)
+
+        self.assertIn(
+            raised.exception.code,
+            {"style_receipt_not_found", "style_receipt_directory_not_found"},
+        )
+        after = read_state(wf)
+        self.assertEqual(after, before)
+        self.assertEqual(after["tasks"][0]["status"], "active")
+        self.assertEqual(after["active_task"], "draft")
+
+    def test_profiled_prose_completion_accepts_real_audit_receipt(self) -> None:
+        wf = self.make(["draft: Draft manuscript prose"])
+        self.register_style_profile(wf)
+        np.command_start(None, wf, "draft", base=self.base)
+        output = self.base / "styled.md"
+        output.write_text("Styled prose.\n", encoding="utf-8")
+        resolved = nature_style.command_style_resolve(
+            self.base, wf, section="discussion", task_id="draft"
+        )
+        audited = nature_style.command_style_audit(
+            self.base,
+            wf,
+            "draft",
+            output,
+            section="discussion",
+            profile_etag=resolved["profile_etag"],
+            resolution_etag=resolved["resolution_etag"],
+            operation="writing",
+            style_checks="passed",
+            content_invariants="passed",
+        )
+
+        completed = np.command_complete(
+            None,
+            wf,
+            "draft",
+            "styled.md",
+            style_receipt=audited["receipt_path"],
+            base=self.base,
+        )
+
+        self.assertEqual(completed["status"], "completed")
+        self.assertEqual(read_state(wf)["tasks"][0]["status"], "completed")
+
+    def test_profiled_completion_rechecks_guard_before_commit(self) -> None:
+        wf = self.make(["draft: Draft manuscript prose"])
+        self.register_style_profile(wf)
+        output = self.base / "styled.md"
+        output.write_text("Styled prose.\n", encoding="utf-8")
+        before = read_state(wf)
+        stale = np.NatureProgressError(
+            "receipt changed before commit",
+            code="prose_style_receipt_stale",
+        )
+
+        with patch.object(
+            nature_style,
+            "assert_style_completion_allowed",
+            side_effect=[None, stale],
+        ) as guard:
+            with self.assertRaises(np.NatureProgressError) as raised:
+                np.command_complete(
+                    None,
+                    wf,
+                    "draft",
+                    output.name,
+                    base=self.base,
+                )
+
+        self.assertEqual(raised.exception.code, "prose_style_receipt_stale")
+        self.assertEqual(guard.call_count, 2)
+        self.assertEqual(read_state(wf), before)
+
+    def test_profiled_completion_rolls_back_when_post_commit_guard_fails(self) -> None:
+        wf = self.make(["draft: Draft manuscript prose"])
+        self.register_style_profile(wf)
+        output = self.base / "styled.md"
+        output.write_text("Styled prose.\n", encoding="utf-8")
+        stale = np.NatureProgressError(
+            "receipt changed during commit",
+            code="prose_style_receipt_stale",
+        )
+
+        with patch.object(
+            nature_style,
+            "assert_style_completion_allowed",
+            side_effect=[None, None, stale],
+        ) as guard:
+            with self.assertRaises(np.NatureProgressError) as raised:
+                np.command_complete(
+                    None,
+                    wf,
+                    "draft",
+                    output.name,
+                    base=self.base,
+                )
+
+        self.assertEqual(raised.exception.code, "prose_style_receipt_stale")
+        self.assertEqual(guard.call_count, 3)
+        record = read_state(wf)
+        self.assertEqual(record["tasks"][0]["status"], "pending")
+        self.assertIsNone(record["tasks"][0]["completed_at"])
+
+    def test_profiled_non_prose_task_completes_without_receipt(self) -> None:
+        wf = self.make(["T1: Collect source metadata"])
+        self.register_style_profile(wf)
+        np.command_start(None, wf, "T1", base=self.base)
+
+        completed = np.command_complete(
+            None, wf, "T1", "metadata ledger", base=self.base
+        )
+
+        self.assertEqual(completed["status"], "completed")
+        self.assertEqual(read_state(wf)["tasks"][0]["status"], "completed")
+
+    def test_complete_with_memory_review_cannot_bypass_style_guard(self) -> None:
+        wf = self.make(["draft: Draft manuscript prose"])
+        self.register_style_profile(wf)
+        np.command_start(None, wf, "draft", base=self.base)
+        output = self.base / "styled.md"
+        output.write_text("Styled prose.\n", encoding="utf-8")
+        before = read_state(wf)
+
+        with self.assertRaises(np.NatureProgressError) as raised:
+            nc.complete_with_memory_review(
+                None,
+                wf,
+                "draft",
+                "styled.md",
+                project_root=self.base,
+            )
+
+        self.assertIn(
+            raised.exception.code,
+            {"style_receipt_not_found", "style_receipt_directory_not_found"},
+        )
+        self.assertEqual(read_state(wf), before)
 
     # --- guards ----------------------------------------------------------
 

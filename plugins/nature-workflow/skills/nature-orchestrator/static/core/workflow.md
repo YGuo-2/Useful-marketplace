@@ -49,10 +49,20 @@ the genre later, `genre <paper_type>` (MCP `nature_genre`).
    skill owns this step and what inputs it needs, then let that skill run (or run
    it if the owner is the orchestrator itself). Pass the domain parameters from the
    template (e.g. "review needs top-500 strongly-relevant screening") as the task
-   brief; do not re-implement the owner skill.
+   brief; do not re-implement the owner skill. For `nature-writing` and
+   `nature-polishing`, also pin the exact project root, workflow directory, task ID,
+   section, source path when available, and intended final evidence path. The owner
+   runs `nature_style_resolve`; `not_configured`/`not_applicable` preserves the old
+   path, `prose_style_choice_required` stops for user choice, and `resolved` requires
+   a final audit receipt. Workflow-bound layout-only polishing still calls the
+   resolver with `mode: layout-only` to record its exemption; prose-classified
+   tasks cannot use that exemption.
 4. **Complete with evidence** — when a real deliverable exists, `complete <task_id>
-   --evidence "<path-or-locator>"` (MCP `nature_complete_task`). The engine
-   **requires** evidence; a step with no product is not complete.
+   --evidence "<path-or-locator>"` (MCP `nature_complete_task`). When a profile was
+   resolved for this task, also pass `--style-receipt "<receipt-path>"` (MCP field
+   `style_receipt`). The engine verifies that the receipt and exact evidence file are
+   still bound to the current selected profile and ETags before changing task state.
+   The engine **requires** evidence; a step with no product is not complete.
 5. **Or block** — if the step cannot proceed (missing input, external dependency,
    unresolved permission), `block <task_id> --reason "<why>"` (MCP
    `nature_block_task`). A blocked task lets the user park it and move on.
@@ -96,3 +106,15 @@ Surface where the user is by echoing the engine, not by narrating from memory:
 - To resume, `resume` / `status` reconstructs state from `nature.yml` — the active
   task, blockers, and next step are recomputed, so a new session picks up exactly
   where the last one stopped.
+
+## 7. Optional prose-profile delegate
+
+Do not seed this task. When the user explicitly asks for a persistent prose profile, load the current
+genre template's `Optional delegates` section and insert its `prose-style` task before the next prose
+producer, normally after `read` and before `outline`. Delegate it to `nature-prose-style` and record
+the validated `ready` or `calibrated` profile path as evidence.
+
+One usable registered profile becomes `auto_single` and enters the downstream prose chain without a
+second activation question. With multiple usable profiles, do not continue prose generation until the
+user makes an exact selection. Generating, updating, disabling, or invalidating a profile can invalidate
+an earlier selection, so rely on the resolver's current result rather than remembered state.

@@ -11,7 +11,7 @@ Add this repository as a plugin marketplace, then install a plugin:
 /plugin install nature-workflow@useful-marketplace
 ```
 
-Claude Code reads the marketplace manifest at `.claude-plugin/marketplace.json` (repo root) and each plugin manifest at `plugins/<name>/.claude-plugin/plugin.json`. Skills under `plugins/<name>/skills/` are auto-discovered, and the bundled MCP server is wired through `${CLAUDE_PLUGIN_ROOT}` in `.mcp.json`. For `nature-workflow`, the memory discovery index is written to `CLAUDE.md` (set via `NATURE_WORKFLOW_MEMORY_INDEX_FILE` in `.mcp.json`), the file Claude Code auto-reads.
+Claude Code reads the marketplace manifest at `.claude-plugin/marketplace.json` (repo root) and each plugin manifest at `plugins/<name>/.claude-plugin/plugin.json`. Skills under `plugins/<name>/skills/` are auto-discovered, and the bundled MCP server is wired through `${CLAUDE_PLUGIN_ROOT}` in the plugin's `.mcp.json` (`plugins/<name>/.mcp.json`). For `nature-workflow`, that host-specific config writes the memory discovery index and optional prose-style bootstrap to `CLAUDE.md`.
 
 ## Import in Codex
 
@@ -21,12 +21,12 @@ Use the Codex "Add plugin marketplace" dialog:
 - Git ref: `main`
 - Sparse path: leave empty
 
-Codex expects the marketplace manifest at `.agents/plugins/marketplace.json` and each plugin manifest at `plugins/<name>/.codex-plugin/plugin.json`. On Codex the memory discovery index stays in `AGENTS.md`. Plugin sources live under `plugins/`.
+Codex expects the marketplace manifest at `.agents/plugins/marketplace.json` and each plugin manifest at `plugins/<name>/.codex-plugin/plugin.json`. `nature-workflow` declares its Codex-specific MCP entry inline, resolves the server relative to the installed plugin root, and keeps the memory index and optional prose-style bootstrap in `AGENTS.md`. Plugin sources live under `plugins/`.
 
 ## Plugins
 
 - `spec-workflow`: spec-first development workflow for complex code changes.
-- `nature-workflow`: Nature research skills packaged with lightweight workflow progress tracking.
+- `nature-workflow`: Nature research skills with lightweight workflow tracking, paper memory, and optional reusable prose-style profiles.
 
 ## Nature Workflow
 
@@ -43,6 +43,7 @@ It includes these user-facing skills:
 - `nature-paper-to-patent`
 - `nature-paper2ppt`
 - `nature-polishing`
+- `nature-prose-style`
 - `nature-reader`
 - `nature-response`
 - `nature-reviewer`
@@ -62,12 +63,26 @@ confidence, lifecycle, and machine-generated timestamps. The physical file, not
 metadata supplied by a caller, determines the scope.
 
 Memory is low-trust project data. `list` and `recall` scan the canonical file at
-read time; `AGENTS.md` contains only a fixed discovery instruction and never
+read time; the host instruction file contains only a fixed discovery instruction and never
 receives titles, body text, workflow names, or evidence. Recall is deterministic,
 lexical, bounded to 3 results by default (5 maximum) and 4096 UTF-8 bytes.
 Writes use an explicit workflow and scope, a workflow lock, entry/file ETags,
 and an atomic replacement. Local mutation is fail-closed unless Git proves that
 the file is both untracked and ignored.
+
+Reusable prose-style profiles are strictly opt-in: `nature-prose-style` creates
+one only when the user explicitly asks to generate or save a persistent style
+profile from a complete English article or article set. Ordinary writing,
+polishing, generic "Nature style", and transient tone requests do not create a
+profile. Once a profile passes validation and becomes usable, writing and
+polishing resolve it automatically. One usable profile is auto-selected; two or
+more usable profiles pause prose work and require the user to choose an exact
+profile. The selected profile and its default/section/one-turn selection mode are treated as low-trust data, and a bound audit
+receipt records their application without allowing style to override facts,
+numbers, units, citations, terminology, causality, or claim strength. The audit
+requires the ETags returned before writing plus an explicit operation and passed semantic checks; polishing also binds a separate normalized UTF-8
+source file. Codex installs the fixed discovery block in `AGENTS.md`, while
+Claude installs it in `CLAUDE.md`; disabling the final usable profile removes the managed block from both files when present.
 
 CLI examples:
 
@@ -95,6 +110,13 @@ MCP tools are exposed through `plugins/nature-workflow/mcp/nature_progress_serve
 - `nature_complete_task`
 - `nature_block_task`
 - `nature_log_note`
+- `nature_style_validate`
+- `nature_style_register`
+- `nature_style_select`
+- `nature_style_resolve`
+- `nature_style_audit`
+- `nature_style_disable`
+- `nature_style_index`
 - `nature_memory_check`
 - `nature_memory_touch`
 - `nature_memory_index`

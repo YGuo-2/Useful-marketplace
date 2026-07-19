@@ -245,6 +245,7 @@ def complete_with_memory_review(
     task_id: str,
     evidence: str,
     notes: str = "",
+    style_receipt: str | None = None,
     *,
     project_root: str | Path | None = None,
     scope: str = "shared",
@@ -261,6 +262,7 @@ def complete_with_memory_review(
         task_id,
         evidence,
         notes,
+        style_receipt,
         base=root,
     )
     try:
